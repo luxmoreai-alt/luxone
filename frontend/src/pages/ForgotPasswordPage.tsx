@@ -80,8 +80,8 @@ const ForgotPasswordPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f7fb] px-4 py-5">
-      <div className="mx-auto flex min-h-screen max-w-[820px] items-center justify-center">
+    <div className="min-h-screen bg-[#f5f7fb] px-4 py-8 sm:py-5">
+      <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-[820px] items-center justify-center">
         <div className="grid w-full overflow-hidden rounded-[20px] border border-slate-200 bg-white shadow-[0_14px_36px_rgba(15,23,42,0.08)] lg:grid-cols-[1fr_0.92fr]">
           <AuthCard>
             <BrandHeader />
