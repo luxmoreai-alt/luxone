@@ -8,6 +8,8 @@ type PasswordStepProps = {
   setPassword: (value: string) => void;
   onBack: () => void;
   onSubmit: () => void;
+  onOtpLogin?: () => void;
+  onForgotPassword?: () => void;
   error?: string;
   buttonText?: string;
   disabled?: boolean;
@@ -19,6 +21,8 @@ const PasswordStep = ({
   setPassword,
   onBack,
   onSubmit,
+  onOtpLogin,
+  onForgotPassword,
   error,
   buttonText = "Sign in",
   disabled = false,
@@ -53,6 +57,7 @@ const PasswordStep = ({
         <div className="flex items-center justify-between text-[14px]">
           <button
             type="button"
+            onClick={onOtpLogin}
             className="font-medium text-blue-600 hover:text-blue-700"
           >
             Sign in using email OTP
@@ -60,6 +65,7 @@ const PasswordStep = ({
 
           <button
             type="button"
+            onClick={onForgotPassword}
             className="font-medium text-blue-600 hover:text-blue-700"
           >
             Forgot Password?
