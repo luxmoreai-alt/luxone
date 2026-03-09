@@ -1,9 +1,9 @@
 const PromoPanel = () => {
   return (
-    <div className="relative hidden h-[500px] overflow-hidden border-l border-slate-200 bg-[linear-gradient(180deg,#f7fbff_0%,#f9fbff_100%)] lg:flex lg:items-start lg:justify-center lg:px-8 lg:py-6">
+    <div className="relative hidden overflow-hidden border-l border-slate-200 bg-[linear-gradient(180deg,#f7fbff_0%,#f9fbff_100%)] lg:flex lg:items-center lg:justify-center lg:px-8 lg:py-8">
       <div className="w-full max-w-[360px] rounded-[24px] border border-blue-100 bg-white/70 px-6 py-6 shadow-[0_10px_28px_rgba(59,130,246,0.08)] backdrop-blur-sm">
-        <div className="mb-6 flex items-center justify-center rounded-[22px] bg-[#f4f7fb] p-6">
-          <div className="relative flex h-[170px] w-[240px] items-center justify-center rounded-[22px] border-[5px] border-indigo-300 bg-white">
+        <div className="mb-4 flex items-center justify-center rounded-[18px] bg-[#f4f7fb] p-4">
+          <div className="relative flex h-[120px] w-[200px] items-center justify-center rounded-[18px] border-[4px] border-indigo-300 bg-white">
             <div className="absolute -left-4 top-6 flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500 text-lg shadow-md">
               🔐
             </div>
