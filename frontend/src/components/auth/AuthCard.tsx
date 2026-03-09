@@ -6,7 +6,7 @@ type AuthCardProps = {
 
 const AuthCard = ({ children }: AuthCardProps) => {
   return (
-    <div className="flex items-center justify-center px-6 py-4 sm:px-8">
+    <div className="flex items-center justify-center px-5 py-6 sm:px-8 sm:py-8">
       <div className="w-full max-w-[340px]">{children}</div>
     </div>
   );

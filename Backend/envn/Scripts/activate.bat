@@ -8,7 +8,11 @@ if defined _OLD_CODEPAGE (
     "%SystemRoot%\System32\chcp.com" 65001 > nul
 )
 
+<<<<<<< HEAD
 set VIRTUAL_ENV=C:\Users\Admin\Desktop\CRMS2.0\Backend\envn
+=======
+set VIRTUAL_ENV=C:\Users\Admin\Desktop\CRMS2.0-1\Backend\envn
+>>>>>>> c33d5c40ea3d083f19569ef6ca752f941b01a2a2
 
 if not defined PROMPT set PROMPT=$P$G
 

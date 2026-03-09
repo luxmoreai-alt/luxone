@@ -37,13 +37,13 @@ const EmailStep = ({
         </AuthButton>
       </div>
 
-      <div className="mt-10">
-        <p className="text-[15px] leading-7 text-slate-500">
+      <div className="mt-5">
+        <p className="text-[14px] leading-6 text-slate-500">
           Use your organization email to continue securely into ZORA CRM.
         </p>
       </div>
 
-      <div className="mt-10 text-[15px] text-slate-500">
+      <div className="mt-5 text-[14px] text-slate-500">
         Don&apos;t have an account?{" "}
         <button
           type="button"
