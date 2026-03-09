@@ -6,8 +6,8 @@ import PromoPanel from "../components/auth/PromoPanel";
 
 export type AuthStep = "email" | "password";
 
-const CHECK_EMAIL_URL = "http://127.0.0.1:8000/check-email/";
-const LOGIN_URL = "http://127.0.0.1:8000/login/";
+const CHECK_EMAIL_URL = "http://127.0.0.1:8000/api/auth/check-email";
+const LOGIN_URL = "http://127.0.0.1:8000/api/auth/login";
 
 const LoginPage = () => {
   const [step, setStep] = useState<AuthStep>("email");
