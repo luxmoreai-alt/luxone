@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   BarChart3,
   BadgeDollarSign,
@@ -131,6 +132,8 @@ export default function Sidebar({
   sidebarOpen,
   setSidebarOpen,
 }: SidebarProps) {
+  const navigate = useNavigate();
+
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
     Sales: false,
     Activities: false,
@@ -150,6 +153,20 @@ export default function Sidebar({
 
   const handlePlusClick = (label: string) => {
     console.log(`Plus clicked for ${label}`);
+  };
+
+  const handlePrimaryNavigation = (label: string) => {
+    if (label === "Home") {
+      navigate("/home");
+    }
+  };
+
+  const handleChildNavigation = (parentLabel: string, childLabel: string) => {
+    if (parentLabel === "Sales") {
+      if (childLabel === "Leads") navigate("/leads");
+      if (childLabel === "Contacts") navigate("/contacts");
+      if (childLabel === "Accounts") navigate("/accounts");
+    }
   };
 
   return (
@@ -187,6 +204,7 @@ export default function Sidebar({
                 <button
                   key={item.label}
                   type="button"
+                  onClick={() => handlePrimaryNavigation(item.label)}
                   title={!sidebarOpen ? item.label : undefined}
                   className={[
                     "flex w-full items-center rounded-lg text-left text-[14px] transition",
@@ -285,6 +303,9 @@ export default function Sidebar({
                             <button
                               key={child.label}
                               type="button"
+                              onClick={() =>
+                                handleChildNavigation(item.label, child.label)
+                              }
                               className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] text-slate-200 transition hover:bg-white/8"
                             >
                               <ChildIcon size={13} />

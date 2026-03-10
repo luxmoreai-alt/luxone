@@ -7,8 +7,40 @@ import PromoPanel from "../components/auth/PromoPanel";
 
 export type AuthStep = "email" | "password";
 
+type ApiPayload = {
+  message?: string;
+  detail?: string;
+  access?: string;
+  token?: string;
+  refresh?: string;
+  data?: {
+    message?: string;
+    detail?: string;
+    access?: string;
+    token?: string;
+    refresh?: string;
+  };
+};
+
 const CHECK_EMAIL_URL = "http://127.0.0.1:8000/api/auth/check-email";
 const LOGIN_URL = "http://127.0.0.1:8000/api/auth/login";
+
+function toApiPayload(value: unknown): ApiPayload | null {
+  if (typeof value === "object" && value !== null) {
+    return value as ApiPayload;
+  }
+  return null;
+}
+
+function extractErrorMessage(data: unknown, fallback: string): string {
+  const payload = toApiPayload(data);
+  if (payload?.message) return payload.message;
+  if (payload?.detail) return payload.detail;
+  if (payload?.data?.message) return payload.data.message;
+  if (payload?.data?.detail) return payload.data.detail;
+  if (typeof data === "string" && data.trim()) return data;
+  return fallback;
+}
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -47,7 +79,7 @@ const LoginPage = () => {
       });
 
       const rawText = await response.text();
-      let data: any = null;
+      let data: unknown = null;
 
       try {
         data = rawText ? JSON.parse(rawText) : null;
@@ -56,12 +88,7 @@ const LoginPage = () => {
       }
 
       if (!response.ok) {
-        setEmailError(
-          data?.message ||
-            data?.detail ||
-            (typeof data === "string" ? data : "") ||
-            "Unable to verify this email"
-        );
+        setEmailError(extractErrorMessage(data, "Unable to verify this email"));
         return;
       }
 
@@ -98,7 +125,7 @@ const LoginPage = () => {
       });
 
       const rawText = await response.text();
-      let data: any = null;
+      let data: unknown = null;
 
       try {
         data = rawText ? JSON.parse(rawText) : null;
@@ -107,23 +134,20 @@ const LoginPage = () => {
       }
 
       if (!response.ok) {
-        setPasswordError(
-          data?.message ||
-            data?.detail ||
-            (typeof data === "string" ? data : "") ||
-            "Invalid email or password"
-        );
+        setPasswordError(extractErrorMessage(data, "Invalid email or password"));
         return;
       }
 
+      const payload = toApiPayload(data);
+
       const accessToken =
-        data?.access ||
-        data?.token ||
-        data?.data?.access ||
-        data?.data?.token ||
+        payload?.access ||
+        payload?.token ||
+        payload?.data?.access ||
+        payload?.data?.token ||
         null;
 
-      const refreshToken = data?.refresh || data?.data?.refresh || null;
+      const refreshToken = payload?.refresh || payload?.data?.refresh || null;
 
       if (accessToken) {
         localStorage.setItem("accessToken", accessToken);
