@@ -1,0 +1,16 @@
+export const contactRelatedList = [
+  "Notes",
+  "Connected Records",
+  "Attachments",
+  "Cadences",
+  "Deals",
+  "Open Activities",
+  "Closed Activities",
+  "Invited Meetings",
+  "Products",
+  "Cases",
+  "Quotes",
+  "Sales Orders",
+  "Purchase Orders",
+  "Emails",
+] as const;

@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-
 import {
   BarChart3,
   BadgeDollarSign,
@@ -148,7 +147,6 @@ export default function Sidebar({
 }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
-
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
     Sales: true,
     Activities: false,
@@ -336,7 +334,7 @@ export default function Sidebar({
                               onClick={() => navigate(child.path)}
                               className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] transition ${
                                 location.pathname === child.path
-                                  ? "bg-white/12 text-white"
+                                  ? "bg-white/12 font-semibold text-white"
                                   : "text-slate-200 hover:bg-white/8"
                               }`}
                             >
@@ -363,6 +361,7 @@ export default function Sidebar({
                     key={item.label}
                     type="button"
                     title={item.label}
+                    onClick={() => item.children?.[0] && navigate(item.children[0].path)}
                     className="flex w-full items-center justify-center rounded-lg px-2 py-2.5 transition hover:bg-white/8"
                   >
                     <Icon size={17} />

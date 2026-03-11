@@ -1,0 +1,18 @@
+export const accountRelatedList = [
+  "Notes",
+  "Connected Records",
+  "Attachments",
+  "Deals",
+  "Contacts",
+  "Emails",
+  "Open Activities",
+  "Closed Activities",
+  "Products",
+  "Quotes",
+  "Sales Orders",
+  "Invoices",
+  "Member Accounts",
+  "Cases",
+  "Social",
+  "Links",
+] as const;

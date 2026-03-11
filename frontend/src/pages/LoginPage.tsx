@@ -7,8 +7,44 @@ import PromoPanel from "../components/auth/PromoPanel";
 
 export type AuthStep = "email" | "password";
 
+type ApiPayload = {
+  message?: string;
+  detail?: string;
+  access?: string;
+  token?: string;
+  access_token?: string;
+  refresh?: string;
+  refresh_token?: string;
+  data?: {
+    message?: string;
+    detail?: string;
+    access?: string;
+    token?: string;
+    access_token?: string;
+    refresh?: string;
+    refresh_token?: string;
+  };
+};
+
 const CHECK_EMAIL_URL = "http://127.0.0.1:8000/api/auth/check-email";
 const LOGIN_URL = "http://127.0.0.1:8000/api/auth/login";
+
+function toApiPayload(value: unknown): ApiPayload | null {
+  if (typeof value === "object" && value !== null) {
+    return value as ApiPayload;
+  }
+  return null;
+}
+
+function extractErrorMessage(data: unknown, fallback: string): string {
+  const payload = toApiPayload(data);
+  if (payload?.message) return payload.message;
+  if (payload?.detail) return payload.detail;
+  if (payload?.data?.message) return payload.data.message;
+  if (payload?.data?.detail) return payload.data.detail;
+  if (typeof data === "string" && data.trim()) return data;
+  return fallback;
+}
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -47,7 +83,7 @@ const LoginPage = () => {
       });
 
       const rawText = await response.text();
-      let data: any = null;
+      let data: unknown = null;
 
       try {
         data = rawText ? JSON.parse(rawText) : null;
@@ -56,12 +92,7 @@ const LoginPage = () => {
       }
 
       if (!response.ok) {
-        setEmailError(
-          data?.message ||
-            data?.detail ||
-            (typeof data === "string" ? data : "") ||
-            "Unable to verify this email"
-        );
+        setEmailError(extractErrorMessage(data, "Unable to verify this email"));
         return;
       }
 
@@ -98,7 +129,7 @@ const LoginPage = () => {
       });
 
       const rawText = await response.text();
-      let data: any = null;
+      let data: unknown = null;
 
       try {
         data = rawText ? JSON.parse(rawText) : null;
@@ -107,26 +138,27 @@ const LoginPage = () => {
       }
 
       if (!response.ok) {
-        setPasswordError(
-          data?.message ||
-            data?.detail ||
-            (typeof data === "string" ? data : "") ||
-            "Invalid email or password"
-        );
+        setPasswordError(extractErrorMessage(data, "Invalid email or password"));
         return;
       }
 
+      const payload = toApiPayload(data);
+
       const accessToken =
-        data?.access ||
-        data?.token ||
-        data?.access_token ||
-        data?.data?.access ||
-        data?.data?.token ||
-        data?.data?.access_token ||
+        payload?.access ||
+        payload?.token ||
+        payload?.access_token ||
+        payload?.data?.access ||
+        payload?.data?.token ||
+        payload?.data?.access_token ||
         null;
 
       const refreshToken =
-        data?.refresh || data?.refresh_token || data?.data?.refresh || data?.data?.refresh_token || null;
+        payload?.refresh ||
+        payload?.refresh_token ||
+        payload?.data?.refresh ||
+        payload?.data?.refresh_token ||
+        null;
 
       if (accessToken) {
         localStorage.setItem("accessToken", accessToken);
@@ -152,8 +184,8 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f7fb] px-4 py-5">
-      <div className="mx-auto flex min-h-screen max-w-[820px] items-center justify-center">
+    <div className="min-h-screen bg-[#f5f7fb] px-4 py-8 sm:py-5">
+      <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-[820px] items-center justify-center">
         <div className="grid w-full overflow-hidden rounded-[20px] border border-slate-200 bg-white shadow-[0_14px_36px_rgba(15,23,42,0.08)] lg:grid-cols-[1fr_0.92fr]">
           <AuthCard>
             {step === "email" ? (
@@ -176,6 +208,8 @@ const LoginPage = () => {
                   setStep("email");
                 }}
                 onSubmit={handleSignIn}
+                onOtpLogin={() => navigate("/otp-login")}
+                onForgotPassword={() => navigate("/forgot-password")}
                 error={passwordError}
                 buttonText={isSigningIn ? "Signing in..." : "Sign in"}
                 disabled={isSigningIn}
