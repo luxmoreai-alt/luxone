@@ -38,7 +38,11 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
+<<<<<<< HEAD
+VIRTUAL_ENV="C:\Users\Admin\Desktop\CRMS2.0\Backend\envn"
+=======
 VIRTUAL_ENV="C:\Users\Admin\Desktop\CRMS2.0-1\Backend\envn"
+>>>>>>> c33d5c40ea3d083f19569ef6ca752f941b01a2a2
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"
