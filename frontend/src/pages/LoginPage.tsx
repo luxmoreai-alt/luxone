@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import AuthCard from "../components/auth/AuthCard";
 import EmailStep from "../components/auth/EmailStep";
 import PasswordStep from "../components/auth/PasswordStep";
@@ -10,6 +11,7 @@ const CHECK_EMAIL_URL = "http://127.0.0.1:8000/api/auth/check-email";
 const LOGIN_URL = "http://127.0.0.1:8000/api/auth/login";
 
 const LoginPage = () => {
+  const navigate = useNavigate();
   const [step, setStep] = useState<AuthStep>("email");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -117,11 +119,14 @@ const LoginPage = () => {
       const accessToken =
         data?.access ||
         data?.token ||
+        data?.access_token ||
         data?.data?.access ||
         data?.data?.token ||
+        data?.data?.access_token ||
         null;
 
-      const refreshToken = data?.refresh || data?.data?.refresh || null;
+      const refreshToken =
+        data?.refresh || data?.refresh_token || data?.data?.refresh || data?.data?.refresh_token || null;
 
       if (accessToken) {
         localStorage.setItem("accessToken", accessToken);
@@ -131,8 +136,13 @@ const LoginPage = () => {
         localStorage.setItem("refreshToken", refreshToken);
       }
 
-      alert("Login successful");
+      if (!accessToken) {
+        setPasswordError("Login succeeded but token was missing from backend response");
+        return;
+      }
+
       console.log("Login success:", data);
+      navigate("/home", { replace: true });
     } catch (error) {
       console.error("Login error:", error);
       setPasswordError("Unable to connect to backend");

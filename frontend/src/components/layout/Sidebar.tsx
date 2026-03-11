@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+
 import {
   BarChart3,
   BadgeDollarSign,
@@ -18,6 +20,7 @@ import {
   MapPinned,
   Megaphone,
   Package,
+  PanelLeft,
   Phone,
   PieChart,
   Plus,
@@ -42,12 +45,13 @@ type SidebarProps = {
 type PrimaryItem = {
   label: string;
   icon: React.ElementType;
-  active?: boolean;
+  path: string;
 };
 
 type SubMenuItem = {
   label: string;
   icon: React.ElementType;
+  path: string;
 };
 
 type WorkspaceItem = {
@@ -58,10 +62,10 @@ type WorkspaceItem = {
 };
 
 const primaryItems: PrimaryItem[] = [
-  { label: "Home", icon: Home, active: true },
-  { label: "Reports", icon: BarChart3 },
-  { label: "Analytics", icon: PieChart },
-  { label: "My Requests", icon: ClipboardList },
+  { label: "Home", icon: Home, path: "/home" },
+  { label: "Reports", icon: BarChart3, path: "/reports" },
+  { label: "Analytics", icon: PieChart, path: "/analytics" },
+  { label: "My Requests", icon: ClipboardList, path: "/my-requests" },
 ];
 
 const workspaceItems: WorkspaceItem[] = [
@@ -70,13 +74,13 @@ const workspaceItems: WorkspaceItem[] = [
     icon: ShoppingBag,
     expandable: true,
     children: [
-      { label: "Leads", icon: CircleDot },
-      { label: "Contacts", icon: Users },
-      { label: "Accounts", icon: Building2 },
-      { label: "Deals", icon: BadgeDollarSign },
-      { label: "Forecasts", icon: TrendingUp },
-      { label: "Documents", icon: FileText },
-      { label: "Campaigns", icon: Megaphone },
+      { label: "Leads", icon: CircleDot, path: "/leads" },
+      { label: "Contacts", icon: Users, path: "/contacts" },
+      { label: "Accounts", icon: Building2, path: "/accounts" },
+      { label: "Deals", icon: BadgeDollarSign, path: "/deals" },
+      { label: "Forecasts", icon: TrendingUp, path: "/forecasts" },
+      { label: "Documents", icon: FileText, path: "/documents" },
+      { label: "Campaigns", icon: Megaphone, path: "/campaigns" },
     ],
   },
   {
@@ -84,9 +88,9 @@ const workspaceItems: WorkspaceItem[] = [
     icon: Search,
     expandable: true,
     children: [
-      { label: "Tasks", icon: CircleDot },
-      { label: "Meetings", icon: CalendarDays },
-      { label: "Calls", icon: Phone },
+      { label: "Tasks", icon: CircleDot, path: "/tasks" },
+      { label: "Meetings", icon: CalendarDays, path: "/meetings" },
+      { label: "Calls", icon: Phone, path: "/calls" },
     ],
   },
   {
@@ -94,13 +98,13 @@ const workspaceItems: WorkspaceItem[] = [
     icon: Package,
     expandable: true,
     children: [
-      { label: "Products", icon: CircleDot },
-      { label: "Price Books", icon: BookOpenText },
-      { label: "Quotes", icon: FileSignature },
-      { label: "Sales Orders", icon: ShoppingCart },
-      { label: "Purchase Orders", icon: ReceiptText },
-      { label: "Invoices", icon: FileText },
-      { label: "Vendors", icon: Truck },
+      { label: "Products", icon: CircleDot, path: "/products" },
+      { label: "Price Books", icon: BookOpenText, path: "/price-books" },
+      { label: "Quotes", icon: FileSignature, path: "/quotes" },
+      { label: "Sales Orders", icon: ShoppingCart, path: "/sales-orders" },
+      { label: "Purchase Orders", icon: ReceiptText, path: "/purchase-orders" },
+      { label: "Invoices", icon: FileText, path: "/invoices" },
+      { label: "Vendors", icon: Truck, path: "/vendors" },
     ],
   },
   {
@@ -108,8 +112,8 @@ const workspaceItems: WorkspaceItem[] = [
     icon: HandHelping,
     expandable: true,
     children: [
-      { label: "Cases", icon: CircleDot },
-      { label: "Solutions", icon: Lightbulb },
+      { label: "Cases", icon: CircleDot, path: "/cases" },
+      { label: "Solutions", icon: Lightbulb, path: "/solutions" },
     ],
   },
   {
@@ -117,9 +121,9 @@ const workspaceItems: WorkspaceItem[] = [
     icon: Settings2,
     expandable: true,
     children: [
-      { label: "SalesInbox", icon: Inbox },
-      { label: "Social", icon: Share2 },
-      { label: "Visits", icon: MapPinned },
+      { label: "SalesInbox", icon: Inbox, path: "/salesinbox" },
+      { label: "Social", icon: Share2, path: "/social" },
+      { label: "Visits", icon: MapPinned, path: "/visits" },
     ],
   },
   { label: "Services", icon: Wrench, expandable: false },
@@ -127,17 +131,42 @@ const workspaceItems: WorkspaceItem[] = [
   { label: "Voice of the Customer", icon: SquareKanban, expandable: false },
 ];
 
+const getParentMenuByPath = (pathname: string) => {
+  for (const item of workspaceItems) {
+    if (!item.children) continue;
+
+    const hasMatch = item.children.some((child) => child.path === pathname);
+    if (hasMatch) return item.label;
+  }
+
+  return null;
+};
+
 export default function Sidebar({
   sidebarOpen,
   setSidebarOpen,
 }: SidebarProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
-    Sales: false,
+    Sales: true,
     Activities: false,
     Inventory: false,
     Support: false,
     Integrations: false,
   });
+
+  useEffect(() => {
+    const parentMenu = getParentMenuByPath(location.pathname);
+
+    if (parentMenu) {
+      setOpenMenus((prev) => ({
+        ...prev,
+        [parentMenu]: true,
+      }));
+    }
+  }, [location.pathname]);
 
   const handleToggleMenu = (label: string) => {
     if (!sidebarOpen) return;
@@ -159,24 +188,42 @@ export default function Sidebar({
       }`}
     >
       <div className={sidebarOpen ? "min-w-[224px]" : "min-w-[56px]"}>
-        <div
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          className={`flex cursor-pointer items-center transition hover:opacity-90 ${
-            sidebarOpen
-              ? "justify-start px-3 pt-3 pb-2"
-              : "justify-center px-2 pt-3 pb-2"
-          }`}
-        >
-          <img
-            src="/logo.png"
-            alt="Zora CRM Logo"
-            className="h-7 w-7 rounded-md object-contain"
-          />
+        {sidebarOpen ? (
+          <div className="flex items-center justify-between px-3 pt-3 pb-2">
+            <div className="flex items-center">
+              <img
+                src="/logo.png"
+                alt="Zora CRM Logo"
+                className="h-7 w-7 rounded-md object-contain"
+              />
+              <div className="ml-2.5 text-[17px] font-bold">Zora CRM</div>
+            </div>
 
-          {sidebarOpen && (
-            <div className="ml-2.5 text-[17px] font-bold">Zora CRM</div>
-          )}
-        </div>
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(false)}
+              className="flex h-8 w-8 items-center justify-center rounded-md transition hover:bg-white/10"
+              aria-label="Collapse sidebar"
+            >
+              <PanelLeft size={18} />
+            </button>
+          </div>
+        ) : (
+          <div className="flex justify-center px-2 pt-3 pb-2">
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              className="rounded-md transition hover:opacity-90"
+              aria-label="Expand sidebar"
+            >
+              <img
+                src="/logo.png"
+                alt="Zora CRM Logo"
+                className="h-7 w-7 rounded-md object-contain"
+              />
+            </button>
+          </div>
+        )}
 
         <nav className={sidebarOpen ? "px-2.5" : "px-1.5"}>
           <div className="flex flex-col gap-0.5">
@@ -187,13 +234,14 @@ export default function Sidebar({
                 <button
                   key={item.label}
                   type="button"
+                  onClick={() => navigate(item.path)}
                   title={!sidebarOpen ? item.label : undefined}
                   className={[
                     "flex w-full items-center rounded-lg text-left text-[14px] transition",
                     sidebarOpen
                       ? "gap-2 px-2.5 py-2"
                       : "justify-center px-2 py-2.5",
-                    item.active
+                    location.pathname === item.path
                       ? "bg-white/12 font-semibold"
                       : "text-white hover:bg-white/8",
                   ].join(" ")}
@@ -285,7 +333,12 @@ export default function Sidebar({
                             <button
                               key={child.label}
                               type="button"
-                              className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] text-slate-200 transition hover:bg-white/8"
+                              onClick={() => navigate(child.path)}
+                              className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] transition ${
+                                location.pathname === child.path
+                                  ? "bg-white/12 text-white"
+                                  : "text-slate-200 hover:bg-white/8"
+                              }`}
                             >
                               <ChildIcon size={13} />
                               <span>{child.label}</span>
