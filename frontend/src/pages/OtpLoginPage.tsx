@@ -5,9 +5,10 @@ import AuthInput from "../components/auth/AuthInput";
 import AuthButton from "../components/auth/AuthButton";
 import BrandHeader from "../components/auth/BrandHeader";
 import PromoPanel from "../components/auth/PromoPanel";
+import { buildApiUrl } from "../api/config";
 
-const SEND_OTP_URL = "http://127.0.0.1:8000/api/auth/send-otp";
-const VERIFY_OTP_URL = "http://127.0.0.1:8000/api/auth/verify-otp";
+const SEND_OTP_URL = buildApiUrl("/auth/send-otp");
+const VERIFY_OTP_URL = buildApiUrl("/auth/verify-otp");
 
 type Step = "email" | "otp";
 
@@ -68,8 +69,12 @@ const OtpLoginPage = () => {
 
       const accessToken = data?.data?.access_token || data?.access_token || null;
       const refreshToken = data?.data?.refresh_token || data?.refresh_token || null;
+      const tenantDb = data?.data?.tenant_db || null;
+      const user = data?.data?.user || null;
       if (accessToken) localStorage.setItem("accessToken", accessToken);
       if (refreshToken) localStorage.setItem("refreshToken", refreshToken);
+      if (tenantDb) localStorage.setItem("tenantDb", tenantDb);
+      if (user) localStorage.setItem("loggedInUser", JSON.stringify(user));
 
       navigate("/home");
     } catch {

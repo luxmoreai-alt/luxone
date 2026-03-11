@@ -4,6 +4,7 @@ import AuthCard from "../components/auth/AuthCard";
 import EmailStep from "../components/auth/EmailStep";
 import PasswordStep from "../components/auth/PasswordStep";
 import PromoPanel from "../components/auth/PromoPanel";
+import { buildApiUrl } from "../api/config";
 
 export type AuthStep = "email" | "password";
 
@@ -15,6 +16,12 @@ type ApiPayload = {
   access_token?: string;
   refresh?: string;
   refresh_token?: string;
+  tenant_db?: string;
+  user?: {
+    id?: string | number;
+    email?: string;
+    is_admin?: boolean;
+  };
   data?: {
     message?: string;
     detail?: string;
@@ -23,11 +30,17 @@ type ApiPayload = {
     access_token?: string;
     refresh?: string;
     refresh_token?: string;
+    tenant_db?: string;
+    user?: {
+      id?: string | number;
+      email?: string;
+      is_admin?: boolean;
+    };
   };
 };
 
-const CHECK_EMAIL_URL = "http://127.0.0.1:8000/api/auth/check-email";
-const LOGIN_URL = "http://127.0.0.1:8000/api/auth/login";
+const CHECK_EMAIL_URL = buildApiUrl("/auth/check-email");
+const LOGIN_URL = buildApiUrl("/auth/login");
 
 function toApiPayload(value: unknown): ApiPayload | null {
   if (typeof value === "object" && value !== null) {
@@ -159,6 +172,8 @@ const LoginPage = () => {
         payload?.data?.refresh ||
         payload?.data?.refresh_token ||
         null;
+      const tenantDb = payload?.data?.tenant_db || null;
+      const user = payload?.data?.user || null;
 
       if (accessToken) {
         localStorage.setItem("accessToken", accessToken);
@@ -166,6 +181,14 @@ const LoginPage = () => {
 
       if (refreshToken) {
         localStorage.setItem("refreshToken", refreshToken);
+      }
+
+      if (tenantDb) {
+        localStorage.setItem("tenantDb", tenantDb);
+      }
+
+      if (user) {
+        localStorage.setItem("loggedInUser", JSON.stringify(user));
       }
 
       if (!accessToken) {
