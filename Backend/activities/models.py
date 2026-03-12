@@ -6,6 +6,29 @@ class LeadActivity(models.Model):
         "leads.Lead",
         on_delete=models.CASCADE,
         related_name="activities",
+        null=True,
+        blank=True,
+    )
+    contact = models.ForeignKey(
+        "contacts.Contact",
+        on_delete=models.CASCADE,
+        related_name="activities",
+        null=True,
+        blank=True,
+    )
+    account = models.ForeignKey(
+        "accounts.Account",
+        on_delete=models.CASCADE,
+        related_name="activities",
+        null=True,
+        blank=True,
+    )
+    deal = models.ForeignKey(
+        "deals.Deal",
+        on_delete=models.CASCADE,
+        related_name="activities",
+        null=True,
+        blank=True,
     )
     action = models.CharField(max_length=100)
     description = models.TextField(blank=True)
@@ -22,8 +45,12 @@ class LeadActivity(models.Model):
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["lead", "created_at"]),
+            models.Index(fields=["contact", "created_at"]),
+            models.Index(fields=["account", "created_at"]),
+            models.Index(fields=["deal", "created_at"]),
             models.Index(fields=["created_at"]),
         ]
 
     def __str__(self):
-        return f"{self.action} - {self.lead_id}"
+        record_id = self.lead_id or self.contact_id or self.account_id or self.deal_id
+        return f"{self.action} - {record_id}"

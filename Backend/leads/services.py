@@ -99,7 +99,7 @@ def convert_lead(*, lead, user=None, create_deal=False, deal_name=None, deal_val
         raise ValidationError("Account creation requires company.")
 
     with transaction.atomic():
-        account = Account.objects.filter(name__iexact=lead.company.strip()).first()
+        account = Account.objects.filter(account_name__iexact=lead.company.strip()).first()
         if not account:
             account = create_account_from_lead(
                 lead=lead,

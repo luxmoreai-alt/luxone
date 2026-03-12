@@ -40,6 +40,8 @@ urlpatterns = [
     path('api/', include('accounts.urls')),
     path('api/', include('contacts.urls')),
     path('api/', include('deals.urls')),
+    path('api/', include('campaigns.urls')),
+    path('api/', include('notes.urls')),
     path('api/', include('saas_admin.urls')),
     
     # Swagger documentation URLs

@@ -70,10 +70,12 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
       typeof data === "object" && data !== null
         ? (data as { detail?: string; message?: string; error?: string })
         : null;
+    const fallbackStatusMessage = `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}`;
     const message =
       errorPayload?.detail ||
       errorPayload?.message ||
       errorPayload?.error ||
+      fallbackStatusMessage ||
       "Request failed";
     throw new Error(message);
   }

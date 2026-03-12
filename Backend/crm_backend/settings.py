@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     'accounts',
     'contacts',
     'deals',
+    'campaigns',
     'activities',
     'notes',
     'django_filters',

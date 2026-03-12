@@ -5,4 +5,4 @@ from .views import ContactViewSet
 router = DefaultRouter(trailing_slash=False)
 router.register("contacts", ContactViewSet, basename="contact")
 
-urlpatterns = router.urls
+urlpatterns = [*router.urls]
