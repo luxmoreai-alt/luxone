@@ -155,7 +155,21 @@ export const contactModuleConfig: CRMModuleConfig<ContactRecord> = {
     },
     {
       title: "Filter By Fields",
-      items: ["Full Name", "Contact Owner", "Account Name", "Email", "Phone", "Mobile", "Contact Source", "Department", "Title", "Created Time", "Modified Time", "Last Activity Time", "Tag"],
+      items: [
+        { label: "Full Name", key: "contactName" },
+        { label: "Contact Owner", key: "contactOwner" },
+        { label: "Account Name", key: "accountName" },
+        { label: "Email", key: "email" },
+        { label: "Phone", key: "phone" },
+        { label: "Mobile", key: "mobile" },
+        { label: "Contact Source", key: "leadSource" },
+        { label: "Department", key: "department" },
+        { label: "Title", key: "title" },
+        { label: "Created Time", key: "createdAt" },
+        { label: "Modified Time", key: "updatedAt" },
+        "Last Activity Time",
+        "Tag",
+      ],
     },
     {
       title: "Filter By Related Modules",

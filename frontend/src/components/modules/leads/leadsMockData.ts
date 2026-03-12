@@ -21,7 +21,21 @@ export const leadFilterSections: FilterSection[] = [
   },
   {
     title: "Filter By Fields",
-    items: ["Full Name", "Lead Owner", "Company", "Email", "Phone", "Lead Source", "Lead Status", "Industry", "Annual Revenue", "Created Time", "Modified Time", "Last Activity Time", "Tag"],
+    items: [
+      { label: "Full Name", key: "leadName" },
+      { label: "Lead Owner", key: "leadOwner" },
+      { label: "Company", key: "company" },
+      { label: "Email", key: "email" },
+      { label: "Phone", key: "phone" },
+      { label: "Lead Source", key: "leadSource" },
+      { label: "Lead Status", key: "leadStatus" },
+      { label: "Industry", key: "industry" },
+      { label: "Annual Revenue", key: "annualRevenue" },
+      { label: "Created Time", key: "createdAt" },
+      { label: "Modified Time", key: "updatedAt" },
+      "Last Activity Time",
+      "Tag",
+    ],
   },
   {
     title: "Filter By Related Modules",

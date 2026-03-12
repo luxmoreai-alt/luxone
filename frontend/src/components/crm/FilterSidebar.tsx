@@ -1,19 +1,27 @@
 import { useMemo, useState } from "react";
-import { ChevronDown, Search } from "lucide-react";
+import { ChevronDown, Search, X } from "lucide-react";
+import type { FilterSection, FilterSectionItem } from "../../lib/shared/crmTypes";
 
-type FilterSection = {
-  title: string;
-  items: string[];
-};
+function getLabel(item: FilterSectionItem): string {
+  return typeof item === "string" ? item : item.label;
+}
+
+function getKey(item: FilterSectionItem): string | null {
+  return typeof item === "string" ? null : item.key;
+}
 
 type FilterSidebarProps = {
   title: string;
   sections: FilterSection[];
+  onApply: (filters: Record<string, string>) => void;
+  onClear: () => void;
 };
 
 export default function FilterSidebar({
   title,
   sections,
+  onApply,
+  onClear,
 }: FilterSidebarProps) {
   const [search, setSearch] = useState("");
 
@@ -21,82 +29,155 @@ export default function FilterSidebar({
     Object.fromEntries(sections.map((section) => [section.title, true]))
   );
 
+  const [checked, setChecked] = useState<Record<string, boolean>>({});
+  const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
+
   const filteredSections = useMemo(() => {
     const query = search.trim().toLowerCase();
-
     if (!query) return sections;
-
     return sections
       .map((section) => ({
         ...section,
         items: section.items.filter((item) =>
-          item.toLowerCase().includes(query)
+          getLabel(item).toLowerCase().includes(query)
         ),
       }))
       .filter((section) => section.items.length > 0);
   }, [search, sections]);
 
-  const toggleSection = (title: string) => {
-    setOpenSections((prev) => ({
-      ...prev,
-      [title]: !prev[title],
-    }));
+  const toggleSection = (sectionTitle: string) => {
+    setOpenSections((prev) => ({ ...prev, [sectionTitle]: !prev[sectionTitle] }));
   };
 
-  return (
-    <aside className="w-[280px] shrink-0 rounded-lg border border-slate-200 bg-white p-4">
-      <h3 className="mb-4 text-[15px] font-semibold text-slate-800">{title}</h3>
+  const toggleItem = (label: string) => {
+    setChecked((prev) => ({ ...prev, [label]: !prev[label] }));
+  };
 
-      <div className="mb-5 flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2">
-        <Search size={16} className="text-slate-500" />
-        <input
-          type="text"
-          placeholder="Search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full bg-transparent text-sm outline-none"
-        />
+  const handleApply = () => {
+    const filters: Record<string, string> = {};
+    sections.forEach((section) => {
+      section.items.forEach((item) => {
+        const label = getLabel(item);
+        const key = getKey(item);
+        if (key && checked[label]) {
+          const val = (fieldValues[label] ?? "").trim();
+          if (val) filters[key] = val;
+        }
+      });
+    });
+    onApply(filters);
+  };
+
+  const handleClear = () => {
+    setChecked({});
+    setFieldValues({});
+    setSearch("");
+    onClear();
+  };
+
+  const hasAnyChecked = Object.values(checked).some(Boolean);
+
+  return (
+    <aside className="flex w-[280px] shrink-0 flex-col rounded-lg border border-slate-200 bg-white">
+      {/* Header */}
+      <div className="border-b border-slate-100 px-4 pt-4 pb-3">
+        <h3 className="mb-3 text-[15px] font-semibold text-slate-800">{title}</h3>
+        <div className="flex items-center gap-2 rounded-md border border-slate-300 px-3 py-[6px]">
+          <Search size={15} className="shrink-0 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search filters..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full bg-transparent text-[13px] outline-none placeholder:text-slate-400"
+          />
+          {search && (
+            <button type="button" onClick={() => setSearch("")}>
+              <X size={13} className="text-slate-400" />
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="space-y-4">
+      {/* Sections */}
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
         {filteredSections.map((section) => {
-          const isOpen = openSections[section.title];
-
+          const isOpen = openSections[section.title] ?? true;
           return (
             <div key={section.title}>
               <button
                 type="button"
                 onClick={() => toggleSection(section.title)}
-                className="flex w-full items-center justify-between text-left text-[15px] font-semibold text-slate-800"
+                className="flex w-full items-center justify-between text-left text-[13px] font-semibold text-slate-700"
               >
                 <span>{section.title}</span>
                 <ChevronDown
-                  size={16}
-                  className={`transition-transform duration-200 ${
-                    isOpen ? "rotate-180" : ""
-                  }`}
+                  size={14}
+                  className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
                 />
               </button>
 
               {isOpen && (
-                <div className="mt-3 space-y-2">
-                  {section.items.map((item) => (
-                    <label
-                      key={item}
-                      className="flex cursor-pointer items-center gap-2 text-sm text-slate-700"
-                    >
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-slate-300"
-                      />
-                      <span>{item}</span>
-                    </label>
-                  ))}
+                <div className="mt-2 space-y-1">
+                  {section.items.map((item) => {
+                    const label = getLabel(item);
+                    const key = getKey(item);
+                    const isChecked = checked[label] ?? false;
+
+                    return (
+                      <div key={label}>
+                        <label className="flex cursor-pointer items-center gap-2 rounded px-1 py-[3px] text-[13px] text-slate-700 hover:bg-slate-50">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => toggleItem(label)}
+                            className="h-[14px] w-[14px] shrink-0 rounded border-slate-300 accent-[#4d76ff]"
+                          />
+                          <span>{label}</span>
+                        </label>
+                        {key && isChecked && (
+                          <div className="ml-5 mt-1 mb-1">
+                            <input
+                              type="text"
+                              placeholder={`Filter by ${label}...`}
+                              value={fieldValues[label] ?? ""}
+                              onChange={(e) =>
+                                setFieldValues((prev) => ({
+                                  ...prev,
+                                  [label]: e.target.value,
+                                }))
+                              }
+                              className="h-[28px] w-full rounded-[4px] border border-[#cfd7e6] bg-white px-2 text-[12px] text-slate-700 outline-none focus:border-[#6d8dff]"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
           );
         })}
+      </div>
+
+      {/* Footer buttons */}
+      <div className="border-t border-slate-100 px-4 py-3 flex gap-2">
+        <button
+          type="button"
+          onClick={handleApply}
+          disabled={!hasAnyChecked}
+          className="flex-1 h-[32px] rounded-[6px] bg-gradient-to-b from-[#4d76ff] to-[#365eea] text-[13px] font-medium text-white hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Apply Filter
+        </button>
+        <button
+          type="button"
+          onClick={handleClear}
+          className="h-[32px] rounded-[6px] border border-[#cfd7e6] bg-white px-3 text-[13px] text-slate-600 hover:bg-slate-50"
+        >
+          Clear
+        </button>
       </div>
     </aside>
   );

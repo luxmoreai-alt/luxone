@@ -16,15 +16,16 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from crm_backend.email_views import send_email_view
 from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 
 schema_view = get_schema_view(
     openapi.Info(
-        title="CRM Authentication API",
+        title="CRM Backend API",
         default_version='v1',
-        description="API documentation for the CRM Authentication Backend.",
+        description="API documentation for the CRM backend.",
         terms_of_service="https://www.google.com/policies/terms/",
         contact=openapi.Contact(email="admin@crm.com"),
         license=openapi.License(name="BSD License"),
@@ -36,6 +37,12 @@ schema_view = get_schema_view(
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/auth/', include('authentication.urls')),
+    path('api/', include('leads.urls')),
+    path('api/', include('accounts.urls')),
+    path('api/', include('contacts.urls')),
+    path('api/', include('deals.urls')),
+    path('api/', include('saas_admin.urls')),
+    path('api/send-email', send_email_view, name='send-email'),
     
     # Swagger documentation URLs
     path('swagger<format>/', schema_view.without_ui(cache_timeout=0), name='schema-json'),

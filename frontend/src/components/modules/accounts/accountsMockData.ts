@@ -149,7 +149,21 @@ export const accountModuleConfig: CRMModuleConfig<AccountRecord> = {
     },
     {
       title: "Filter By Fields",
-      items: ["Account Name", "Account Owner", "Account Type", "Industry", "Annual Revenue", "Phone", "Website", "Parent Account", "Rating", "Created Time", "Modified Time", "Last Activity Time", "Tag"],
+      items: [
+        { label: "Account Name", key: "accountName" },
+        { label: "Account Owner", key: "accountOwner" },
+        "Account Type",
+        { label: "Industry", key: "industry" },
+        { label: "Annual Revenue", key: "annualRevenue" },
+        { label: "Phone", key: "phone" },
+        { label: "Website", key: "website" },
+        { label: "Parent Account", key: "parentAccount" },
+        { label: "Rating", key: "rating" },
+        { label: "Created Time", key: "createdAt" },
+        { label: "Modified Time", key: "updatedAt" },
+        "Last Activity Time",
+        "Tag",
+      ],
     },
     {
       title: "Filter By Related Modules",

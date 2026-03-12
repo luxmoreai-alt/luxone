@@ -15,6 +15,7 @@ type ApiPayload = {
   access_token?: string;
   refresh?: string;
   refresh_token?: string;
+  tenant_db?: string;
   data?: {
     message?: string;
     detail?: string;
@@ -23,6 +24,7 @@ type ApiPayload = {
     access_token?: string;
     refresh?: string;
     refresh_token?: string;
+    tenant_db?: string;
   };
 };
 
@@ -160,12 +162,21 @@ const LoginPage = () => {
         payload?.data?.refresh_token ||
         null;
 
+      const tenantDb =
+        payload?.tenant_db ||
+        payload?.data?.tenant_db ||
+        null;
+
       if (accessToken) {
         localStorage.setItem("accessToken", accessToken);
       }
 
       if (refreshToken) {
         localStorage.setItem("refreshToken", refreshToken);
+      }
+
+      if (tenantDb) {
+        localStorage.setItem("tenantDb", tenantDb);
       }
 
       if (!accessToken) {

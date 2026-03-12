@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   ChevronDown,
   Ellipsis,
@@ -20,48 +21,25 @@ type ModuleToolbarProps = {
   sortFields?: string[];
   isFilterOpen: boolean;
   onToggleFilter: () => void;
+  onCreateClick: () => void;
 };
 
 const defaultSortFields = [
   "None",
   "Address - City",
   "Address - Country / Region",
-  "Address - Flat / House No./ Building / Apartment Name",
-  "Address - Latitude",
-  "Address - Longitude",
-  "Address - State / Province",
-  "Address - Street Address",
-  "Address - Zip / Postal Code",
-  "Annual Revenue",
   "Company",
-  "Created By",
   "Created Time",
-  "Distance",
   "Email",
-  "Email Opt Out",
-  "Fax",
   "First Name",
-  "Industry",
-  "Last Activity Time",
   "Last Name",
-  "Lead Conversion Time",
   "Lead Name",
   "Lead Owner",
   "Lead Source",
   "Lead Status",
-  "Mobile",
-  "Modified By",
-  "Modified Time",
-  "No. of Employees",
   "Phone",
   "Rating",
-  "Salutation",
-  "Secondary Email",
-  "Skype ID",
   "Title",
-  "Twitter",
-  "Unsubscribed Mode",
-  "Unsubscribed Time",
   "Website",
 ];
 
@@ -71,12 +49,16 @@ export default function ModuleToolbar({
   sortFields,
   isFilterOpen,
   onToggleFilter,
+  onCreateClick,
 }: ModuleToolbarProps) {
+  const navigate = useNavigate();
+
   const fields = sortFields?.length ? sortFields : defaultSortFields;
 
   const [sortModalOpen, setSortModalOpen] = useState(false);
   const [fieldDropdownOpen, setFieldDropdownOpen] = useState(false);
   const [orderDropdownOpen, setOrderDropdownOpen] = useState(false);
+  const [importMenuOpen, setImportMenuOpen] = useState(false);
 
   const [selectedField, setSelectedField] = useState("None");
   const [selectedOrder, setSelectedOrder] = useState<"Ascending" | "Descending">(
@@ -85,12 +67,55 @@ export default function ModuleToolbar({
   const [searchText, setSearchText] = useState("");
 
   const modalRef = useRef<HTMLDivElement | null>(null);
+  const importMenuRef = useRef<HTMLDivElement | null>(null);
 
   const filteredFields = useMemo(() => {
     const q = searchText.trim().toLowerCase();
     if (!q) return fields;
     return fields.filter((item) => item.toLowerCase().includes(q));
   }, [fields, searchText]);
+
+  const singularModuleName = useMemo(() => {
+    if (createButtonLabel.startsWith("Create ")) {
+      return createButtonLabel.replace("Create ", "").trim();
+    }
+    return "Record";
+  }, [createButtonLabel]);
+
+  const importPrimaryLabel = useMemo(
+    () => `Import ${singularModuleName}s`,
+    [singularModuleName]
+  );
+
+  const moduleBaseRoute = useMemo(() => {
+    const normalized = singularModuleName.toLowerCase();
+
+    if (normalized === "contact") return "/contacts";
+    if (normalized === "account") return "/accounts";
+    if (normalized === "deal") return "/deals";
+    return "/leads";
+  }, [singularModuleName]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        importMenuRef.current &&
+        !importMenuRef.current.contains(event.target as Node)
+      ) {
+        setImportMenuOpen(false);
+      }
+
+      if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
+        setFieldDropdownOpen(false);
+        setOrderDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   const handleApplySort = () => {
     console.log("Apply sort:", {
@@ -107,6 +132,16 @@ export default function ModuleToolbar({
     setFieldDropdownOpen(false);
     setOrderDropdownOpen(false);
     setSearchText("");
+  };
+
+  const handleImportPrimary = () => {
+    navigate(`${moduleBaseRoute}/import`);
+    setImportMenuOpen(false);
+  };
+
+  const handleImportNotes = () => {
+    navigate(`${moduleBaseRoute}/import-notes`);
+    setImportMenuOpen(false);
   };
 
   const toolbarIconButtonClass =
@@ -126,13 +161,43 @@ export default function ModuleToolbar({
         </div>
 
         <div className="flex items-center gap-2">
-          <button className="cursor-pointer rounded-md bg-gradient-to-b from-blue-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white transition duration-150 hover:shadow-sm">
+          <button
+            type="button"
+            onClick={onCreateClick}
+            className="cursor-pointer rounded-md bg-gradient-to-b from-blue-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white transition duration-150 hover:shadow-sm"
+          >
             {createButtonLabel}
           </button>
 
-          <button className="cursor-pointer rounded-md bg-gradient-to-b from-blue-500 to-blue-600 px-3 py-2 text-white transition duration-150 hover:shadow-sm">
-            <ChevronDown size={16} />
-          </button>
+          <div className="relative" ref={importMenuRef}>
+            <button
+              type="button"
+              onClick={() => setImportMenuOpen((prev) => !prev)}
+              className="cursor-pointer rounded-md bg-gradient-to-b from-blue-500 to-blue-600 px-3 py-2 text-white transition duration-150 hover:shadow-sm"
+            >
+              <ChevronDown size={16} />
+            </button>
+
+            {importMenuOpen && (
+              <div className="absolute right-0 top-[42px] z-50 min-w-[170px] rounded-md border border-slate-200 bg-white py-1 shadow-lg">
+                <button
+                  type="button"
+                  onClick={handleImportPrimary}
+                  className="block w-full px-4 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-100"
+                >
+                  {importPrimaryLabel}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleImportNotes}
+                  className="block w-full px-4 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-100"
+                >
+                  Import Notes
+                </button>
+              </div>
+            )}
+          </div>
 
           <button className="cursor-pointer rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-slate-700 transition duration-150 hover:bg-slate-200 hover:shadow-sm">
             <Ellipsis size={16} />
@@ -154,6 +219,7 @@ export default function ModuleToolbar({
           </button>
 
           <button
+            type="button"
             onClick={() => {
               setSortModalOpen((prev) => !prev);
               setFieldDropdownOpen(false);
