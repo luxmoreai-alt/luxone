@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import CRMModuleListPage from "../crm/CRMModuleListPage";
 import { contactModuleConfig } from "../../components/modules/contacts/contactsMockData";
 import { deleteContact, getContacts } from "../../lib/api/contactsApi";
@@ -43,6 +44,7 @@ export default function ContactsPage() {
   return (
     <CRMModuleListPage
       config={contactModuleConfig}
+      rows={rows}
       rows={rows}
       showNotes={true}
       showActivity={false}

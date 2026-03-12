@@ -5,9 +5,10 @@ import AuthInput from "../components/auth/AuthInput";
 import AuthButton from "../components/auth/AuthButton";
 import BrandHeader from "../components/auth/BrandHeader";
 import PromoPanel from "../components/auth/PromoPanel";
+import { buildApiUrl } from "../api/config";
 
-const FORGOT_PASSWORD_URL = "http://127.0.0.1:8000/api/auth/forgot-password";
-const RESET_PASSWORD_URL = "http://127.0.0.1:8000/api/auth/reset-password";
+const FORGOT_PASSWORD_URL = buildApiUrl("/auth/forgot-password");
+const RESET_PASSWORD_URL = buildApiUrl("/auth/reset-password");
 
 type Step = "email" | "reset";
 

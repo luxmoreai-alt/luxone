@@ -4,6 +4,7 @@ import AuthCard from "../components/auth/AuthCard";
 import EmailStep from "../components/auth/EmailStep";
 import PasswordStep from "../components/auth/PasswordStep";
 import PromoPanel from "../components/auth/PromoPanel";
+import { buildApiUrl } from "../api/config";
 
 export type AuthStep = "email" | "password";
 
@@ -28,8 +29,8 @@ type ApiPayload = {
   };
 };
 
-const CHECK_EMAIL_URL = "http://127.0.0.1:8000/api/auth/check-email";
-const LOGIN_URL = "http://127.0.0.1:8000/api/auth/login";
+const CHECK_EMAIL_URL = buildApiUrl("/auth/check-email");
+const LOGIN_URL = buildApiUrl("/auth/login");
 
 function toApiPayload(value: unknown): ApiPayload | null {
   if (typeof value === "object" && value !== null) {
@@ -160,6 +161,11 @@ const LoginPage = () => {
         payload?.refresh_token ||
         payload?.data?.refresh ||
         payload?.data?.refresh_token ||
+        null;
+     
+      const tenantDb =
+        payload?.tenant_db ||
+        payload?.data?.tenant_db ||
         null;
 
       const tenantDb =

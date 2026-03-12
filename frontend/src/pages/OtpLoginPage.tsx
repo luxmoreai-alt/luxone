@@ -5,9 +5,10 @@ import AuthInput from "../components/auth/AuthInput";
 import AuthButton from "../components/auth/AuthButton";
 import BrandHeader from "../components/auth/BrandHeader";
 import PromoPanel from "../components/auth/PromoPanel";
+import { buildApiUrl } from "../api/config";
 
-const SEND_OTP_URL = "http://127.0.0.1:8000/api/auth/send-otp";
-const VERIFY_OTP_URL = "http://127.0.0.1:8000/api/auth/verify-otp";
+const SEND_OTP_URL = buildApiUrl("/auth/send-otp");
+const VERIFY_OTP_URL = buildApiUrl("/auth/verify-otp");
 
 type Step = "email" | "otp";
 
