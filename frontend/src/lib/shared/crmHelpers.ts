@@ -33,11 +33,28 @@ export function filterRecords<T extends CRMRecord>(
   columns: CRMColumn<T>[],
   filters: Partial<Record<string, string>>
 ): T[] {
-  return rows.filter((row) =>
-    columns.every((column) => {
+  const columnKeys = new Set(columns.map((c) => c.key));
+
+  return rows.filter((row) => {
+    // Column-based filters (only keys that match visible columns)
+    const columnMatch = columns.every((column) => {
       const filterValue = (filters[column.key] ?? "").trim().toLowerCase();
       if (!filterValue) return true;
       return String(row[column.key] ?? "").toLowerCase().includes(filterValue);
-    })
-  );
+    });
+
+    if (!columnMatch) return false;
+
+    // Extra filters (sidebar filters for keys not in visible columns)
+    return Object.entries(filters).every(([key, value]) => {
+      if (typeof key === "string" && columnKeys.has(key as keyof T & string)) return true; // already handled above
+      const filterValue = (value ?? "").trim().toLowerCase();
+      if (!filterValue) return true;
+      // Type guard: only use key if it's a property of row
+      if (key in row) {
+        return String((row as Record<string, unknown>)[key] ?? "").toLowerCase().includes(filterValue);
+      }
+      return true;
+    });
+  });
 }

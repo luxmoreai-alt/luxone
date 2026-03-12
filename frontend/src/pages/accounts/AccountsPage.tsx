@@ -1,25 +1,24 @@
 import { useEffect, useState } from "react";
 import CRMModuleListPage from "../crm/CRMModuleListPage";
-import { accountModuleConfig, accountsMockList } from "../../components/modules/accounts/accountsMockData";
-import DashboardLayout from "../../components/layout/DashboardLayout";
-import { fetchAccounts } from "../../api/crm";
-import { mapAccount } from "../../lib/shared/crmMappers";
+import { accountModuleConfig } from "../../components/modules/accounts/accountsMockData";
+import { deleteAccount, getAccounts } from "../../lib/api/accountsApi";
 import type { AccountRecord } from "../../lib/shared/crmTypes";
 
 export default function AccountsPage() {
-  const [rows, setRows] = useState<AccountRecord[]>(accountsMockList);
+  const [rows, setRows] = useState<AccountRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
       try {
         setLoading(true);
-        const accounts = await fetchAccounts();
-        setRows(accounts.map(mapAccount));
-        setError("");
+        setError(null);
+        const data = await getAccounts();
+        setRows(data);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load accounts");
+        console.error("Failed to load accounts:", err);
+        setError(err instanceof Error ? err.message : "Unable to load accounts");
       } finally {
         setLoading(false);
       }
@@ -29,12 +28,17 @@ export default function AccountsPage() {
   }, []);
 
   if (loading) {
-    return <DashboardLayout><div className="rounded-xl border border-slate-200 bg-white p-6 text-slate-500">Loading accounts...</div></DashboardLayout>;
+    return <div className="p-6 text-sm text-slate-600">Loading accounts...</div>;
   }
 
   if (error) {
-    return <DashboardLayout><div className="rounded-xl border border-red-200 bg-red-50 p-6 text-red-600">{error}</div></DashboardLayout>;
+    return <div className="p-6 text-sm text-rose-600">Unable to load accounts: {error}</div>;
   }
+
+  const handleDeleteRow = async (id: string) => {
+    await deleteAccount(id);
+    setRows((prev) => prev.filter((r) => r.id !== id));
+  };
 
   return (
     <CRMModuleListPage
@@ -42,6 +46,7 @@ export default function AccountsPage() {
       rows={rows}
       showNotes={true}
       showActivity={false}
+      onDeleteRow={handleDeleteRow}
     />
   );
 }

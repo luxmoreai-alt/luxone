@@ -32,12 +32,13 @@ export default function ModulePageLayout({
 
   return (
     <div className="bg-[#f5f7fb]">
-      <ModuleToolbar
-        viewName={viewName}
-        createButtonLabel={createButtonLabel}
-        isFilterOpen={isFilterOpen}
-        onToggleFilter={() => setIsFilterOpen((prev) => !prev)}
-      />
+        <ModuleToolbar
+          viewName={viewName}
+          createButtonLabel={createButtonLabel}
+          isFilterOpen={isFilterOpen}
+          onToggleFilter={() => setIsFilterOpen((prev) => !prev)}
+          onCreateClick={() => {}}
+        />
 
       <div className="flex gap-3 p-3">
         {isFilterOpen && (

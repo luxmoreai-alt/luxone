@@ -1,40 +1,41 @@
 import { useEffect, useState } from "react";
 import CRMModuleListPage from "../crm/CRMModuleListPage";
-import { leadModuleConfig, leadsMockList } from "../../components/modules/leads/leadsMockData";
-import DashboardLayout from "../../components/layout/DashboardLayout";
-import { fetchLeads } from "../../api/crm";
-import { mapLeadListItem } from "../../lib/shared/crmMappers";
+import { leadModuleConfig } from "../../components/modules/leads/leadsMockData";
+import { deleteLead, getLeads } from "../../lib/api/leadsApi";
 import type { LeadRecord } from "../../lib/shared/crmTypes";
 
 export default function LeadsPage() {
-  const [rows, setRows] = useState<LeadRecord[]>(leadsMockList);
+  const [rows, setRows] = useState<LeadRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
 
   useEffect(() => {
-    const load = async () => {
+    const loadLeads = async () => {
       try {
         setLoading(true);
-        const leads = await fetchLeads();
-        setRows(leads.map(mapLeadListItem));
-        setError("");
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load leads");
+        const data = await getLeads();
+        setRows(data);
+      } catch (error) {
+        console.error("Failed to load leads:", error);
       } finally {
         setLoading(false);
       }
     };
 
-    void load();
+    void loadLeads();
   }, []);
 
   if (loading) {
-    return <DashboardLayout><div className="rounded-xl border border-slate-200 bg-white p-6 text-slate-500">Loading leads...</div></DashboardLayout>;
+    return (
+      <div className="p-6 text-sm text-slate-600">
+        Loading leads...
+      </div>
+    );
   }
 
-  if (error) {
-    return <DashboardLayout><div className="rounded-xl border border-red-200 bg-red-50 p-6 text-red-600">{error}</div></DashboardLayout>;
-  }
+  const handleDeleteRow = async (id: string) => {
+    await deleteLead(id);
+    setRows((prev) => prev.filter((r) => r.id !== id));
+  };
 
   return (
     <CRMModuleListPage
@@ -42,6 +43,7 @@ export default function LeadsPage() {
       rows={rows}
       showNotes={true}
       showActivity={true}
+      onDeleteRow={handleDeleteRow}
     />
   );
 }

@@ -1,25 +1,25 @@
 import { useEffect, useState } from "react";
 import CRMModuleListPage from "../crm/CRMModuleListPage";
-import { contactModuleConfig, contactsMockList } from "../../components/modules/contacts/contactsMockData";
-import DashboardLayout from "../../components/layout/DashboardLayout";
-import { fetchContacts } from "../../api/crm";
-import { mapContact } from "../../lib/shared/crmMappers";
+import { contactModuleConfig } from "../../components/modules/contacts/contactsMockData";
+import { deleteContact, getContacts } from "../../lib/api/contactsApi";
 import type { ContactRecord } from "../../lib/shared/crmTypes";
+import FilterSidebar from "../../components/crm/FilterSidebar";
 
 export default function ContactsPage() {
-  const [rows, setRows] = useState<ContactRecord[]>(contactsMockList);
+  const [rows, setRows] = useState<ContactRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
       try {
         setLoading(true);
-        const contacts = await fetchContacts();
-        setRows(contacts.map(mapContact));
-        setError("");
+        setError(null);
+        const data = await getContacts();
+        setRows(data);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load contacts");
+        console.error("Failed to load contacts:", err);
+        setError(err instanceof Error ? err.message : "Unable to load contacts");
       } finally {
         setLoading(false);
       }
@@ -29,19 +29,39 @@ export default function ContactsPage() {
   }, []);
 
   if (loading) {
-    return <DashboardLayout><div className="rounded-xl border border-slate-200 bg-white p-6 text-slate-500">Loading contacts...</div></DashboardLayout>;
+    return <div className="p-6 text-sm text-slate-600">Loading contacts...</div>;
   }
 
   if (error) {
-    return <DashboardLayout><div className="rounded-xl border border-red-200 bg-red-50 p-6 text-red-600">{error}</div></DashboardLayout>;
+    return (
+      <div className="p-6 text-sm text-rose-600">
+        Unable to load contacts: {error}
+      </div>
+    );
   }
 
+  const handleDeleteRow = async (id: string) => {
+    await deleteContact(id);
+    setRows((prev) => prev.filter((r) => r.id !== id));
+  };
+
   return (
-    <CRMModuleListPage
-      config={contactModuleConfig}
-      rows={rows}
-      showNotes={true}
-      showActivity={false}
-    />
+    <>
+      <CRMModuleListPage
+        config={contactModuleConfig}
+        rows={rows}
+        showNotes={true}
+        showActivity={false}
+        onDeleteRow={handleDeleteRow}
+      />
+
+      {/* Example usage, update filterTitle/filterSections as needed */}
+      <FilterSidebar
+        title="Contacts Filters"
+        sections={[]}
+        onApply={() => {}}
+        onClear={() => {}}
+      />
+    </>
   );
 }

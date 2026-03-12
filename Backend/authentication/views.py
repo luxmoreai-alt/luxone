@@ -70,7 +70,7 @@ class CheckEmailView(APIView):
         serializer = CheckEmailSerializer(data=request.data)
         if serializer.is_valid():
             email = serializer.validated_data['email']
-            db_name, user = get_tenant_user_for_email(email)
+            db_name, user = get_tenant_user_for_email(email, require_admin=False)
 
             if db_name and user:
                 set_current_db_name(db_name)
@@ -88,13 +88,13 @@ class LoginView(APIView):
             email = serializer.validated_data['email']
             password = serializer.validated_data['password']
 
-            db_name, tenant_user = get_tenant_user_for_email(email)
+            db_name, tenant_user = get_tenant_user_for_email(email, require_admin=False)
             if not db_name or not tenant_user:
                 return Response(custom_response(success=False, message="Invalid login context"), status=status.HTTP_401_UNAUTHORIZED)
 
             set_current_db_name(db_name)
             user = authenticate(email=email, password=password)
-            if user and hasattr(user, 'is_admin') and getattr(user, 'is_admin', True) and user.is_active:
+            if user and user.is_active:
                 data = build_auth_payload(user, db_name)
                 return Response(custom_response(success=True, message="Login successful", data=data), status=status.HTTP_200_OK)
             return Response(custom_response(success=False, message="Invalid password or deactivated"), status=status.HTTP_401_UNAUTHORIZED)
@@ -108,7 +108,7 @@ class SendOTPView(APIView):
         serializer = SendOTPSerializer(data=request.data)
         if serializer.is_valid():
             email = serializer.validated_data['email']
-            db_name, user = get_tenant_user_for_email(email)
+            db_name, user = get_tenant_user_for_email(email, require_admin=False)
 
             if db_name and user:
                 set_current_db_name(db_name)
@@ -128,7 +128,7 @@ class VerifyOTPView(APIView):
             email = serializer.validated_data['email']
             code = serializer.validated_data['otp']
 
-            db_name, user = get_tenant_user_for_email(email)
+            db_name, user = get_tenant_user_for_email(email, require_admin=False)
             if not db_name or not user:
                 return Response(custom_response(success=False, message="Admin not registered"), status=status.HTTP_404_NOT_FOUND)
 
@@ -152,7 +152,7 @@ class ForgotPasswordView(APIView):
         serializer = SendOTPSerializer(data=request.data)
         if serializer.is_valid():
             email = serializer.validated_data['email']
-            db_name, user = get_tenant_user_for_email(email)
+            db_name, user = get_tenant_user_for_email(email, require_admin=False)
             if db_name and user:
                 set_current_db_name(db_name)
                 if generate_and_send_otp(email):
@@ -172,7 +172,7 @@ class ResetPasswordView(APIView):
             code = serializer.validated_data['otp']
             new_password = serializer.validated_data['new_password']
 
-            db_name, user = get_tenant_user_for_email(email)
+            db_name, user = get_tenant_user_for_email(email, require_admin=False)
             if not db_name or not user:
                 return Response(custom_response(success=False, message="Admin not registered"), status=status.HTTP_404_NOT_FOUND)
 

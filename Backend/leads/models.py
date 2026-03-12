@@ -27,13 +27,11 @@ class Lead(models.Model):
     website = models.URLField(max_length=255, blank=True, null=True)
     lead_source = models.CharField(
         max_length=100,
-        choices=LeadSource.choices,
         blank=True,
         null=True,
     )
     lead_status = models.CharField(
         max_length=100,
-        choices=LeadStatus.choices,
         blank=True,
         null=True,
     )

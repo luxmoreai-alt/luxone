@@ -17,11 +17,6 @@ type ApiPayload = {
   refresh?: string;
   refresh_token?: string;
   tenant_db?: string;
-  user?: {
-    id?: string | number;
-    email?: string;
-    is_admin?: boolean;
-  };
   data?: {
     message?: string;
     detail?: string;
@@ -31,11 +26,6 @@ type ApiPayload = {
     refresh?: string;
     refresh_token?: string;
     tenant_db?: string;
-    user?: {
-      id?: string | number;
-      email?: string;
-      is_admin?: boolean;
-    };
   };
 };
 
@@ -172,8 +162,12 @@ const LoginPage = () => {
         payload?.data?.refresh ||
         payload?.data?.refresh_token ||
         null;
-      const tenantDb = payload?.data?.tenant_db || null;
-      const user = payload?.data?.user || null;
+     
+
+      const tenantDb =
+        payload?.tenant_db ||
+        payload?.data?.tenant_db ||
+        null;
 
       if (accessToken) {
         localStorage.setItem("accessToken", accessToken);
@@ -185,10 +179,6 @@ const LoginPage = () => {
 
       if (tenantDb) {
         localStorage.setItem("tenantDb", tenantDb);
-      }
-
-      if (user) {
-        localStorage.setItem("loggedInUser", JSON.stringify(user));
       }
 
       if (!accessToken) {

@@ -1,4 +1,4 @@
-export type CRMModule = "leads" | "contacts" | "accounts";
+export type CRMModule = "leads" | "contacts" | "accounts" | "deals";
 
 export type LeadRecord = {
   id: string;
@@ -77,22 +77,6 @@ export type AccountRecord = {
   updatedAt: string;
 };
 
-export type CRMRecord = LeadRecord | ContactRecord | AccountRecord;
-
-export type FilterSection = {
-  title: string;
-  items: string[];
-};
-
-export type Note = {
-  id: string;
-  parentId: string;
-  title: string;
-  content: string;
-  createdAt: string;
-  createdBy: string;
-};
-
 export type Deal = {
   id: string;
   parentId: string;
@@ -102,6 +86,32 @@ export type Deal = {
   probability: number;
   closingDate: string;
   type: string;
+  accountName?: string;
+  contactName?: string;
+  leadName?: string;
+  dealOwner?: string;
+  ownerEmail?: string;
+  value?: number;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type CRMRecord = LeadRecord | ContactRecord | AccountRecord | Deal;
+
+export type FilterSectionItem = string | { label: string; key: string };
+
+export type FilterSection = {
+  title: string;
+  items: FilterSectionItem[];
+};
+
+export type Note = {
+  id: string;
+  parentId: string;
+  title: string;
+  content: string;
+  createdAt: string;
+  createdBy: string;
 };
 
 export type Activity = {

@@ -69,12 +69,10 @@ const OtpLoginPage = () => {
 
       const accessToken = data?.data?.access_token || data?.access_token || null;
       const refreshToken = data?.data?.refresh_token || data?.refresh_token || null;
-      const tenantDb = data?.data?.tenant_db || null;
-      const user = data?.data?.user || null;
+      const tenantDb = data?.data?.tenant_db || data?.tenant_db || null;
       if (accessToken) localStorage.setItem("accessToken", accessToken);
       if (refreshToken) localStorage.setItem("refreshToken", refreshToken);
       if (tenantDb) localStorage.setItem("tenantDb", tenantDb);
-      if (user) localStorage.setItem("loggedInUser", JSON.stringify(user));
 
       navigate("/home");
     } catch {

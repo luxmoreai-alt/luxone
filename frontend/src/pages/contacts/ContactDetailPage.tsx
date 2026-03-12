@@ -2,76 +2,70 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import CRMModuleDetailPage from "../crm/CRMModuleDetailPage";
 import { contactModuleConfig } from "../../components/modules/contacts/contactsMockData";
-import DashboardLayout from "../../components/layout/DashboardLayout";
-import { fetchContact, fetchDeals } from "../../api/crm";
-import { mapContact, mapDeal } from "../../lib/shared/crmMappers";
-import type { Activity, Attachment, Case, ConnectedRecord, ContactRecord, Deal, EmailRecord, Invoice, Meeting, Note, Product, PurchaseOrder, Quote, SalesOrder, TimelineItem } from "../../lib/shared/crmTypes";
+import { getContactById } from "../../lib/api/contactsApi";
+import type { ContactRecord } from "../../lib/shared/crmTypes";
 
 export default function ContactDetailPage() {
-  const { id = "" } = useParams();
-  const [record, setRecord] = useState<ContactRecord | null>(null);
-  const [deals, setDeals] = useState<Deal[]>([]);
-  const [error, setError] = useState("");
+  const { id } = useParams<{ id: string }>();
+  const [contact, setContact] = useState<ContactRecord | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!id) return;
+
     const load = async () => {
       try {
-        const [contact, allDeals] = await Promise.all([fetchContact(id), fetchDeals()]);
-        setRecord(mapContact(contact));
-        setDeals(allDeals.filter((item) => item.contact === contact.id).map(mapDeal));
-        setError("");
+        setLoading(true);
+        setError(null);
+        const data = await getContactById(id);
+        setContact(data);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load contact details");
+        setError(
+          err instanceof Error ? err.message : "Failed to load contact"
+        );
+      } finally {
+        setLoading(false);
       }
     };
 
-    if (id) {
-      void load();
-    }
+    void load();
   }, [id]);
 
-  if (error) {
-    return <DashboardLayout><div className="rounded-xl border border-red-200 bg-red-50 p-6 text-red-600">{error}</div></DashboardLayout>;
+  if (loading) {
+    return (
+      <div className="p-6 text-sm text-slate-600">Loading contact...</div>
+    );
   }
 
-  if (!record) {
-    return <DashboardLayout><div className="rounded-xl border border-slate-200 bg-white p-6 text-slate-500">Loading contact details...</div></DashboardLayout>;
+  if (error || !contact) {
+    return (
+      <div className="p-6 text-sm text-rose-600">
+        {error ?? "Contact not found."}
+      </div>
+    );
   }
-
-  const emptyNotes: Note[] = [];
-  const emptyActivities: Activity[] = [];
-  const emptyMeetings: Meeting[] = [];
-  const emptyProducts: Product[] = [];
-  const emptyEmails: EmailRecord[] = [];
-  const emptyAttachments: Attachment[] = [];
-  const emptyConnected: ConnectedRecord[] = [];
-  const emptyCases: Case[] = [];
-  const emptyQuotes: Quote[] = [];
-  const emptySalesOrders: SalesOrder[] = [];
-  const emptyPurchaseOrders: PurchaseOrder[] = [];
-  const emptyInvoices: Invoice[] = [];
-  const emptyTimeline: TimelineItem[] = [];
 
   return (
     <CRMModuleDetailPage
       config={contactModuleConfig}
-      rows={[record]}
+      rows={[contact]}
       data={{
-        notes: emptyNotes,
-        deals,
-        openActivities: emptyActivities,
-        closedActivities: emptyActivities,
-        meetings: emptyMeetings,
-        products: emptyProducts,
-        emails: emptyEmails,
-        attachments: emptyAttachments,
-        connectedRecords: emptyConnected,
-        cases: emptyCases,
-        quotes: emptyQuotes,
-        salesOrders: emptySalesOrders,
-        purchaseOrders: emptyPurchaseOrders,
-        invoices: emptyInvoices,
-        timeline: emptyTimeline,
+        notes: [],
+        deals: [],
+        openActivities: [],
+        closedActivities: [],
+        meetings: [],
+        products: [],
+        emails: [],
+        attachments: [],
+        connectedRecords: [],
+        cases: [],
+        quotes: [],
+        salesOrders: [],
+        purchaseOrders: [],
+        invoices: [],
+        timeline: [],
       }}
     />
   );
