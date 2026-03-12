@@ -47,10 +47,14 @@ export function filterRecords<T extends CRMRecord>(
 
     // Extra filters (sidebar filters for keys not in visible columns)
     return Object.entries(filters).every(([key, value]) => {
-      if (columnKeys.has(key)) return true; // already handled above
+      if (typeof key === "string" && columnKeys.has(key as keyof T & string)) return true; // already handled above
       const filterValue = (value ?? "").trim().toLowerCase();
       if (!filterValue) return true;
-      return String((row as Record<string, unknown>)[key] ?? "").toLowerCase().includes(filterValue);
+      // Type guard: only use key if it's a property of row
+      if (key in row) {
+        return String((row as Record<string, unknown>)[key] ?? "").toLowerCase().includes(filterValue);
+      }
+      return true;
     });
   });
 }

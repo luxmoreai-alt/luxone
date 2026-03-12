@@ -163,10 +163,6 @@ const LoginPage = () => {
         payload?.data?.refresh_token ||
         null;
      
-      const tenantDb =
-        payload?.tenant_db ||
-        payload?.data?.tenant_db ||
-        null;
 
       const tenantDb =
         payload?.tenant_db ||

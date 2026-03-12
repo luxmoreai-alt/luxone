@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, Search, X } from "lucide-react";
 import type { FilterSection, FilterSectionItem } from "../../lib/shared/crmTypes";
 
@@ -13,8 +13,8 @@ function getKey(item: FilterSectionItem): string | null {
 type FilterSidebarProps = {
   title: string;
   sections: FilterSection[];
-  onApply: (filters: Record<string, string>) => void;
-  onClear: () => void;
+  onApply?: (filters: Record<string, string>) => void;
+  onClear?: () => void;
 };
 
 export default function FilterSidebar({
@@ -25,16 +25,27 @@ export default function FilterSidebar({
 }: FilterSidebarProps) {
   const [search, setSearch] = useState("");
 
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(sections.map((section) => [section.title, true]))
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>(
+    () => Object.fromEntries(sections.map((section) => [section.title, true]))
   );
 
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
 
+  useEffect(() => {
+    setOpenSections((prev) => {
+      const next: Record<string, boolean> = {};
+      sections.forEach((section) => {
+        next[section.title] = prev[section.title] ?? true;
+      });
+      return next;
+    });
+  }, [sections]);
+
   const filteredSections = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) return sections;
+
     return sections
       .map((section) => ({
         ...section,
@@ -46,42 +57,53 @@ export default function FilterSidebar({
   }, [search, sections]);
 
   const toggleSection = (sectionTitle: string) => {
-    setOpenSections((prev) => ({ ...prev, [sectionTitle]: !prev[sectionTitle] }));
+    setOpenSections((prev) => ({
+      ...prev,
+      [sectionTitle]: !prev[sectionTitle],
+    }));
   };
 
   const toggleItem = (label: string) => {
-    setChecked((prev) => ({ ...prev, [label]: !prev[label] }));
+    setChecked((prev) => ({
+      ...prev,
+      [label]: !prev[label],
+    }));
   };
 
   const handleApply = () => {
     const filters: Record<string, string> = {};
+
     sections.forEach((section) => {
       section.items.forEach((item) => {
         const label = getLabel(item);
         const key = getKey(item);
+
         if (key && checked[label]) {
-          const val = (fieldValues[label] ?? "").trim();
-          if (val) filters[key] = val;
+          const value = (fieldValues[label] ?? "").trim();
+          if (value) {
+            filters[key] = value;
+          }
         }
       });
     });
-    onApply(filters);
+
+    onApply?.(filters);
   };
 
   const handleClear = () => {
     setChecked({});
     setFieldValues({});
     setSearch("");
-    onClear();
+    onClear?.();
   };
 
   const hasAnyChecked = Object.values(checked).some(Boolean);
 
   return (
     <aside className="flex w-[280px] shrink-0 flex-col rounded-lg border border-slate-200 bg-white">
-      {/* Header */}
-      <div className="border-b border-slate-100 px-4 pt-4 pb-3">
+      <div className="border-b border-slate-100 px-4 pb-3 pt-4">
         <h3 className="mb-3 text-[15px] font-semibold text-slate-800">{title}</h3>
+
         <div className="flex items-center gap-2 rounded-md border border-slate-300 px-3 py-[6px]">
           <Search size={15} className="shrink-0 text-slate-400" />
           <input
@@ -99,10 +121,10 @@ export default function FilterSidebar({
         </div>
       </div>
 
-      {/* Sections */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+      <div className="flex-1 space-y-4 overflow-y-auto px-4 py-3">
         {filteredSections.map((section) => {
           const isOpen = openSections[section.title] ?? true;
+
           return (
             <div key={section.title}>
               <button
@@ -113,7 +135,9 @@ export default function FilterSidebar({
                 <span>{section.title}</span>
                 <ChevronDown
                   size={14}
-                  className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+                  className={`transition-transform duration-200 ${
+                    isOpen ? "rotate-180" : ""
+                  }`}
                 />
               </button>
 
@@ -135,8 +159,9 @@ export default function FilterSidebar({
                           />
                           <span>{label}</span>
                         </label>
+
                         {key && isChecked && (
-                          <div className="ml-5 mt-1 mb-1">
+                          <div className="mb-1 ml-5 mt-1">
                             <input
                               type="text"
                               placeholder={`Filter by ${label}...`}
@@ -161,16 +186,16 @@ export default function FilterSidebar({
         })}
       </div>
 
-      {/* Footer buttons */}
-      <div className="border-t border-slate-100 px-4 py-3 flex gap-2">
+      <div className="flex gap-2 border-t border-slate-100 px-4 py-3">
         <button
           type="button"
           onClick={handleApply}
           disabled={!hasAnyChecked}
-          className="flex-1 h-[32px] rounded-[6px] bg-gradient-to-b from-[#4d76ff] to-[#365eea] text-[13px] font-medium text-white hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="h-[32px] flex-1 rounded-[6px] bg-gradient-to-b from-[#4d76ff] to-[#365eea] text-[13px] font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           Apply Filter
         </button>
+
         <button
           type="button"
           onClick={handleClear}
