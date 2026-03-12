@@ -1,5 +1,7 @@
+import { useEffect, useMemo, useState } from "react";
+import { useParams } from "react-router-dom";
 import CRMCreatePage, { type CRMCreateSection } from "../../components/crm/CRMCreatePage";
-import { createLead } from "../../lib/api/leadsApi";
+import { createLead, getLeadById, updateLead } from "../../lib/api/leadsApi";
 import {
   INDUSTRY_OPTIONS,
   LEAD_SOURCE_OPTIONS,
@@ -130,8 +132,65 @@ const sections: CRMCreateSection[] = [
 ];
 
 export default function CreateLeadPage() {
+  const { id } = useParams<{ id?: string }>();
+  const isEditMode = Boolean(id);
+  const [loading, setLoading] = useState(false);
+  const [formValues, setFormValues] = useState<LeadCreateValues>(initialValues);
+
+  useEffect(() => {
+    const loadLead = async () => {
+      if (!id) {
+        setFormValues(initialValues);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const lead = await getLeadById(id);
+        if (!lead) return;
+
+        setFormValues({
+          leadOwner: lead.leadOwner ?? "",
+          salutation: "",
+          firstName: lead.firstName ?? "",
+          company: lead.company ?? "",
+          lastName: lead.lastName ?? "",
+          title: lead.title ?? "",
+          email: lead.email ?? "",
+          phone: lead.phone ?? "",
+          fax: lead.fax ?? "",
+          mobile: lead.mobile ?? "",
+          website: lead.website ?? "",
+          leadSource: lead.leadSource ?? "",
+          leadStatus: lead.leadStatus ?? "",
+          industry: lead.industry ?? "",
+          noOfEmployees: String(lead.noOfEmployees || ""),
+          annualRevenue: String(lead.annualRevenue || ""),
+          rating: lead.rating ?? "",
+          emailOptOut: false,
+          skypeId: "",
+          secondaryEmail: lead.secondaryEmail ?? "",
+          twitter: "@",
+          country: lead.country ?? "",
+          flatNo: "",
+          street: lead.address ?? "",
+          city: lead.city ?? "",
+          state: lead.state ?? "",
+          zipCode: lead.zipCode ?? "",
+          latitude: "",
+          longitude: "",
+          description: lead.description ?? "",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void loadLead();
+  }, [id]);
+
   const handleSubmit = async (values: LeadCreateValues) => {
-    await createLead({
+    const payload = {
       leadOwner: values.leadOwner,
       salutation: values.salutation,
       firstName: values.firstName,
@@ -161,13 +220,26 @@ export default function CreateLeadPage() {
       latitude: values.latitude,
       longitude: values.longitude,
       description: values.description,
-    });
+    };
+
+    if (isEditMode && id) {
+      await updateLead(id, payload);
+      return;
+    }
+
+    await createLead(payload);
   };
+
+  const pageTitle = useMemo(() => (isEditMode ? "Edit Lead" : "Create Lead"), [isEditMode]);
+
+  if (loading) {
+    return <div className="p-6 text-sm text-slate-600">Loading lead...</div>;
+  }
 
   return (
     <CRMCreatePage
-      title="Create Lead"
-      initialValues={initialValues}
+      title={pageTitle}
+      initialValues={formValues}
       sections={sections}
       backPath="/leads"
       onSubmit={handleSubmit}

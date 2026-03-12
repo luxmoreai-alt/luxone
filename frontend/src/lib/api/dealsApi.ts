@@ -197,3 +197,42 @@ export async function updateDeal(id: string, payload: Partial<CreateDealPayload>
 export async function deleteDeal(id: string): Promise<void> {
   await apiRequest(`/deals/${id}`, { method: "DELETE" });
 }
+
+export async function createDealTask(
+  id: string,
+  payload: { subject: string; description?: string }
+): Promise<void> {
+  await apiRequest(`/deals/${id}/create-task`, {
+    method: "POST",
+    body: JSON.stringify({
+      subject: payload.subject,
+      description: payload.description ?? "",
+    }),
+  });
+}
+
+export async function logDealCall(
+  id: string,
+  payload: { call_summary: string; call_outcome?: string }
+): Promise<void> {
+  await apiRequest(`/deals/${id}/log-call`, {
+    method: "POST",
+    body: JSON.stringify({
+      call_summary: payload.call_summary,
+      call_outcome: payload.call_outcome ?? "",
+    }),
+  });
+}
+
+export async function scheduleDealMeeting(
+  id: string,
+  payload: { meeting_subject: string; agenda?: string }
+): Promise<void> {
+  await apiRequest(`/deals/${id}/schedule-meeting`, {
+    method: "POST",
+    body: JSON.stringify({
+      meeting_subject: payload.meeting_subject,
+      agenda: payload.agenda ?? "",
+    }),
+  });
+}

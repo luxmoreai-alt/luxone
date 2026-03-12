@@ -370,3 +370,63 @@ export async function getLeadTimeline(id: string): Promise<TimelineItem[]> {
     by: item.user ?? "",
   }));
 }
+
+export async function createLeadTask(
+  id: string,
+  payload: { subject: string; description?: string }
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/leads/${id}/create-task`, {
+    method: "POST",
+    headers: buildHeaders(),
+    body: JSON.stringify({
+      subject: payload.subject,
+      description: payload.description ?? "",
+    }),
+  });
+  if (!res.ok) throw new Error((await res.text()) || "Failed to create task");
+}
+
+export async function logLeadCall(
+  id: string,
+  payload: { call_summary: string; call_outcome?: string }
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/leads/${id}/log-call`, {
+    method: "POST",
+    headers: buildHeaders(),
+    body: JSON.stringify({
+      call_summary: payload.call_summary,
+      call_outcome: payload.call_outcome ?? "",
+    }),
+  });
+  if (!res.ok) throw new Error((await res.text()) || "Failed to log call");
+}
+
+export async function scheduleLeadMeeting(
+  id: string,
+  payload: { meeting_subject: string; agenda?: string }
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/leads/${id}/schedule-meeting`, {
+    method: "POST",
+    headers: buildHeaders(),
+    body: JSON.stringify({
+      meeting_subject: payload.meeting_subject,
+      agenda: payload.agenda ?? "",
+    }),
+  });
+  if (!res.ok) throw new Error((await res.text()) || "Failed to schedule meeting");
+}
+
+export async function sendLeadEmail(
+  id: string,
+  payload: { subject: string; body: string }
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/leads/${id}/send-email`, {
+    method: "POST",
+    headers: buildHeaders(),
+    body: JSON.stringify({
+      subject: payload.subject,
+      body: payload.body,
+    }),
+  });
+  if (!res.ok) throw new Error((await res.text()) || "Failed to send email");
+}

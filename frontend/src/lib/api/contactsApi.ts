@@ -1,5 +1,5 @@
 import { apiRequest } from "../../api/client";
-import type { ContactRecord } from "../shared/crmTypes";
+import type { ContactRecord, Note } from "../shared/crmTypes";
 
 type BackendContact = {
   id: number;
@@ -38,6 +38,13 @@ type Paginated<T> = {
   next: string | null;
   previous: string | null;
   results: T[];
+};
+
+type BackendNote = {
+  id: number;
+  note: string;
+  created_by?: string | null;
+  created_at?: string;
 };
 
 function toList<T>(payload: T[] | Paginated<T>): T[] {
@@ -176,3 +183,64 @@ export async function createContact(payload: CreateContactPayload): Promise<Cont
   return normalizeContact(data);
 }
 
+export async function addContactNote(id: string, note: string): Promise<void> {
+  await apiRequest(`/contacts/${id}/notes`, {
+    method: "POST",
+    body: JSON.stringify({ note }),
+  });
+}
+
+export async function getContactNotes(id: string): Promise<Note[]> {
+  try {
+    const data = await apiRequest<BackendNote[]>(`/contacts/${id}/notes`);
+    return data.map((item) => ({
+      id: String(item.id),
+      parentId: id,
+      title: item.note.slice(0, 60),
+      content: item.note,
+      createdAt: item.created_at ?? "",
+      createdBy: item.created_by ?? "",
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function createContactTask(
+  id: string,
+  payload: { subject: string; description?: string }
+): Promise<void> {
+  await apiRequest(`/contacts/${id}/create-task`, {
+    method: "POST",
+    body: JSON.stringify({
+      subject: payload.subject,
+      description: payload.description ?? "",
+    }),
+  });
+}
+
+export async function logContactCall(
+  id: string,
+  payload: { call_summary: string; call_outcome?: string }
+): Promise<void> {
+  await apiRequest(`/contacts/${id}/log-call`, {
+    method: "POST",
+    body: JSON.stringify({
+      call_summary: payload.call_summary,
+      call_outcome: payload.call_outcome ?? "",
+    }),
+  });
+}
+
+export async function sendContactEmail(
+  id: string,
+  payload: { subject: string; body: string }
+): Promise<void> {
+  await apiRequest(`/contacts/${id}/send-email`, {
+    method: "POST",
+    body: JSON.stringify({
+      subject: payload.subject,
+      body: payload.body,
+    }),
+  });
+}

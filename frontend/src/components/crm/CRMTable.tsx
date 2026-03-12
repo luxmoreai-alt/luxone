@@ -79,7 +79,8 @@ export default function CRMTable<T extends CRMRecord>({
   const allChecked = rows.every((row) => selectedIds.includes(row.id));
 
   return (
-    <div className="overflow-x-auto overflow-y-visible rounded-xl border border-slate-200 bg-white pb-1">
+    <div className="overflow-visible rounded-xl border border-slate-200 bg-white pb-1">
+      <div className="overflow-x-auto overflow-y-visible">
       <table className="w-full min-w-[1180px] divide-y divide-slate-200 text-left">
         <thead className="bg-slate-50">
           <tr>
@@ -188,6 +189,7 @@ export default function CRMTable<T extends CRMRecord>({
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

@@ -10,6 +10,7 @@ import ContactDetailPage from "./pages/contacts/ContactDetailPage";
 import AccountsPage from "./pages/accounts/AccountsPage";
 import AccountDetailPage from "./pages/accounts/AccountDetailPage";
 import DealsPage from "./pages/deals/DealsPage";
+import DealDetailPage from "./pages/deals/DealDetailPage";
 
 import CreateLeadPage from "./pages/leads/CreateLeadPage";
 import CreateContactPage from "./pages/contacts/CreateContactPage";
@@ -37,8 +38,10 @@ export default function App() {
       <Route path="/accounts" element={<AccountsPage />} />
       <Route path="/accounts/:id" element={<AccountDetailPage />} />
       <Route path="/deals" element={<DealsPage />} />
+      <Route path="/deals/:id" element={<DealDetailPage />} />
       <Route path="*" element={<Navigate to="/home" replace />} />
       <Route path="/leads/create" element={<CreateLeadPage />} />
+      <Route path="/leads/:id/edit" element={<CreateLeadPage />} />
       <Route path="/contacts/create" element={<CreateContactPage />} />
       <Route path="/accounts/create" element={<CreateAccountPage />} />
       <Route path="/deals/create" element={<CreateDealPage />} />

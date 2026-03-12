@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../layout/DashboardLayout";
 import { ChevronDown } from "lucide-react";
@@ -90,6 +90,10 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState<T>(initialValues);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    setFormData(initialValues);
+  }, [initialValues]);
 
   const countryOptions = ["-None-"];
   const stateOptions = ["-None-"];

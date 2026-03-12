@@ -96,3 +96,23 @@ class LeadConvertResponseSerializer(serializers.Serializer):
     account_id = serializers.IntegerField()
     contact_id = serializers.IntegerField()
     deal_id = serializers.IntegerField(allow_null=True, required=False)
+
+
+class LeadActionSerializer(serializers.Serializer):
+    subject = serializers.CharField(max_length=255)
+    description = serializers.CharField(allow_blank=True, required=False, default="")
+
+
+class LeadCallSerializer(serializers.Serializer):
+    call_summary = serializers.CharField(max_length=255)
+    call_outcome = serializers.CharField(max_length=255, required=False, allow_blank=True)
+
+
+class LeadMeetingSerializer(serializers.Serializer):
+    meeting_subject = serializers.CharField(max_length=255)
+    agenda = serializers.CharField(required=False, allow_blank=True)
+
+
+class LeadSendEmailSerializer(serializers.Serializer):
+    subject = serializers.CharField(max_length=255)
+    body = serializers.CharField()

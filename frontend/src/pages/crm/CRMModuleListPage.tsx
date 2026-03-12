@@ -129,7 +129,12 @@ export default function CRMModuleListPage<T extends CRMRecord>({
       return openModal("convert", row);
     }
     if (actionKey === "delete") return openModal("delete", row);
-    if (actionKey === "edit") return navigate(`${config.baseRoute}/${row.id}`);
+    if (actionKey === "edit") {
+      if (config.module === "leads") {
+        return navigate(`${config.baseRoute}/${row.id}/edit`);
+      }
+      return navigate(`${config.baseRoute}/${row.id}`);
+    }
   };
 
   const handleOpenRow = (row: T) => {
@@ -141,6 +146,185 @@ export default function CRMModuleListPage<T extends CRMRecord>({
     if (onDeleteRow) {
       await onDeleteRow(activeRow.id);
     }
+  };
+
+  const handleSaveNote = async (note: string): Promise<void> => {
+    if (!activeRow) {
+      throw new Error("No record selected.");
+    }
+
+    if (config.module === "leads") {
+      const { addLeadNote } = await import("../../lib/api/leadsApi");
+      await addLeadNote(activeRow.id, note);
+      return;
+    }
+
+    if (config.module === "accounts") {
+      const { addAccountNote } = await import("../../lib/api/accountsApi");
+      await addAccountNote(activeRow.id, note);
+      return;
+    }
+
+    if (config.module === "contacts") {
+      const { addContactNote } = await import("../../lib/api/contactsApi");
+      await addContactNote(activeRow.id, note);
+      return;
+    }
+
+    throw new Error("Notes are not enabled for this module.");
+  };
+
+  const handleSendEmail = async (payload: {
+    to: string;
+    subject: string;
+    body: string;
+    from_email?: string;
+  }): Promise<void> => {
+    if (!activeRow) {
+      throw new Error("No record selected.");
+    }
+
+    if (config.module === "contacts") {
+      const { sendContactEmail } = await import("../../lib/api/contactsApi");
+      await sendContactEmail(activeRow.id, {
+        subject: payload.subject,
+        body: payload.body,
+      });
+      return;
+    }
+
+    if (config.module === "accounts") {
+      const { sendAccountEmail } = await import("../../lib/api/accountsApi");
+      await sendAccountEmail(activeRow.id, {
+        subject: payload.subject,
+        body: payload.body,
+      });
+      return;
+    }
+
+    if (config.module === "leads") {
+      const { sendEmail, sendLeadEmail } = await import("../../lib/api/leadsApi");
+      await sendEmail(payload);
+      await sendLeadEmail(activeRow.id, {
+        subject: payload.subject,
+        body: payload.body,
+      });
+      return;
+    }
+
+    const { sendEmail } = await import("../../lib/api/leadsApi");
+    await sendEmail(payload);
+  };
+
+  const handleCreateTask = async (payload: {
+    subject: string;
+    description?: string;
+  }): Promise<void> => {
+    if (!activeRow) {
+      throw new Error("No record selected.");
+    }
+
+    if (config.module === "contacts") {
+      const { createContactTask } = await import("../../lib/api/contactsApi");
+      await createContactTask(activeRow.id, payload);
+      return;
+    }
+
+    if (config.module === "deals") {
+      const { createDealTask } = await import("../../lib/api/dealsApi");
+      await createDealTask(activeRow.id, payload);
+      return;
+    }
+
+    if (config.module === "accounts") {
+      const { createAccountTask } = await import("../../lib/api/accountsApi");
+      await createAccountTask(activeRow.id, payload);
+      return;
+    }
+
+    if (config.module === "leads") {
+      const { createLeadTask } = await import("../../lib/api/leadsApi");
+      await createLeadTask(activeRow.id, payload);
+      return;
+    }
+
+    throw new Error(`Task action is not available for ${config.module}.`);
+  };
+
+  const handleCreateMeeting = async (payload: {
+    meeting_subject: string;
+    agenda?: string;
+  }): Promise<void> => {
+    if (!activeRow) {
+      throw new Error("No record selected.");
+    }
+
+    if (config.module === "deals") {
+      const { scheduleDealMeeting } = await import("../../lib/api/dealsApi");
+      await scheduleDealMeeting(activeRow.id, payload);
+      return;
+    }
+
+    if (config.module === "accounts") {
+      const { scheduleAccountMeeting } = await import("../../lib/api/accountsApi");
+      await scheduleAccountMeeting(activeRow.id, payload);
+      return;
+    }
+
+    if (config.module === "leads") {
+      const { scheduleLeadMeeting } = await import("../../lib/api/leadsApi");
+      await scheduleLeadMeeting(activeRow.id, payload);
+      return;
+    }
+
+    throw new Error(`Meeting action is not available for ${config.module}.`);
+  };
+
+  const handleCallAction = async (payload: {
+    call_summary: string;
+    call_outcome?: string;
+  }): Promise<void> => {
+    if (!activeRow) {
+      throw new Error("No record selected.");
+    }
+
+    if (config.module === "contacts") {
+      const { logContactCall } = await import("../../lib/api/contactsApi");
+      await logContactCall(activeRow.id, payload);
+      return;
+    }
+
+    if (config.module === "deals") {
+      const { logDealCall } = await import("../../lib/api/dealsApi");
+      await logDealCall(activeRow.id, payload);
+      return;
+    }
+
+    if (config.module === "accounts") {
+      const { logAccountCall } = await import("../../lib/api/accountsApi");
+      await logAccountCall(activeRow.id, payload);
+      return;
+    }
+
+    if (config.module === "leads") {
+      const { logLeadCall } = await import("../../lib/api/leadsApi");
+      await logLeadCall(activeRow.id, payload);
+      return;
+    }
+
+    throw new Error(`Call action is not available for ${config.module}.`);
+  };
+
+  const handleConvertLead = async (payload: {
+    create_deal: boolean;
+    deal_name?: string;
+  }): Promise<void> => {
+    if (!activeRow || config.module !== "leads") {
+      throw new Error("Convert is only available for leads.");
+    }
+
+    const { convertLead } = await import("../../lib/api/leadsApi");
+    await convertLead(activeRow.id, payload);
   };
 
   const recordName = activeRow ? getRecordName(activeRow as CRMRecord) : "";
@@ -250,6 +434,7 @@ export default function CRMModuleListPage<T extends CRMRecord>({
         onClose={closeModal}
         toEmail={recordEmail}
         recordName={recordName}
+        onSend={handleSendEmail}
       />
       <AddTagsModal
         open={activeModal === "add-tags"}
@@ -260,30 +445,37 @@ export default function CRMModuleListPage<T extends CRMRecord>({
         open={activeModal === "task"}
         onClose={closeModal}
         recordName={recordName}
+        onSave={handleCreateTask}
       />
       <MeetingModal
         open={activeModal === "meeting"}
         onClose={closeModal}
         recordName={recordName}
+        onSave={handleCreateMeeting}
       />
       <ScheduleCallModal
         open={activeModal === "schedule-call"}
         onClose={closeModal}
         recordName={recordName}
+        onSave={handleCallAction}
       />
       <LogCallModal
         open={activeModal === "log-call"}
         onClose={closeModal}
         recordName={recordName}
+        onSave={handleCallAction}
       />
       <NoteModal
         open={activeModal === "note"}
         onClose={closeModal}
+        recordName={recordName}
+        onSave={handleSaveNote}
       />
       <ConvertLeadModal
         open={activeModal === "convert"}
         onClose={closeModal}
         leadName={recordName}
+        onConvert={handleConvertLead}
       />
       <DeleteModal
         open={activeModal === "delete"}

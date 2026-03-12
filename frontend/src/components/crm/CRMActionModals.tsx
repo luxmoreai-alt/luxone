@@ -1,5 +1,5 @@
 import { Paperclip } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import CRMModalBase from "./CRMModalBase";
 
 type BaseModalProps = {
@@ -7,33 +7,58 @@ type BaseModalProps = {
   onClose: () => void;
 };
 
-// ─── Send Email ───────────────────────────────────────────────────────────────
 export function SendEmailModal({
   open,
   onClose,
   toEmail = "",
   recordName = "",
-}: BaseModalProps & { toEmail?: string; recordName?: string }) {
-  const [from, setFrom] = useState("sales@crms2.com");
+  onSend,
+}: BaseModalProps & {
+  toEmail?: string;
+  recordName?: string;
+  onSend?: (payload: { to: string; subject: string; body: string; from_email?: string }) => Promise<void>;
+}) {
+  const [from, setFrom] = useState("");
   const [to, setTo] = useState(toEmail);
   const [subject, setSubject] = useState(recordName ? `Re: ${recordName}` : "");
   const [body, setBody] = useState("");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setTo(toEmail);
+    setSubject(recordName ? `Re: ${recordName}` : "");
+    setBody("");
+    setError(null);
+  }, [open, toEmail, recordName]);
 
   const handleSend = async () => {
-    if (!to.trim()) { alert("Please enter a recipient email."); return; }
-    if (!subject.trim()) { alert("Please enter a subject."); return; }
+    if (!to.trim()) {
+      setError("Please enter a recipient email.");
+      return;
+    }
+    if (!subject.trim()) {
+      setError("Please enter a subject.");
+      return;
+    }
+
     try {
-      const { sendEmail } = await import("../../lib/api/leadsApi");
-      await sendEmail({
-        to,
-        subject,
-        body,
-        from_email: from,
-      });
-      alert("Email sent successfully.");
+      setSending(true);
+      setError(null);
+
+      if (onSend) {
+        await onSend({ to: to.trim(), subject: subject.trim(), body: body.trim(), from_email: from.trim() || undefined });
+      } else {
+        const { sendEmail } = await import("../../lib/api/leadsApi");
+        await sendEmail({ to: to.trim(), subject: subject.trim(), body: body.trim(), from_email: from.trim() || undefined });
+      }
+
       onClose();
-    } catch (err: any) {
-      alert("Failed to send email: " + (err?.message || err));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to send email.");
+    } finally {
+      setSending(false);
     }
   };
 
@@ -44,9 +69,10 @@ export function SendEmailModal({
       maxWidthClassName="max-w-3xl"
       footer={
         <>
-          <button onClick={onClose} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">Cancel</button>
-          <button onClick={onClose} className="rounded-lg border border-blue-600 px-3 py-2 text-sm text-blue-700">Schedule</button>
-          <button onClick={handleSend} className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white">Send</button>
+          <button onClick={onClose} disabled={sending} className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-50">Cancel</button>
+          <button onClick={() => void handleSend()} disabled={sending} className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white disabled:opacity-50">
+            {sending ? "Sending..." : "Send"}
+          </button>
         </>
       }
     >
@@ -60,17 +86,15 @@ export function SendEmailModal({
           <button className="rounded border border-slate-200 px-2 py-1 font-bold">B</button>
           <button className="rounded border border-slate-200 px-2 py-1 italic">I</button>
           <button className="rounded border border-slate-200 px-2 py-1 underline">U</button>
-          <button className="rounded border border-slate-200 px-2 py-1">List</button>
-          <button className="rounded border border-slate-200 px-2 py-1">Link</button>
         </div>
         <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={7} className="w-full resize-none rounded-b-lg px-3 py-2 text-sm outline-none" />
       </div>
       <button className="mt-3 inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700"><Paperclip size={14} />Attach Files</button>
+      {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
     </CRMModalBase>
   );
 }
 
-// ─── Add Tags ─────────────────────────────────────────────────────────────────
 export function AddTagsModal({
   open,
   onClose,
@@ -82,14 +106,14 @@ export function AddTagsModal({
   return (
     <CRMModalBase
       open={open}
-      title={recordName ? `Add Tags — ${recordName}` : "Add Tags"}
+      title={recordName ? `Add Tags - ${recordName}` : "Add Tags"}
       maxWidthClassName="max-w-lg"
       footer={
         <>
           <button onClick={onClose} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">Cancel</button>
           <button
             onClick={() => {
-              if (!value.trim()) { alert("Please enter or select a tag."); return; }
+              if (!value.trim()) return;
               onClose();
             }}
             className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white"
@@ -112,27 +136,51 @@ export function AddTagsModal({
   );
 }
 
-// ─── Note ─────────────────────────────────────────────────────────────────────
-export function NoteModal({ open, onClose }: BaseModalProps) {
+export function NoteModal({
+  open,
+  onClose,
+  recordName = "",
+  onSave,
+}: BaseModalProps & { recordName?: string; onSave?: (note: string) => Promise<void> }) {
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSave = async () => {
+    if (!note.trim()) {
+      setError("Please enter a note.");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError(null);
+      await onSave?.(note.trim());
+      setTitle("");
+      setNote("");
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save note.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <CRMModalBase
       open={open}
-      title="Notes"
+      title={recordName ? `Notes - ${recordName}` : "Notes"}
       maxWidthClassName="max-w-xl"
       footer={
         <>
-          <button onClick={onClose} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">Cancel</button>
+          <button onClick={onClose} disabled={saving} className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-50">Cancel</button>
           <button
-            onClick={() => {
-              if (!note.trim()) { alert("Please enter a note."); return; }
-              onClose();
-            }}
-            className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white"
+            onClick={() => void handleSave()}
+            disabled={saving}
+            className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white disabled:opacity-50"
           >
-            Save
+            {saving ? "Saving..." : "Save"}
           </button>
         </>
       }
@@ -140,18 +188,42 @@ export function NoteModal({ open, onClose }: BaseModalProps) {
       <div className="grid gap-3">
         <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note" rows={5} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        {error && <p className="text-sm text-rose-600">{error}</p>}
       </div>
     </CRMModalBase>
   );
 }
 
-// ─── Task ─────────────────────────────────────────────────────────────────────
 export function TaskModal({
   open,
   onClose,
   recordName = "",
-}: BaseModalProps & { recordName?: string }) {
+  onSave,
+}: BaseModalProps & {
+  recordName?: string;
+  onSave?: (payload: { subject: string; description?: string }) => Promise<void>;
+}) {
   const [subject, setSubject] = useState(recordName ? `Follow up with ${recordName}` : "");
+  const [description, setDescription] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSave = async () => {
+    if (!subject.trim()) {
+      setError("Please enter a subject.");
+      return;
+    }
+    try {
+      setSaving(true);
+      setError(null);
+      await onSave?.({ subject: subject.trim(), description: description.trim() });
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create task.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <CRMModalBase
@@ -160,48 +232,52 @@ export function TaskModal({
       maxWidthClassName="max-w-xl"
       footer={
         <>
-          <button onClick={onClose} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">Cancel</button>
-          <button
-            onClick={() => {
-              if (!subject.trim()) { alert("Please enter a subject."); return; }
-              onClose();
-            }}
-            className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white"
-          >
-            Save
+          <button onClick={onClose} disabled={saving} className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-50">Cancel</button>
+          <button onClick={() => void handleSave()} disabled={saving} className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white disabled:opacity-50">
+            {saving ? "Saving..." : "Save"}
           </button>
         </>
       }
     >
-      <div className="grid gap-3 sm:grid-cols-2">
-        <input
-          placeholder="Subject"
-          value={subject}
-          onChange={(e) => setSubject(e.target.value)}
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm sm:col-span-2"
-        />
-        <input type="date" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        <select className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-          <option value="">Priority</option>
-          <option>High</option><option>Medium</option><option>Low</option>
-        </select>
-        <input placeholder="Owner" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        <select className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-          <option value="">Reminder</option>
-          <option>None</option><option>5 minutes before</option><option>15 minutes before</option><option>30 minutes before</option><option>1 hour before</option>
-        </select>
+      <div className="grid gap-3">
+        <input placeholder="Subject" value={subject} onChange={(e) => setSubject(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        <textarea placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} rows={4} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        {error && <p className="text-sm text-rose-600">{error}</p>}
       </div>
     </CRMModalBase>
   );
 }
 
-// ─── Meeting ──────────────────────────────────────────────────────────────────
 export function MeetingModal({
   open,
   onClose,
   recordName = "",
-}: BaseModalProps & { recordName?: string }) {
-  const [title, setTitle] = useState(recordName ? `Meeting with ${recordName}` : "");
+  onSave,
+}: BaseModalProps & {
+  recordName?: string;
+  onSave?: (payload: { meeting_subject: string; agenda?: string }) => Promise<void>;
+}) {
+  const [meetingSubject, setMeetingSubject] = useState(recordName ? `Meeting with ${recordName}` : "");
+  const [agenda, setAgenda] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSave = async () => {
+    if (!meetingSubject.trim()) {
+      setError("Please enter a meeting title.");
+      return;
+    }
+    try {
+      setSaving(true);
+      setError(null);
+      await onSave?.({ meeting_subject: meetingSubject.trim(), agenda: agenda.trim() });
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to schedule meeting.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <CRMModalBase
@@ -209,46 +285,52 @@ export function MeetingModal({
       title="Create Meeting"
       footer={
         <>
-          <button onClick={onClose} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">Cancel</button>
-          <button
-            onClick={() => {
-              if (!title.trim()) { alert("Please enter a meeting title."); return; }
-              onClose();
-            }}
-            className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white"
-          >
-            Save
+          <button onClick={onClose} disabled={saving} className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-50">Cancel</button>
+          <button onClick={() => void handleSave()} disabled={saving} className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white disabled:opacity-50">
+            {saving ? "Saving..." : "Save"}
           </button>
         </>
       }
     >
-      <div className="grid gap-3 sm:grid-cols-2">
-        <input
-          placeholder="Title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm sm:col-span-2"
-        />
-        <input placeholder="Meeting Venue" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        <input placeholder="Location" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        <label className="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm"><input type="checkbox" />All Day</label>
-        <input type="datetime-local" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        <input type="datetime-local" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        <input placeholder="Host" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        <input placeholder="Participants" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+      <div className="grid gap-3">
+        <input placeholder="Meeting Subject" value={meetingSubject} onChange={(e) => setMeetingSubject(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        <textarea rows={3} placeholder="Agenda" value={agenda} onChange={(e) => setAgenda(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        {error && <p className="text-sm text-rose-600">{error}</p>}
       </div>
-      <textarea rows={3} placeholder="Add more details" className="mt-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
     </CRMModalBase>
   );
 }
 
-// ─── Schedule Call ────────────────────────────────────────────────────────────
 export function ScheduleCallModal({
   open,
   onClose,
   recordName = "",
-}: BaseModalProps & { recordName?: string }) {
-  const [subject, setSubject] = useState(recordName ? `Call with ${recordName}` : "");
+  onSave,
+}: BaseModalProps & {
+  recordName?: string;
+  onSave?: (payload: { call_summary: string; call_outcome?: string }) => Promise<void>;
+}) {
+  const [summary, setSummary] = useState(recordName ? `Call with ${recordName}` : "");
+  const [outcome, setOutcome] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSave = async () => {
+    if (!summary.trim()) {
+      setError("Please enter call summary.");
+      return;
+    }
+    try {
+      setSaving(true);
+      setError(null);
+      await onSave?.({ call_summary: summary.trim(), call_outcome: outcome.trim() });
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to schedule call.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <CRMModalBase
@@ -256,53 +338,52 @@ export function ScheduleCallModal({
       title="Schedule a Call"
       footer={
         <>
-          <button onClick={onClose} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">Cancel</button>
-          <button
-            onClick={() => {
-              if (!subject.trim()) { alert("Please enter a subject."); return; }
-              onClose();
-            }}
-            className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white"
-          >
-            Schedule
+          <button onClick={onClose} disabled={saving} className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-50">Cancel</button>
+          <button onClick={() => void handleSave()} disabled={saving} className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white disabled:opacity-50">
+            {saving ? "Scheduling..." : "Schedule"}
           </button>
         </>
       }
     >
-      <div className="grid gap-3 sm:grid-cols-2">
-        <input
-          placeholder="Subject"
-          value={subject}
-          onChange={(e) => setSubject(e.target.value)}
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm sm:col-span-2"
-        />
-        <input defaultValue={recordName} placeholder="Call For" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        <input placeholder="Related To" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        <select className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-          <option value="">Call Type</option><option>Inbound</option><option>Outbound</option>
-        </select>
-        <select className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-          <option value="">Call Status</option><option>Scheduled</option><option>Completed</option><option>Cancelled</option>
-        </select>
-        <input type="datetime-local" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        <input placeholder="Call Owner" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        <select className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-          <option value="">Reminder</option><option>None</option><option>5 min before</option><option>15 min before</option>
-        </select>
-        <input placeholder="Call Purpose" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+      <div className="grid gap-3">
+        <input placeholder="Call Subject" value={summary} onChange={(e) => setSummary(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        <textarea rows={3} placeholder="Call Purpose / Outcome" value={outcome} onChange={(e) => setOutcome(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        {error && <p className="text-sm text-rose-600">{error}</p>}
       </div>
-      <textarea rows={3} placeholder="Call Agenda" className="mt-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
     </CRMModalBase>
   );
 }
 
-// ─── Log Call ─────────────────────────────────────────────────────────────────
 export function LogCallModal({
   open,
   onClose,
   recordName = "",
-}: BaseModalProps & { recordName?: string }) {
-  const [subject, setSubject] = useState(recordName ? `Call with ${recordName}` : "");
+  onSave,
+}: BaseModalProps & {
+  recordName?: string;
+  onSave?: (payload: { call_summary: string; call_outcome?: string }) => Promise<void>;
+}) {
+  const [summary, setSummary] = useState(recordName ? `Call with ${recordName}` : "");
+  const [outcome, setOutcome] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSave = async () => {
+    if (!summary.trim()) {
+      setError("Please enter call summary.");
+      return;
+    }
+    try {
+      setSaving(true);
+      setError(null);
+      await onSave?.({ call_summary: summary.trim(), call_outcome: outcome.trim() });
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to log call.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <CRMModalBase
@@ -310,45 +391,22 @@ export function LogCallModal({
       title="Log a Call"
       footer={
         <>
-          <button onClick={onClose} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">Cancel</button>
-          <button
-            onClick={() => {
-              if (!subject.trim()) { alert("Please enter a subject."); return; }
-              onClose();
-            }}
-            className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white"
-          >
-            Save
+          <button onClick={onClose} disabled={saving} className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-50">Cancel</button>
+          <button onClick={() => void handleSave()} disabled={saving} className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white disabled:opacity-50">
+            {saving ? "Saving..." : "Save"}
           </button>
         </>
       }
     >
-      <div className="grid gap-3 sm:grid-cols-2">
-        <input
-          placeholder="Subject"
-          value={subject}
-          onChange={(e) => setSubject(e.target.value)}
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm sm:col-span-2"
-        />
-        <input defaultValue={recordName} placeholder="Call For" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        <input placeholder="Related To" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        <select className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-          <option value="">Call Type</option><option>Inbound</option><option>Outbound</option>
-        </select>
-        <select className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-          <option value="">Call Status</option><option>Completed</option><option>Not Connected</option>
-        </select>
-        <input type="datetime-local" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        <input placeholder="Call Duration (minutes)" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        <input placeholder="Call Purpose" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        <input placeholder="Call Result" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+      <div className="grid gap-3">
+        <input placeholder="Call Subject" value={summary} onChange={(e) => setSummary(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        <textarea rows={3} placeholder="Call Outcome" value={outcome} onChange={(e) => setOutcome(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        {error && <p className="text-sm text-rose-600">{error}</p>}
       </div>
-      <textarea rows={3} placeholder="Description" className="mt-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
     </CRMModalBase>
   );
 }
 
-// ─── Delete ───────────────────────────────────────────────────────────────────
 export function DeleteModal({
   open,
   onClose,
@@ -397,39 +455,58 @@ export function DeleteModal({
   );
 }
 
-// ─── Convert Lead ─────────────────────────────────────────────────────────────
 export function ConvertLeadModal({
   open,
   onClose,
   leadName = "",
-}: BaseModalProps & { leadName?: string }) {
+  onConvert,
+}: BaseModalProps & {
+  leadName?: string;
+  onConvert?: (payload: { create_deal: boolean; deal_name?: string }) => Promise<void>;
+}) {
   const [createDeal, setCreateDeal] = useState(true);
-  const [owner, setOwner] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleConvert = async () => {
+    try {
+      setSaving(true);
+      setError(null);
+      await onConvert?.({
+        create_deal: createDeal,
+        deal_name: createDeal ? `${leadName || "Lead"} Deal` : undefined,
+      });
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to convert lead.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <CRMModalBase
       open={open}
-      title={leadName ? `Convert Lead — ${leadName}` : "Convert Lead"}
+      title={leadName ? `Convert Lead - ${leadName}` : "Convert Lead"}
       maxWidthClassName="max-w-xl"
       footer={
         <>
-          <button onClick={onClose} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">Cancel</button>
-          <button onClick={onClose} className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white">Convert</button>
+          <button onClick={onClose} disabled={saving} className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-50">Cancel</button>
+          <button onClick={() => void handleConvert()} disabled={saving} className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white disabled:opacity-50">
+            {saving ? "Converting..." : "Convert"}
+          </button>
         </>
       }
     >
       <div className="space-y-3 text-sm text-slate-700">
-        <label className="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2"><input type="checkbox" defaultChecked readOnly />Create New Account</label>
-        <label className="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2"><input type="checkbox" defaultChecked readOnly />Create New Contact</label>
+        <label className="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2"><input type="checkbox" checked readOnly />Create New Account</label>
+        <label className="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2"><input type="checkbox" checked readOnly />Create New Contact</label>
         <label className="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2">
           <input type="checkbox" checked={createDeal} onChange={(e) => setCreateDeal(e.target.checked)} />
           Create a new Deal for this Account
         </label>
       </div>
-      <label className="mt-4 grid gap-1 text-sm">
-        <span>Owner of the New Records</span>
-        <input value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="Enter owner name" className="rounded-lg border border-slate-300 px-3 py-2" />
-      </label>
+      {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
     </CRMModalBase>
   );
 }

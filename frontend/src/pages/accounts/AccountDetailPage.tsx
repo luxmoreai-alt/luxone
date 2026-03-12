@@ -2,12 +2,13 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import CRMModuleDetailPage from "../crm/CRMModuleDetailPage";
 import { accountModuleConfig } from "../../components/modules/accounts/accountsMockData";
-import { getAccountById } from "../../lib/api/accountsApi";
-import type { AccountRecord } from "../../lib/shared/crmTypes";
+import { getAccountById, getAccountNotes } from "../../lib/api/accountsApi";
+import type { AccountRecord, Note } from "../../lib/shared/crmTypes";
 
 export default function AccountDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [account, setAccount] = useState<AccountRecord | null>(null);
+  const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -18,8 +19,12 @@ export default function AccountDetailPage() {
       try {
         setLoading(true);
         setError(null);
-        const data = await getAccountById(id);
-        setAccount(data);
+        const [accountData, notesData] = await Promise.all([
+          getAccountById(id),
+          getAccountNotes(id),
+        ]);
+        setAccount(accountData);
+        setNotes(notesData);
       } catch (err) {
         setError(
           err instanceof Error ? err.message : "Failed to load account"
@@ -51,7 +56,7 @@ export default function AccountDetailPage() {
       config={accountModuleConfig}
       rows={[account]}
       data={{
-        notes: [],
+        notes,
         deals: [],
         openActivities: [],
         closedActivities: [],

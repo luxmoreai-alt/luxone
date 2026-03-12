@@ -1,5 +1,5 @@
 import { apiRequest } from "../../api/client";
-import type { AccountRecord } from "../shared/crmTypes";
+import type { AccountRecord, Note } from "../shared/crmTypes";
 
 type BackendAccount = {
   id: number;
@@ -25,6 +25,13 @@ type Paginated<T> = {
   next: string | null;
   previous: string | null;
   results: T[];
+};
+
+type BackendNote = {
+  id: number;
+  note: string;
+  created_by?: string | null;
+  created_at?: string;
 };
 
 function toList<T>(payload: T[] | Paginated<T>): T[] {
@@ -166,4 +173,79 @@ export async function createAccount(payload: CreateAccountPayload): Promise<Acco
     body: JSON.stringify(body),
   });
   return normalizeAccount(data);
+}
+
+export async function addAccountNote(id: string, note: string): Promise<void> {
+  await apiRequest(`/accounts/${id}/notes`, {
+    method: "POST",
+    body: JSON.stringify({ note }),
+  });
+}
+
+export async function getAccountNotes(id: string): Promise<Note[]> {
+  try {
+    const data = await apiRequest<BackendNote[]>(`/accounts/${id}/notes`);
+    return data.map((item) => ({
+      id: String(item.id),
+      parentId: id,
+      title: item.note.slice(0, 60),
+      content: item.note,
+      createdAt: item.created_at ?? "",
+      createdBy: item.created_by ?? "",
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function createAccountTask(
+  id: string,
+  payload: { subject: string; description?: string }
+): Promise<void> {
+  await apiRequest(`/accounts/${id}/create-task`, {
+    method: "POST",
+    body: JSON.stringify({
+      subject: payload.subject,
+      description: payload.description ?? "",
+    }),
+  });
+}
+
+export async function logAccountCall(
+  id: string,
+  payload: { call_summary: string; call_outcome?: string }
+): Promise<void> {
+  await apiRequest(`/accounts/${id}/log-call`, {
+    method: "POST",
+    body: JSON.stringify({
+      call_summary: payload.call_summary,
+      call_outcome: payload.call_outcome ?? "",
+    }),
+  });
+}
+
+export async function scheduleAccountMeeting(
+  id: string,
+  payload: { meeting_subject: string; agenda?: string }
+): Promise<void> {
+  await apiRequest(`/accounts/${id}/schedule-meeting`, {
+    method: "POST",
+    body: JSON.stringify({
+      meeting_subject: payload.meeting_subject,
+      agenda: payload.agenda ?? "",
+    }),
+  });
+}
+
+export async function sendAccountEmail(
+  id: string,
+  payload: { subject: string; body: string }
+): Promise<void> {
+  await apiRequest(`/accounts/${id}/send-email`, {
+    method: "POST",
+    body: JSON.stringify({
+      subject: payload.subject,
+      body: payload.body,
+    }),
+  });
 }

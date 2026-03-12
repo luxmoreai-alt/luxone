@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import CRMModuleListPage from "../crm/CRMModuleListPage";
 import { dealModuleConfig } from "../../components/modules/deals/dealsConfig";
-import { getDeals } from "../../lib/api/dealsApi";
+import { deleteDeal, getDeals } from "../../lib/api/dealsApi";
 import type { Deal } from "../../lib/shared/crmTypes";
 
 export default function DealsPage() {
@@ -41,12 +41,18 @@ export default function DealsPage() {
     );
   }
 
+  const handleDeleteRow = async (id: string) => {
+    await deleteDeal(id);
+    setRows((prev) => prev.filter((row) => row.id !== id));
+  };
+
   return (
     <CRMModuleListPage
       config={dealModuleConfig}
       rows={rows}
       showNotes={false}
       showActivity={false}
+      onDeleteRow={handleDeleteRow}
     />
   );
 }

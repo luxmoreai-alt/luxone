@@ -17,12 +17,16 @@ from .filters import LeadFilter
 from .models import Lead
 from .pagination import LeadPagination
 from .serializers import (
+    LeadActionSerializer,
+    LeadCallSerializer,
     LeadCloneResponseSerializer,
     LeadConvertRequestSerializer,
     LeadConvertResponseSerializer,
     LeadDetailSerializer,
     LeadListSerializer,
+    LeadMeetingSerializer,
     LeadNoteCreateSerializer,
+    LeadSendEmailSerializer,
 )
 from .services import (
     bulk_delete_leads,
@@ -78,6 +82,14 @@ class LeadViewSet(viewsets.ModelViewSet):
             return LeadNoteCreateSerializer
         if self.action == "notes":
             return LeadNoteSerializer
+        if self.action == "create_task":
+            return LeadActionSerializer
+        if self.action == "log_call":
+            return LeadCallSerializer
+        if self.action == "schedule_meeting":
+            return LeadMeetingSerializer
+        if self.action == "send_email":
+            return LeadSendEmailSerializer
         if self.action == "convert":
             return LeadConvertRequestSerializer
         return LeadDetailSerializer
@@ -242,3 +254,65 @@ class LeadViewSet(viewsets.ModelViewSet):
             },
             status=status.HTTP_200_OK,
         )
+
+    @action(detail=True, methods=["post"], url_path="create-task")
+    def create_task(self, request, pk=None):
+        lead = self.get_object()
+        serializer = LeadActionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        create_activity_log(
+            lead=lead,
+            action="Task created",
+            description=serializer.validated_data["subject"],
+            user=request.user,
+        )
+        return Response({"message": "Task created successfully"}, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="log-call")
+    def log_call(self, request, pk=None):
+        lead = self.get_object()
+        serializer = LeadCallSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        description = serializer.validated_data["call_summary"]
+        outcome = serializer.validated_data.get("call_outcome", "").strip()
+        if outcome:
+            description = f"{description} | {outcome}"
+
+        create_activity_log(
+            lead=lead,
+            action="Call logged",
+            description=description,
+            user=request.user,
+        )
+        return Response({"message": "Call logged successfully"}, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="schedule-meeting")
+    def schedule_meeting(self, request, pk=None):
+        lead = self.get_object()
+        serializer = LeadMeetingSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        description = serializer.validated_data["meeting_subject"]
+        agenda = serializer.validated_data.get("agenda", "").strip()
+        if agenda:
+            description = f"{description} | {agenda}"
+
+        create_activity_log(
+            lead=lead,
+            action="Meeting scheduled",
+            description=description,
+            user=request.user,
+        )
+        return Response({"message": "Meeting scheduled successfully"}, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="send-email")
+    def send_email(self, request, pk=None):
+        lead = self.get_object()
+        serializer = LeadSendEmailSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        create_activity_log(
+            lead=lead,
+            action="Email sent",
+            description=serializer.validated_data["subject"],
+            user=request.user,
+        )
+        return Response({"message": "Email logged successfully"}, status=status.HTTP_201_CREATED)

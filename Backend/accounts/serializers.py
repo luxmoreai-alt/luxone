@@ -283,3 +283,23 @@ class AccountAttachmentCreateSerializer(serializers.Serializer):
 
 class AccountImageUploadSerializer(serializers.Serializer):
     image = serializers.FileField()
+
+
+class AccountActionSerializer(serializers.Serializer):
+    subject = serializers.CharField(max_length=255)
+    description = serializers.CharField(allow_blank=True, required=False, default="")
+
+
+class AccountLogCallSerializer(serializers.Serializer):
+    call_summary = serializers.CharField(max_length=255)
+    call_outcome = serializers.CharField(max_length=255, required=False, allow_blank=True)
+
+
+class AccountMeetingSerializer(serializers.Serializer):
+    meeting_subject = serializers.CharField(max_length=255)
+    agenda = serializers.CharField(required=False, allow_blank=True)
+
+
+class AccountSendEmailSerializer(serializers.Serializer):
+    subject = serializers.CharField(max_length=255)
+    body = serializers.CharField()

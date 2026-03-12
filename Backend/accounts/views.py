@@ -11,14 +11,18 @@ from .filters import AccountFilter
 from .models import Account, AccountAttachment
 from .permissions import AccountPermission, can_access_account_owner
 from .serializers import (
+    AccountActionSerializer,
     AccountAttachmentCreateSerializer,
     AccountAttachmentSerializer,
     AccountCloneResponseSerializer,
     AccountDetailSerializer,
+    AccountLogCallSerializer,
     AccountListSerializer,
     AccountMergeSerializer,
+    AccountMeetingSerializer,
     AccountNoteCreateSerializer,
     AccountNoteSerializer,
+    AccountSendEmailSerializer,
     AccountTimelineSerializer,
     AccountWriteSerializer,
     AccountImageUploadSerializer,
@@ -57,6 +61,14 @@ class AccountViewSet(viewsets.ModelViewSet):
             return AccountNoteCreateSerializer
         if self.action == "notes":
             return AccountNoteSerializer
+        if self.action == "create_task":
+            return AccountActionSerializer
+        if self.action == "log_call":
+            return AccountLogCallSerializer
+        if self.action == "schedule_meeting":
+            return AccountMeetingSerializer
+        if self.action == "send_email":
+            return AccountSendEmailSerializer
         if self.action == "clone":
             return AccountCloneResponseSerializer
         if self.action == "merge":
@@ -238,6 +250,66 @@ class AccountViewSet(viewsets.ModelViewSet):
             user=request.user,
         )
         return Response(AccountDetailSerializer(updated).data)
+
+    @action(detail=True, methods=["post"], url_path="create-task")
+    def create_task(self, request, pk=None):
+        account = self.get_object()
+        serializer = AccountActionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        account_service.log_activity(
+            account=account,
+            action="Task created",
+            description=serializer.validated_data["subject"],
+            user=request.user,
+        )
+        return Response({"message": "Task created successfully"}, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="log-call")
+    def log_call(self, request, pk=None):
+        account = self.get_object()
+        serializer = AccountLogCallSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        description = serializer.validated_data["call_summary"]
+        outcome = serializer.validated_data.get("call_outcome", "").strip()
+        if outcome:
+            description = f"{description} | {outcome}"
+        account_service.log_activity(
+            account=account,
+            action="Call logged",
+            description=description,
+            user=request.user,
+        )
+        return Response({"message": "Call logged successfully"}, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="schedule-meeting")
+    def schedule_meeting(self, request, pk=None):
+        account = self.get_object()
+        serializer = AccountMeetingSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        description = serializer.validated_data["meeting_subject"]
+        agenda = serializer.validated_data.get("agenda", "").strip()
+        if agenda:
+            description = f"{description} | {agenda}"
+        account_service.log_activity(
+            account=account,
+            action="Meeting scheduled",
+            description=description,
+            user=request.user,
+        )
+        return Response({"message": "Meeting scheduled successfully"}, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="send-email")
+    def send_email(self, request, pk=None):
+        account = self.get_object()
+        serializer = AccountSendEmailSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        account_service.log_activity(
+            account=account,
+            action="Email sent",
+            description=serializer.validated_data["subject"],
+            user=request.user,
+        )
+        return Response({"message": "Email logged successfully"}, status=status.HTTP_201_CREATED)
 
 
 class AccountAttachmentDetailAPIView(APIView):
