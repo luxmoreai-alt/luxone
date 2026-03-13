@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../layout/DashboardLayout";
 import { ChevronDown } from "lucide-react";
+import { Country, State } from "country-state-city";
 
 export type CRMCreateFieldType =
   | "text"
@@ -95,8 +96,28 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
     setFormData(initialValues);
   }, [initialValues]);
 
-  const countryOptions = ["-None-"];
-  const stateOptions = ["-None-"];
+  const normalizeOptions = (options?: string[], fallback?: string[]) =>
+    options && options.length > 0 ? options : fallback ?? ["-None-"];
+
+  const optionsWithValue = (options: string[], value: string) => {
+    if (!value || options.includes(value)) {
+      return options;
+    }
+
+    if (options[0] === "-None-") {
+      return ["-None-", value, ...options.slice(1)];
+    }
+
+    return [value, ...options];
+  };
+
+  const countryList = useMemo(() => {
+    const countries = Country.getAllCountries()
+      .map((country) => country.name)
+      .sort((a, b) => a.localeCompare(b));
+
+    return ["-None-", ...countries];
+  }, []);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -177,6 +198,11 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
     }
 
     if (field.type === "country") {
+      const baseOptions = field.options ?? countryList;
+      const options = optionsWithValue(
+        normalizeOptions(baseOptions),
+        value
+      );
       return (
         <SelectField
           name={field.name}
@@ -189,18 +215,34 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
               state: "",
             }));
           }}
-          options={countryOptions}
+          options={options}
         />
       );
     }
 
     if (field.type === "state") {
+      const selectedCountry = String(formData.country ?? "");
+      const baseOptions =
+        field.options ??
+        (() => {
+          const country = Country.getAllCountries().find(
+            (item) => item.name === selectedCountry
+          );
+          if (!country) {
+            return ["-None-"];
+          }
+          const states = State.getStatesOfCountry(country.isoCode)
+            .map((state) => state.name)
+            .sort((a, b) => a.localeCompare(b));
+          return ["-None-", ...states];
+        })();
+      const options = optionsWithValue(normalizeOptions(baseOptions), value);
       return (
         <SelectField
           name={field.name}
           value={value}
           onChange={handleChange}
-          options={stateOptions}
+          options={options}
         />
       );
     }

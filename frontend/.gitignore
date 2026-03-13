@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Documenrtation
+CRM_FRONTEND_BACKEND_GUIDE.md

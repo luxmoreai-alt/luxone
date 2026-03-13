@@ -17,6 +17,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from crm_backend.email_views import send_email_view
+from crm_backend.import_views import import_file_view
 from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
@@ -45,6 +46,7 @@ urlpatterns = [
     path('api/', include('notes.urls')),
     path('api/', include('saas_admin.urls')),
     path('api/send-email', send_email_view, name='send-email'),
+    path('api/imports', import_file_view, name='import-file'),
     
     # Swagger documentation URLs
     path('swagger<format>/', schema_view.without_ui(cache_timeout=0), name='schema-json'),

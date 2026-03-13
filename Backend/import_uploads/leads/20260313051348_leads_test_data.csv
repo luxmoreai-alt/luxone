@@ -1,0 +1,21 @@
+lead_name,company,email,phone,lead_source,status,owner,city,country,created_at
+John Carter,TechNova,john.carter@technova.com,9876543210,Website,New Lead,Admin,New York,USA,2026-03-01
+Emma Watson,GreenSoft,emma.watson@greensoft.com,9123456780,LinkedIn,Contacted,Admin,London,UK,2026-03-02
+Rajesh Kumar,InnovaTech,rajesh.kumar@innovatech.in,9988776655,Referral,Qualified,Admin,Chennai,India,2026-03-03
+Sophia Lee,NextGen Solutions,sophia.lee@nextgen.com,9345678123,Website,New Lead,Admin,Singapore,Singapore,2026-03-03
+Michael Brown,CloudEdge,michael.brown@cloudedge.com,9786541230,Email Campaign,Contacted,Admin,Sydney,Australia,2026-03-04
+David Wilson,DataBridge,david.wilson@databridge.com,9876123456,Cold Call,New Lead,Admin,Toronto,Canada,2026-03-05
+Aisha Khan,SmartLogics,aisha.khan@smartlogics.com,9123098765,Website,Qualified,Admin,Dubai,UAE,2026-03-05
+Carlos Mendes,FutureSoft,carlos.mendes@futuresoft.com,9988123456,Referral,Contacted,Admin,Sao Paulo,Brazil,2026-03-06
+Olivia Taylor,VisionWare,olivia.taylor@visionware.com,9345012876,LinkedIn,New Lead,Admin,Los Angeles,USA,2026-03-06
+Ethan Scott,AlphaTech,ethan.scott@alphatech.com,9786012345,Website,Qualified,Admin,Berlin,Germany,2026-03-07
+Liam Johnson,ByteWorks,liam.johnson@byteworks.com,9876456123,Email Campaign,Contacted,Admin,Chicago,USA,2026-03-08
+Noah Davis,CodeCraft,noah.davis@codecraft.com,9345123498,Cold Call,New Lead,Admin,Austin,USA,2026-03-08
+Mia Clark,InfoCore,mia.clark@infocore.com,9123987654,Website,Qualified,Admin,Paris,France,2026-03-09
+Lucas Martin,DataSpark,lucas.martin@dataspark.com,9988012345,Referral,Contacted,Admin,Madrid,Spain,2026-03-09
+Isabella Moore,TechBridge,isabella.moore@techbridge.com,9345987612,LinkedIn,New Lead,Admin,Rome,Italy,2026-03-10
+James Anderson,SoftPulse,james.anderson@softpulse.com,9786540987,Website,Qualified,Admin,San Francisco,USA,2026-03-10
+Charlotte White,InfiTech,charlotte.white@infitech.com,9123459801,Email Campaign,Contacted,Admin,Amsterdam,Netherlands,2026-03-11
+Benjamin Harris,NextWave,ben.harris@nextwave.com,9988771122,Referral,New Lead,Admin,Melbourne,Australia,2026-03-11
+Amelia Walker,CoreLogic,amelia.walker@corelogic.com,9345679901,Website,Qualified,Admin,Delhi,India,2026-03-12
+Daniel Hall,FutureBridge,daniel.hall@futurebridge.com,9786001234,Cold Call,Contacted,Admin,Boston,USA,2026-03-12

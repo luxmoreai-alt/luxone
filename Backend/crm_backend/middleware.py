@@ -1,4 +1,5 @@
 import threading
+from django.conf import settings
 
 _thread_local = threading.local()
 
@@ -27,8 +28,10 @@ class TenantMiddleware:
         set_current_db_name('default')
         
         tenant_db = request.headers.get('X-Tenant-DB')
-        if tenant_db:
+        if tenant_db and tenant_db in getattr(settings, "DATABASES", {}):
             set_current_db_name(tenant_db)
+        else:
+            set_current_db_name('default')
 
         response = self.get_response(request)
         

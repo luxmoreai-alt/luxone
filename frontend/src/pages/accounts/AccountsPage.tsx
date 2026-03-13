@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import CRMModuleListPage from "../crm/CRMModuleListPage";
 import { accountModuleConfig } from "../../components/modules/accounts/accountsMockData";
 import { deleteAccount, getAccounts } from "../../lib/api/accountsApi";
@@ -9,23 +9,34 @@ export default function AccountsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const loadAccounts = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await getAccounts();
+      setRows(data);
+    } catch (err) {
+      console.error("Failed to load accounts:", err);
+      setError(err instanceof Error ? err.message : "Unable to load accounts");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    const load = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const data = await getAccounts();
-        setRows(data);
-      } catch (err) {
-        console.error("Failed to load accounts:", err);
-        setError(err instanceof Error ? err.message : "Unable to load accounts");
-      } finally {
-        setLoading(false);
+    void loadAccounts();
+  }, [loadAccounts]);
+
+  useEffect(() => {
+    const handleImport = (event: Event) => {
+      const detail = (event as CustomEvent<{ module?: string }>).detail;
+      if (!detail?.module || detail.module === "accounts") {
+        void loadAccounts();
       }
     };
-
-    void load();
-  }, []);
+    window.addEventListener("crm:imported", handleImport as EventListener);
+    return () => window.removeEventListener("crm:imported", handleImport as EventListener);
+  }, [loadAccounts]);
 
   if (loading) {
     return <div className="p-6 text-sm text-slate-600">Loading accounts...</div>;

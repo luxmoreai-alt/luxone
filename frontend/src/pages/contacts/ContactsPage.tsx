@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import CRMModuleListPage from "../crm/CRMModuleListPage";
 import { contactModuleConfig } from "../../components/modules/contacts/contactsMockData";
 import { deleteContact, getContacts } from "../../lib/api/contactsApi";
@@ -10,23 +10,34 @@ export default function ContactsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const loadContacts = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await getContacts();
+      setRows(data);
+    } catch (err) {
+      console.error("Failed to load contacts:", err);
+      setError(err instanceof Error ? err.message : "Unable to load contacts");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    const load = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const data = await getContacts();
-        setRows(data);
-      } catch (err) {
-        console.error("Failed to load contacts:", err);
-        setError(err instanceof Error ? err.message : "Unable to load contacts");
-      } finally {
-        setLoading(false);
+    void loadContacts();
+  }, [loadContacts]);
+
+  useEffect(() => {
+    const handleImport = (event: Event) => {
+      const detail = (event as CustomEvent<{ module?: string }>).detail;
+      if (!detail?.module || detail.module === "contacts") {
+        void loadContacts();
       }
     };
-
-    void load();
-  }, []);
+    window.addEventListener("crm:imported", handleImport as EventListener);
+    return () => window.removeEventListener("crm:imported", handleImport as EventListener);
+  }, [loadContacts]);
 
   if (loading) {
     return <div className="p-6 text-sm text-slate-600">Loading contacts...</div>;

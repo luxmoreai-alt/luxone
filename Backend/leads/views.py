@@ -1,4 +1,6 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.validators import EmailValidator
+from django.db import transaction
 from django.db.models import Prefetch
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_yasg import openapi
@@ -110,6 +112,159 @@ class LeadViewSet(viewsets.ModelViewSet):
             action="Lead Updated",
             description="Lead record updated.",
             user=self.request.user,
+        )
+
+    @action(detail=False, methods=["post"], url_path="import")
+    def import_records(self, request):
+        payload = request.data.get("records", request.data)
+        if not isinstance(payload, list):
+            return Response(
+                {"detail": "Expected a list of records."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if len(payload) == 0:
+            return Response({"detail": "No records provided."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if len(payload) > 5000:
+            return Response(
+                {"detail": "CSV exceeds the limit of 5000 records."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        allowed_fields = {
+            "first_name",
+            "last_name",
+            "company",
+            "title",
+            "email",
+            "phone",
+            "mobile",
+            "website",
+            "lead_source",
+            "lead_status",
+            "industry",
+            "annual_revenue",
+            "employee_count",
+            "rating",
+            "street",
+            "city",
+            "state",
+            "country",
+            "zip_code",
+            "skype_id",
+            "secondary_email",
+            "description",
+            "owner",
+        }
+        required_fields = {"first_name", "last_name", "company", "email"}
+
+        invalid_columns = sorted(
+            {key for row in payload if isinstance(row, dict) for key in row.keys()} - allowed_fields
+        )
+        if invalid_columns:
+            return Response(
+                {"detail": "Invalid columns.", "invalid_columns": invalid_columns},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        errors = []
+        normalized_records = []
+        seen_emails = set()
+        validate_email = EmailValidator()
+
+        for index, row in enumerate(payload, start=1):
+            if not isinstance(row, dict):
+                errors.append({"row": index, "errors": {"row": ["Row data is invalid."]}})
+                continue
+
+            normalized = {}
+            for key, value in row.items():
+                if value is None:
+                    continue
+                if isinstance(value, str):
+                    value = value.strip()
+                    if value == "":
+                        continue
+                if key in {"annual_revenue"} and isinstance(value, str):
+                    cleaned = value.replace(",", "")
+                    try:
+                        value = float(cleaned)
+                    except ValueError:
+                        pass
+                if key in {"employee_count"} and isinstance(value, str):
+                    cleaned = value.replace(",", "")
+                    try:
+                        value = int(cleaned)
+                    except ValueError:
+                        pass
+                if key in {"email", "secondary_email"} and isinstance(value, str):
+                    value = value.lower()
+                normalized[key] = value
+
+            if not normalized:
+                errors.append({"row": index, "errors": {"row": ["Row is empty."]}})
+                continue
+
+            missing = [field for field in required_fields if not normalized.get(field)]
+            if missing:
+                errors.append({"row": index, "errors": {"missing_fields": missing}})
+                continue
+
+            email = normalized.get("email")
+            if email:
+                try:
+                    validate_email(email)
+                except DjangoValidationError:
+                    errors.append({"row": index, "errors": {"email": ["Invalid email format."]}})
+                    continue
+                if email in seen_emails:
+                    errors.append({"row": index, "errors": {"email": ["Duplicate email in file."]}})
+                    continue
+                seen_emails.add(email)
+
+            if not normalized.get("owner"):
+                normalized["owner"] = request.user.id
+
+            serializer = LeadDetailSerializer(data=normalized)
+            if not serializer.is_valid():
+                errors.append({"row": index, "errors": serializer.errors})
+                continue
+            normalized_records.append(serializer.validated_data)
+
+        existing_emails = set()
+        if seen_emails:
+            existing_emails = set(
+                Lead.objects.filter(email__in=seen_emails).values_list("email", flat=True)
+            )
+
+        valid_records = []
+        skipped_count = 0
+        for index, data in enumerate(normalized_records, start=1):
+            email = data.get("email")
+            if email and email in existing_emails:
+                errors.append({"row": index, "errors": {"email": ["Email already exists."]}})
+                skipped_count += 1
+                continue
+            valid_records.append(data)
+
+        created_count = 0
+        if valid_records:
+            with transaction.atomic():
+                leads = [Lead(**record) for record in valid_records]
+                Lead.objects.bulk_create(leads, batch_size=500)
+                created_count = len(leads)
+
+        return Response(
+            {
+                "message": "Leads import completed.",
+                "total": len(payload),
+                "imported_count": created_count,
+                "skipped_count": skipped_count,
+                "error_count": len(errors),
+                "errors": errors,
+            },
+            status=status.HTTP_201_CREATED,
         )
 
     @swagger_auto_schema(

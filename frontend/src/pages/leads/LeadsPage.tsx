@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import CRMModuleListPage from "../crm/CRMModuleListPage";
 import { leadModuleConfig } from "../../components/modules/leads/leadsMockData";
 import { deleteLead, getLeads } from "../../lib/api/leadsApi";
@@ -8,21 +8,32 @@ export default function LeadsPage() {
   const [rows, setRows] = useState<LeadRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const loadLeads = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await getLeads();
+      setRows(data);
+    } catch (error) {
+      console.error("Failed to load leads:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    const loadLeads = async () => {
-      try {
-        setLoading(true);
-        const data = await getLeads();
-        setRows(data);
-      } catch (error) {
-        console.error("Failed to load leads:", error);
-      } finally {
-        setLoading(false);
+    void loadLeads();
+  }, [loadLeads]);
+
+  useEffect(() => {
+    const handleImport = (event: Event) => {
+      const detail = (event as CustomEvent<{ module?: string }>).detail;
+      if (!detail?.module || detail.module === "leads") {
+        void loadLeads();
       }
     };
-
-    void loadLeads();
-  }, []);
+    window.addEventListener("crm:imported", handleImport as EventListener);
+    return () => window.removeEventListener("crm:imported", handleImport as EventListener);
+  }, [loadLeads]);
 
   if (loading) {
     return (

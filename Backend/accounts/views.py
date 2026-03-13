@@ -1,5 +1,8 @@
 from django.core.exceptions import ObjectDoesNotExist
 from django.http import Http404
+import json
+from django.db import transaction
+from django.db.models.functions import Lower
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
@@ -86,6 +89,8 @@ class AccountViewSet(viewsets.ModelViewSet):
         return AccountDetailSerializer
 
     def create(self, request, *args, **kwargs):
+        if isinstance(request.data, list) or "records" in request.data:
+            return self.import_records(request)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         account = account_service.create_account(data=serializer.validated_data, user=request.user)
@@ -115,6 +120,132 @@ class AccountViewSet(viewsets.ModelViewSet):
         account = self.get_object()
         account_service.delete_account(account=account, user=request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=False, methods=["post"], url_path="import")
+    def import_records(self, request):
+        payload = request.data.get("records", request.data)
+        if isinstance(payload, str):
+            try:
+                payload = json.loads(payload)
+            except json.JSONDecodeError:
+                pass
+        if not isinstance(payload, list):
+            return Response(
+                {"detail": "Expected a list of records."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if len(payload) == 0:
+            return Response(
+                {"detail": "No records provided."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if len(payload) > 5000:
+            return Response(
+                {"detail": "CSV exceeds the limit of 5000 records."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        allowed_fields = set(AccountWriteSerializer.Meta.fields)
+        allowed_fields.update({"name", "owner"})
+        invalid_columns = sorted(
+            {key for row in payload if isinstance(row, dict) for key in row.keys()} - allowed_fields
+        )
+
+        errors = []
+        normalized_records = []
+
+        for index, row in enumerate(payload, start=1):
+            if not isinstance(row, dict):
+                errors.append({"row": index, "errors": {"row": ["Row data is invalid."]}})
+                continue
+
+            normalized = {}
+            for key, value in row.items():
+                if key not in allowed_fields:
+                    continue
+                if value is None:
+                    continue
+                if isinstance(value, str):
+                    value = value.strip()
+                    if value == "":
+                        continue
+                if key in {"annual_revenue"} and isinstance(value, str):
+                    cleaned = value.replace(",", "")
+                    try:
+                        value = float(cleaned)
+                    except ValueError:
+                        pass
+                if key in {"employees"} and isinstance(value, str):
+                    cleaned = value.replace(",", "")
+                    try:
+                        value = int(cleaned)
+                    except ValueError:
+                        pass
+                normalized[key] = value
+
+            if not normalized:
+                errors.append({"row": index, "errors": {"row": ["Row is empty."]}})
+                continue
+
+            if not normalized.get("account_name") and normalized.get("name"):
+                normalized["account_name"] = normalized.get("name")
+
+            if not normalized.get("account_name"):
+                errors.append({"row": index, "errors": {"account_name": ["account_name is required."]}})
+                continue
+
+            serializer = AccountWriteSerializer(data=normalized, context={"request": request})
+            if not serializer.is_valid():
+                errors.append({"row": index, "errors": serializer.errors})
+                continue
+            record = serializer.validated_data
+            if not record.get("account_owner"):
+                record["account_owner"] = request.user
+            normalized_records.append(record)
+
+        if invalid_columns:
+            errors.append({"row": 0, "errors": {"invalid_columns": invalid_columns}})
+
+        existing_names = set()
+        names = [record.get("account_name") for record in normalized_records if record.get("account_name")]
+        if names:
+            lowered = [name.lower() for name in names]
+            existing_names = set(
+                Account.objects.annotate(name_lower=Lower("account_name"))
+                .filter(name_lower__in=lowered)
+                .values_list("name_lower", flat=True)
+            )
+
+        valid_records = []
+        skipped_count = 0
+        for index, data in enumerate(normalized_records, start=1):
+            name = data.get("account_name")
+            if name and name.lower() in existing_names:
+                errors.append({"row": index, "errors": {"account_name": ["Account already exists."]}})
+                skipped_count += 1
+                continue
+            valid_records.append(data)
+
+        created_count = 0
+        if valid_records:
+            with transaction.atomic():
+                accounts = [Account(**record) for record in valid_records]
+                Account.objects.bulk_create(accounts, batch_size=500)
+                created_count = len(accounts)
+
+        return Response(
+            {
+                "message": "Accounts import completed.",
+                "total": len(payload),
+                "imported_count": created_count,
+                "skipped_count": skipped_count,
+                "error_count": len(errors),
+                "errors": errors,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
     @action(detail=True, methods=["post"], url_path="clone")
     def clone(self, request, pk=None):

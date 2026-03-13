@@ -1,5 +1,6 @@
 from django.core.exceptions import ObjectDoesNotExist
 from django.http import Http404, HttpResponse
+from django.db import transaction
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
@@ -22,7 +23,11 @@ from .serializers import (
     DealTimelineSerializer,
     DealWriteSerializer,
 )
-from .services import deal_service
+from .services import deal_service, ensure_default_stages
+from accounts.models import Account
+from contacts.models import Contact
+from leads.models import Lead
+from .models import DealStage, Deal
 
 
 class DealViewSet(viewsets.ModelViewSet):
@@ -147,6 +152,173 @@ class DealViewSet(viewsets.ModelViewSet):
         response = HttpResponse(csv_data, content_type="text/csv")
         response["Content-Disposition"] = 'attachment; filename="deals_export.csv"'
         return response
+
+    @action(detail=False, methods=["post"], url_path="import")
+    def import_records(self, request):
+        payload = request.data.get("records", request.data)
+        if not isinstance(payload, list):
+            return Response(
+                {"detail": "Expected a list of records."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if len(payload) == 0:
+            return Response(
+                {"detail": "No records provided."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if len(payload) > 5000:
+            return Response(
+                {"detail": "CSV exceeds the limit of 5000 records."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        allowed_fields = set(DealWriteSerializer.Meta.fields)
+        allowed_fields.update({"account_name", "contact_email", "lead_email"})
+        invalid_columns = sorted(
+            {key for row in payload if isinstance(row, dict) for key in row.keys()} - allowed_fields
+        )
+        if invalid_columns:
+            return Response(
+                {"detail": "Invalid columns.", "invalid_columns": invalid_columns},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        errors = []
+        normalized_records = []
+
+        for index, row in enumerate(payload, start=1):
+            if not isinstance(row, dict):
+                errors.append({"row": index, "errors": {"row": ["Row data is invalid."]}})
+                continue
+
+            normalized = {}
+            for key, value in row.items():
+                if value is None:
+                    continue
+                if isinstance(value, str):
+                    value = value.strip()
+                    if value == "":
+                        continue
+                if key in {"amount", "expected_revenue", "probability"} and isinstance(value, str):
+                    cleaned = value.replace(",", "")
+                    try:
+                        value = float(cleaned)
+                    except ValueError:
+                        pass
+                normalized[key] = value
+
+            if not normalized:
+                errors.append({"row": index, "errors": {"row": ["Row is empty."]}})
+                continue
+
+            if not normalized.get("deal_name"):
+                errors.append({"row": index, "errors": {"deal_name": ["deal_name is required."]}})
+                continue
+
+            if normalized.get("account_name") and not normalized.get("account"):
+                account = Account.objects.filter(
+                    account_name__iexact=str(normalized["account_name"]).strip()
+                ).first()
+                if not account:
+                    errors.append(
+                        {
+                            "row": index,
+                            "errors": {"account_name": ["Account not found."]},
+                        }
+                    )
+                    continue
+                normalized["account"] = account.id
+            if normalized.get("account_name"):
+                normalized.pop("account_name", None)
+
+            if not normalized.get("account"):
+                errors.append({"row": index, "errors": {"account": ["account is required."]}})
+                continue
+
+            if normalized.get("contact_email") and not normalized.get("contact"):
+                contact = Contact.objects.filter(
+                    email__iexact=str(normalized["contact_email"]).strip()
+                ).first()
+                if not contact:
+                    errors.append(
+                        {
+                            "row": index,
+                            "errors": {"contact_email": ["Contact not found."]},
+                        }
+                    )
+                    continue
+                normalized["contact"] = contact.id
+            if normalized.get("contact_email"):
+                normalized.pop("contact_email", None)
+
+            if normalized.get("lead_email") and not normalized.get("lead"):
+                lead = Lead.objects.filter(
+                    email__iexact=str(normalized["lead_email"]).strip()
+                ).first()
+                if not lead:
+                    errors.append(
+                        {
+                            "row": index,
+                            "errors": {"lead_email": ["Lead not found."]},
+                        }
+                    )
+                    continue
+                normalized["lead"] = lead.id
+            if normalized.get("lead_email"):
+                normalized.pop("lead_email", None)
+
+            serializer = DealWriteSerializer(data=normalized, context={"request": request})
+            if not serializer.is_valid():
+                errors.append({"row": index, "errors": serializer.errors})
+                continue
+            record = serializer.validated_data
+            if not record.get("deal_owner"):
+                record["deal_owner"] = request.user
+            normalized_records.append(record)
+
+        ensure_default_stages()
+
+        created_count = 0
+        skipped_count = 0
+        deals_to_create = []
+
+        for index, data in enumerate(normalized_records, start=1):
+            stage = data.get("stage")
+            if not stage:
+                stage = DealStage.objects.get(stage_name="Qualification")
+                data["stage"] = stage
+
+            probability = data.get("probability")
+            if probability is not None and (probability < 0 or probability > 100):
+                errors.append({"row": index, "errors": {"probability": ["Probability must be 0-100."]}})
+                skipped_count += 1
+                continue
+
+            deal = Deal(
+                is_closed=stage.is_closed_stage,
+                is_won=stage.stage_name == "Closed Won",
+                **data,
+            )
+            deals_to_create.append(deal)
+
+        if deals_to_create:
+            with transaction.atomic():
+                Deal.objects.bulk_create(deals_to_create, batch_size=500)
+                created_count = len(deals_to_create)
+
+        return Response(
+            {
+                "message": "Deals import completed.",
+                "total": len(payload),
+                "imported_count": created_count,
+                "skipped_count": skipped_count,
+                "error_count": len(errors),
+                "errors": errors,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
     @action(detail=True, methods=["get", "post"], url_path="notes")
     def notes(self, request, pk=None):
