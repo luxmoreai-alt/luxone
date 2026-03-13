@@ -19,7 +19,13 @@ type CompanyDetailsResponse = {
     db_name: string;
     status: string;
     created_at: string;
-    usage_stats: CompanyUsageStats;
+    usage_stats?: Partial<CompanyUsageStats>;
+};
+
+const defaultUsageStats: CompanyUsageStats = {
+    total_crm_users: 0,
+    total_leads: 0,
+    storage_used_mb: 0,
 };
 
 export default function CompanyDetails() {
@@ -30,35 +36,45 @@ export default function CompanyDetails() {
     useEffect(() => {
         const fetchCompany = async () => {
             try {
-                const res = await api.get(`admin/companies/${id}`);
+                const res = await api.get<CompanyDetailsResponse>(`admin/companies/${id}`);
                 setCompany(res.data);
                 setError('');
-            } catch (err) {
+            } catch {
                 setError('Failed to load company info.');
             }
         };
-        fetchCompany();
+
+        if (id) {
+            void fetchCompany();
+        } else {
+            setError('Company ID is missing.');
+        }
     }, [id]);
 
     if (error) return <div className="p-8 text-red-600">{error}</div>;
     if (!company) return <div className="p-8 text-slate-500">Loading...</div>;
 
+    const usageStats = {
+        ...defaultUsageStats,
+        ...company.usage_stats,
+    };
+
     const usageCards = [
         {
             title: 'Registered CRM Users',
-            value: company.usage_stats.total_crm_users,
+            value: usageStats.total_crm_users,
             icon: Users,
             iconClass: 'bg-purple-100 text-purple-600',
         },
         {
             title: 'Leads Managed',
-            value: company.usage_stats.total_leads,
+            value: usageStats.total_leads,
             icon: Target,
             iconClass: 'bg-amber-100 text-amber-600',
         },
         {
             title: 'Storage Used',
-            value: `${company.usage_stats.storage_used_mb.toFixed(2)} MB`,
+            value: `${usageStats.storage_used_mb.toFixed(2)} MB`,
             icon: Activity,
             iconClass: 'bg-blue-100 text-blue-600',
         },

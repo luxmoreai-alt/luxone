@@ -2,25 +2,39 @@ import { useEffect, useState } from 'react';
 import { Users, Building, Activity, Target } from 'lucide-react';
 import api from '../api/axios';
 
+type DashboardStats = {
+    total_clients: number;
+    active_clients: number;
+    inactive_clients: number;
+    total_crm_users: number;
+    total_leads: number;
+};
+
+const defaultStats: DashboardStats = {
+    total_clients: 0,
+    active_clients: 0,
+    inactive_clients: 0,
+    total_crm_users: 0,
+    total_leads: 0,
+};
+
 export default function Dashboard() {
-    const [stats, setStats] = useState({
-        total_clients: 0,
-        active_clients: 0,
-        inactive_clients: 0,
-        total_crm_users: 0,
-        total_leads: 0,
-    });
+    const [stats, setStats] = useState<DashboardStats>(defaultStats);
 
     useEffect(() => {
         const fetchStats = async () => {
             try {
-                const response = await api.get('admin/dashboard');
-                setStats(response.data);
+                const response = await api.get<Partial<DashboardStats>>('admin/dashboard');
+                setStats({
+                    ...defaultStats,
+                    ...response.data,
+                });
             } catch (error) {
                 console.error('Failed to load dashboard stats:', error);
             }
         };
-        fetchStats();
+
+        void fetchStats();
     }, []);
 
     const cards = [
@@ -38,8 +52,8 @@ export default function Dashboard() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {cards.map((card, index) => (
-                    <div key={index} className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                {cards.map((card) => (
+                    <div key={card.title} className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm font-medium text-slate-500">{card.title}</p>

@@ -5,7 +5,6 @@ const api = axios.create({
     baseURL: `${getResolvedApiBaseUrl()}/`,
 });
 
-// Add a request interceptor
 api.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem('admin_token');
@@ -15,6 +14,21 @@ api.interceptors.request.use(
         return config;
     },
     (error) => Promise.reject(error)
+);
+
+api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        if (axios.isAxiosError(error) && error.response?.status === 401) {
+            localStorage.removeItem('admin_token');
+
+            if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+                window.location.href = '/login';
+            }
+        }
+
+        return Promise.reject(error);
+    }
 );
 
 export default api;

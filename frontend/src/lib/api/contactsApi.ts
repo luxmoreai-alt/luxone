@@ -1,6 +1,8 @@
 import { apiRequest } from "../../api/client";
 import type { ContactRecord, Note } from "../shared/crmTypes";
 
+const PHONE_PATTERN = /^\+?[0-9\-().\s]{7,20}$/;
+
 type BackendContact = {
   id: number;
   salutation?: string | null;
@@ -97,23 +99,58 @@ async function resolveAccountIdByName(accountName?: string): Promise<number | nu
 
 function toBackendPayload(payload: Partial<CreateContactPayload>, accountId: number | null): Record<string, unknown> {
   const body: Record<string, unknown> = {};
-  if (payload.salutation !== undefined) body.salutation = payload.salutation || null;
-  if (payload.firstName !== undefined) body.first_name = payload.firstName;
-  if (payload.lastName !== undefined) body.last_name = payload.lastName;
-  if (payload.title !== undefined) body.title = payload.title || null;
-  if (payload.department !== undefined) body.department = payload.department || null;
-  if (payload.email !== undefined) body.email = payload.email || null;
-  if (payload.phone !== undefined) body.phone = payload.phone || null;
-  if (payload.mobile !== undefined) body.mobile = payload.mobile || null;
-  if (payload.otherPhone !== undefined) body.other_phone = payload.otherPhone || null;
-  if (payload.assistant !== undefined) body.assistant = payload.assistant || null;
-  if (payload.assistantPhone !== undefined) body.assistant_phone = payload.assistantPhone || null;
+  if (payload.salutation !== undefined) body.salutation = payload.salutation.trim() || null;
+  if (payload.firstName !== undefined) body.first_name = payload.firstName.trim();
+  if (payload.lastName !== undefined) body.last_name = payload.lastName.trim();
+  if (payload.title !== undefined) body.title = payload.title.trim() || null;
+  if (payload.department !== undefined) body.department = payload.department.trim() || null;
+  if (payload.email !== undefined) body.email = payload.email.trim().toLowerCase() || null;
+  if (payload.phone !== undefined) body.phone = payload.phone.trim() || null;
+  if (payload.mobile !== undefined) body.mobile = payload.mobile.trim() || null;
+  if (payload.otherPhone !== undefined) body.other_phone = payload.otherPhone.trim() || null;
+  if (payload.assistant !== undefined) body.assistant = payload.assistant.trim() || null;
+  if (payload.assistantPhone !== undefined) body.assistant_phone = payload.assistantPhone.trim() || null;
   if (accountId !== null) body.account = accountId;
 
   if (payload.contactOwner && /^\d+$/.test(payload.contactOwner.trim())) {
     body.contact_owner = Number(payload.contactOwner.trim());
   }
   return body;
+}
+
+function validateCreateContactPayload(payload: Partial<CreateContactPayload>) {
+  if (!payload.firstName?.trim()) {
+    throw new Error("First name is required.");
+  }
+
+  if (!payload.lastName?.trim()) {
+    throw new Error("Last name is required.");
+  }
+
+  const hasContactMethod = [
+    payload.email,
+    payload.phone,
+    payload.mobile,
+    payload.otherPhone,
+  ].some((value) => Boolean(value?.trim()));
+
+  if (!hasContactMethod) {
+    throw new Error("At least one contact method is required: email, phone, mobile, or other phone.");
+  }
+
+  const phoneFields = [
+    { label: "Phone", value: payload.phone },
+    { label: "Mobile", value: payload.mobile },
+    { label: "Other phone", value: payload.otherPhone },
+    { label: "Assistant phone", value: payload.assistantPhone },
+  ];
+
+  for (const field of phoneFields) {
+    const rawValue = field.value?.trim();
+    if (rawValue && !PHONE_PATTERN.test(rawValue)) {
+      throw new Error(`${field.label} is not in a valid format.`);
+    }
+  }
 }
 
 export async function getContacts(): Promise<ContactRecord[]> {
@@ -174,6 +211,7 @@ export async function deleteContact(id: string): Promise<void> {
 }
 
 export async function createContact(payload: CreateContactPayload): Promise<ContactRecord> {
+  validateCreateContactPayload(payload);
   const accountId = await resolveAccountIdByName(payload.accountName);
   const body = toBackendPayload(payload, accountId);
   const data = await apiRequest<BackendContact>("/contacts", {

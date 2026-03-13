@@ -1,6 +1,7 @@
 import type { LeadRecord, Note, TimelineItem } from "../shared/crmTypes";
+import { buildApiUrl } from "../../api/config";
 
-const API_BASE = "http://127.0.0.1:8000/api";
+const API_BASE = buildApiUrl("").replace(/\/$/, "");
 
 type BackendLeadList = {
   id: number;
