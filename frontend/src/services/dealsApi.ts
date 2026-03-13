@@ -1,79 +1,112 @@
-// Deals API layer
+import { apiRequest } from "../api/client";
 import type { DealRecord } from "../lib/types/dealTypes";
 
-const USE_MOCK_DEALS = true;
-const API_BASE = "http://127.0.0.1:8000/api";
+type BackendDeal = {
+  id: number | string;
+  name?: string;
+  deal_name?: string;
+  account?: number | null;
+  account_name?: string | null;
+  contact?: number | null;
+  contact_name?: string | null;
+  owner?: number | null;
+  owner_email?: string | null;
+  amount?: number | null;
+  stage?: string | null;
+  probability?: number | null;
+  expected_revenue?: number | string | null;
+  closing_date?: string | null;
+  type?: string | null;
+  lead_source?: string | null;
+  campaign_source?: string | null;
+  next_step?: string | null;
+  description?: string | null;
+  lead?: number | null;
+};
 
-import { dealsMockList } from "../lib/mock/dealsMockData";
+type PaginatedResponse<T> = {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+};
+
+function asNumber(value: number | string | null | undefined): number {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function toList<T>(payload: T[] | PaginatedResponse<T>): T[] {
+  return Array.isArray(payload) ? payload : payload.results;
+}
+
+function normalizeDeal(item: BackendDeal): DealRecord {
+  return {
+    id: String(item.id),
+    dealName: item.deal_name ?? item.name ?? "Untitled Deal",
+    accountId: item.account ? String(item.account) : undefined,
+    accountName: item.account_name ?? "",
+    contactId: item.contact ? String(item.contact) : undefined,
+    contactName: item.contact_name ?? "",
+    ownerId: item.owner ? String(item.owner) : undefined,
+    ownerName: item.owner_email ?? "",
+    amount: asNumber(item.amount),
+    closingDate: item.closing_date ?? "",
+    stage: item.stage ?? "",
+    probability: asNumber(item.probability),
+    expectedRevenue: asNumber(item.expected_revenue),
+    type: item.type ?? "",
+    leadSource: item.lead_source ?? "",
+    campaignSource: item.campaign_source ?? "",
+    nextStep: item.next_step ?? "",
+    description: item.description ?? "",
+    leadId: item.lead ? String(item.lead) : undefined,
+  };
+}
 
 export async function getDeals(): Promise<DealRecord[]> {
-  if (USE_MOCK_DEALS) return Promise.resolve(dealsMockList);
-  const res = await fetch(`${API_BASE}/deals`, { headers: { "Content-Type": "application/json" } });
-  if (!res.ok) throw new Error("Failed to load deals");
-  return await res.json();
+  const data = await apiRequest<BackendDeal[] | PaginatedResponse<BackendDeal>>("/deals");
+  return toList(data).map(normalizeDeal);
 }
 
 export async function getDealById(id: string): Promise<DealRecord | null> {
-  if (USE_MOCK_DEALS) return Promise.resolve(dealsMockList.find(d => d.id === id) || null);
-  const res = await fetch(`${API_BASE}/deals/${id}`, { headers: { "Content-Type": "application/json" } });
-  if (!res.ok) return null;
-  return await res.json();
+  try {
+    const data = await apiRequest<BackendDeal>(`/deals/${id}`);
+    return normalizeDeal(data);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("404")) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 export async function createDeal(data: Partial<DealRecord>): Promise<DealRecord> {
-  if (USE_MOCK_DEALS) {
-    const newDeal = { ...data, id: `deal-${Date.now()}` } as DealRecord;
-    dealsMockList.push(newDeal);
-    return Promise.resolve(newDeal);
-  }
-  const res = await fetch(`${API_BASE}/deals`, {
+  const created = await apiRequest<BackendDeal>("/deals", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error("Failed to create deal");
-  return await res.json();
+  return normalizeDeal(created);
 }
 
 export async function updateDeal(id: string, data: Partial<DealRecord>): Promise<DealRecord> {
-  if (USE_MOCK_DEALS) {
-    const idx = dealsMockList.findIndex(d => d.id === id);
-    if (idx >= 0) dealsMockList[idx] = { ...dealsMockList[idx], ...data };
-    return Promise.resolve(dealsMockList[idx]);
-  }
-  const res = await fetch(`${API_BASE}/deals/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
+  const updated = await apiRequest<BackendDeal>(`/deals/${id}`, {
+    method: "PATCH",
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error("Failed to update deal");
-  return await res.json();
+  return normalizeDeal(updated);
 }
 
 export async function deleteDeal(id: string): Promise<void> {
-  if (USE_MOCK_DEALS) {
-    const idx = dealsMockList.findIndex(d => d.id === id);
-    if (idx >= 0) dealsMockList.splice(idx, 1);
-    return Promise.resolve();
-  }
-  const res = await fetch(`${API_BASE}/deals/${id}`, {
+  await apiRequest(`/deals/${id}`, {
     method: "DELETE",
-    headers: { "Content-Type": "application/json" },
   });
-  if (!res.ok) throw new Error("Failed to delete deal");
 }
 
-export async function convertLeadToDeal(leadId: string, payload: any): Promise<DealRecord> {
-  if (USE_MOCK_DEALS) {
-    const newDeal = { ...payload.deal, id: `deal-${Date.now()}`, sourceModule: "lead-conversion", leadId } as DealRecord;
-    dealsMockList.push(newDeal);
-    return Promise.resolve(newDeal);
-  }
-  const res = await fetch(`${API_BASE}/leads/${leadId}/convert`, {
+export async function convertLeadToDeal(leadId: string, payload: unknown): Promise<DealRecord> {
+  const converted = await apiRequest<BackendDeal>(`/leads/${leadId}/convert`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error("Failed to convert lead");
-  return await res.json();
+  return normalizeDeal(converted);
 }

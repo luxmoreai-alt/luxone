@@ -17,6 +17,7 @@ type ApiPayload = {
   refresh?: string;
   refresh_token?: string;
   tenant_db?: string;
+  user?: Record<string, unknown>;
   data?: {
     message?: string;
     detail?: string;
@@ -26,6 +27,7 @@ type ApiPayload = {
     refresh?: string;
     refresh_token?: string;
     tenant_db?: string;
+    user?: Record<string, unknown>;
   };
 };
 
@@ -169,6 +171,11 @@ const LoginPage = () => {
         payload?.data?.tenant_db ||
         null;
 
+      const user =
+        payload?.user ||
+        payload?.data?.user ||
+        null;
+
       if (accessToken) {
         localStorage.setItem("accessToken", accessToken);
       }
@@ -179,6 +186,10 @@ const LoginPage = () => {
 
       if (tenantDb) {
         localStorage.setItem("tenantDb", tenantDb);
+      }
+
+      if (user) {
+        localStorage.setItem("loggedInUser", JSON.stringify(user));
       }
 
       if (!accessToken) {

@@ -4,24 +4,41 @@ import axios from 'axios';
 import { Lock, Mail } from 'lucide-react';
 import api from '../api/axios';
 
+type LoginResponse = {
+    access: string;
+    refresh: string;
+};
+
 export default function Login() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const navigate = useNavigate();
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
+        setError('');
+        setIsSubmitting(true);
+
         try {
-            const res = await api.post('admin/login', { email, password });
+            const res = await api.post<LoginResponse>('admin/login', { email, password });
             localStorage.setItem('admin_token', res.data.access);
             navigate('/dashboard');
-        } catch (err: any) {
+        } catch (err: unknown) {
             if (axios.isAxiosError(err) && !err.response) {
                 setError('Unable to reach backend. Check that Django is running and the admin API base URL is correct.');
                 return;
             }
-            setError(err.response?.data?.error || 'Login failed');
+
+            if (axios.isAxiosError(err)) {
+                setError(typeof err.response?.data?.error === 'string' ? err.response.data.error : 'Login failed');
+                return;
+            }
+
+            setError('Login failed');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -68,7 +85,7 @@ export default function Login() {
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 className="block w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 outline-none"
-                                placeholder="••••••••"
+                                placeholder="........"
                                 required
                             />
                         </div>
@@ -76,9 +93,10 @@ export default function Login() {
 
                     <button
                         type="submit"
-                        className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        disabled={isSubmitting}
+                        className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-70"
                     >
-                        Sign In
+                        {isSubmitting ? 'Signing In...' : 'Sign In'}
                     </button>
                 </form>
             </div>

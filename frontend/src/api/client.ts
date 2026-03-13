@@ -1,17 +1,40 @@
-import { API_BASE_URL } from "./config";
+import { getResolvedApiBaseUrl } from "./config";
 
 type RequestOptions = RequestInit & {
   query?: Record<string, string | number | boolean | undefined | null>;
 };
 
+function flattenErrorPayload(value: unknown): string[] {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed ? [trimmed] : [];
+  }
+
+  if (Array.isArray(value)) {
+    return value.flatMap(flattenErrorPayload);
+  }
+
+  if (value && typeof value === "object") {
+    return Object.entries(value).flatMap(([key, nestedValue]) => {
+      const nestedMessages = flattenErrorPayload(nestedValue);
+      if (!nestedMessages.length) {
+        return [];
+      }
+
+      if (key === "non_field_errors" || key === "detail" || key === "message" || key === "error") {
+        return nestedMessages;
+      }
+
+      return nestedMessages.map((message) => `${key}: ${message}`);
+    });
+  }
+
+  return [];
+}
+
 function buildUrl(path: string, query?: RequestOptions["query"]) {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const base =
-    API_BASE_URL.startsWith("http://") || API_BASE_URL.startsWith("https://")
-      ? API_BASE_URL
-      : typeof window !== "undefined"
-        ? `${window.location.origin}${API_BASE_URL}`
-        : `http://127.0.0.1:5173${API_BASE_URL}`;
+  const base = getResolvedApiBaseUrl();
   const url = new URL(`${base}${normalizedPath}`);
 
   if (query) {
@@ -22,6 +45,13 @@ function buildUrl(path: string, query?: RequestOptions["query"]) {
   }
 
   return url.toString();
+}
+
+function clearStoredAuth() {
+  localStorage.removeItem("accessToken");
+  localStorage.removeItem("refreshToken");
+  localStorage.removeItem("tenantDb");
+  localStorage.removeItem("loggedInUser");
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -66,15 +96,21 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   }
 
   if (!response.ok) {
+    if (response.status === 401) {
+      clearStoredAuth();
+    }
+
     const errorPayload =
       typeof data === "object" && data !== null
         ? (data as { detail?: string; message?: string; error?: string })
         : null;
     const fallbackStatusMessage = `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}`;
+    const flattenedMessages = flattenErrorPayload(data);
     const message =
       errorPayload?.detail ||
       errorPayload?.message ||
       errorPayload?.error ||
+      flattenedMessages.join(" | ") ||
       fallbackStatusMessage ||
       "Request failed";
     throw new Error(message);
@@ -84,5 +120,5 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 }
 
 export function getApiBaseUrl() {
-  return API_BASE_URL;
+  return getResolvedApiBaseUrl();
 }

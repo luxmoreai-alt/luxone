@@ -1,18 +1,44 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { getDealById } from "../../services/dealsApi";
 import type { DealRecord } from "../../lib/types/dealTypes";
 import { formatCurrency, formatDate } from "../../lib/helpers/dealHelpers";
 
-const DealDetailPage: React.FC = () => {
+export default function DealDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [deal, setDeal] = useState<DealRecord | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (id) getDealById(id).then(setDeal);
+    const loadDeal = async () => {
+      if (!id) {
+        setError("Deal id is missing.");
+        return;
+      }
+
+      try {
+        const data = await getDealById(id);
+        if (!data) {
+          setError("Deal not found.");
+          return;
+        }
+        setDeal(data);
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Unable to load deal.");
+      }
+    };
+
+    void loadDeal();
   }, [id]);
 
-  if (!deal) return <div className="p-6">Loading...</div>;
+  if (error) {
+    return <div className="p-6 text-rose-600">{error}</div>;
+  }
+
+  if (!deal) {
+    return <div className="p-6">Loading...</div>;
+  }
 
   return (
     <div className="max-w-2xl mx-auto p-6">
@@ -34,6 +60,4 @@ const DealDetailPage: React.FC = () => {
       </div>
     </div>
   );
-};
-
-export default DealDetailPage;
+}
