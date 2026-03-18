@@ -49,9 +49,11 @@ type CRMModuleDetailPageProps<T extends CRMRecord> = {
   config: CRMModuleConfig<T>;
   rows: T[];
   data: CRMDetailData;
+  onAction?: (action: string) => void;
+  onNavigate?: (type: "deal" | "contact" | "account" | "lead", id: string) => void;
 };
 
-export default function CRMModuleDetailPage<T extends CRMRecord>({ config, rows, data }: CRMModuleDetailPageProps<T>) {
+export default function CRMModuleDetailPage<T extends CRMRecord>({ config, rows, data, onAction, onNavigate }: CRMModuleDetailPageProps<T>) {
   const { id } = useParams();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"overview" | "timeline">("overview");
@@ -108,7 +110,23 @@ export default function CRMModuleDetailPage<T extends CRMRecord>({ config, rows,
 
     if (type === "deals") {
       return data.deals.length ? (
-        <div className="space-y-2">{data.deals.map((item) => <div key={item.id} className="rounded-md border border-slate-200 p-3 text-sm text-slate-700">{item.dealName} • ${item.amount.toLocaleString()} • {item.stage}</div>)}</div>
+        <div className="space-y-2">
+          {data.deals.map((item) => (
+            <div key={item.id} className="flex items-center justify-between rounded-md border border-slate-200 p-3 text-sm">
+              <div>
+                <button
+                  type="button"
+                  onClick={() => onNavigate?.("deal", item.id)}
+                  className="font-medium text-blue-600 hover:underline"
+                >
+                  {item.dealName}
+                </button>
+                <p className="text-xs text-slate-500">{item.stage} • {item.closingDate ? new Date(item.closingDate).toLocaleDateString("en-GB") : "—"}</p>
+              </div>
+              <span className="text-sm font-semibold text-slate-700">${item.amount.toLocaleString()}</span>
+            </div>
+          ))}
+        </div>
       ) : (
         <CRMEmptyState message="No deals available." />
       );
@@ -164,7 +182,34 @@ export default function CRMModuleDetailPage<T extends CRMRecord>({ config, rows,
 
     if (type === "connected-records") {
       return data.connectedRecords.length ? (
-        <div className="space-y-2">{data.connectedRecords.map((item) => <div key={item.id} className="rounded-md border border-slate-200 p-3 text-sm text-slate-700">{item.recordType}: {item.name}</div>)}</div>
+        <div className="space-y-2">
+          {data.connectedRecords.map((item) => (
+            <div key={item.id} className="flex items-center justify-between rounded-md border border-slate-200 p-3 text-sm">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{item.recordType}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const typeMap: Record<string, "deal" | "contact" | "account" | "lead"> = {
+                      Contact: "contact",
+                      Account: "account",
+                      Deal: "deal",
+                      Lead: "lead",
+                    };
+                    const navType = typeMap[item.recordType];
+                    if (navType) onNavigate?.(navType, item.id);
+                  }}
+                  className="font-medium text-blue-600 hover:underline"
+                >
+                  {item.name}
+                </button>
+              </div>
+              <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${item.status === "Active" ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-600"}`}>
+                {item.status}
+              </span>
+            </div>
+          ))}
+        </div>
       ) : (
         <CRMEmptyState message="No connected records." />
       );
@@ -229,6 +274,7 @@ export default function CRMModuleDetailPage<T extends CRMRecord>({ config, rows,
           subtitle={String(record[config.subtitleKey] || "")}
           avatar={avatar}
           actions={config.headerActions}
+          onAction={onAction}
           onBack={() => navigate(config.baseRoute)}
         />
 

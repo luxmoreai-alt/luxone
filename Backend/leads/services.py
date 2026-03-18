@@ -7,6 +7,7 @@ from django.utils.text import slugify
 from activities.services import create_lead_activity
 from accounts.models import Account
 from accounts.services import create_account_from_lead
+from contacts.models import Contact
 from contacts.services import create_contact_from_lead
 from deals.services import create_deal_from_lead
 from notes.models import LeadNote
@@ -106,11 +107,18 @@ def convert_lead(*, lead, user=None, create_deal=False, deal_name=None, deal_val
                 owner=lead.owner or user,
             )
 
-        contact = create_contact_from_lead(
-            lead=lead,
-            account=account,
-            owner=lead.owner or user,
-        )
+        existing_contact = None
+        if lead.email:
+            existing_contact = Contact.objects.filter(email__iexact=lead.email).first()
+
+        if existing_contact:
+            contact = existing_contact
+        else:
+            contact = create_contact_from_lead(
+                lead=lead,
+                account=account,
+                owner=lead.owner or user,
+            )
 
         deal = None
         if create_deal:

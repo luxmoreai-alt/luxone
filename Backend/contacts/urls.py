@@ -3,7 +3,7 @@ from django.urls import path
 
 from .views import ContactViewSet
 
-router = DefaultRouter(trailing_slash=False)
+router = DefaultRouter()
 router.register("contacts", ContactViewSet, basename="contact")
 
 contact_import_view = ContactViewSet.as_view({"post": "import_records"})

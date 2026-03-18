@@ -30,6 +30,18 @@ export type LeadRecord = {
   createdAt: string;
   updatedBy: string;
   updatedAt: string;
+  nextActivity?: {
+    date: string;
+    type: "call" | "task" | "meeting" | "other";
+    action: string;
+  };
+  leadStatus?: string;
+  convertedAccountId?: string;
+  convertedAccountName?: string;
+  convertedContactId?: string;
+  convertedContactName?: string;
+  convertedDealId?: string;
+  convertedDealName?: string;
 };
 
 export type ContactRecord = {
@@ -53,6 +65,9 @@ export type ContactRecord = {
   avatar: string;
   createdAt: string;
   updatedAt: string;
+  accountId?: string;
+  createdFromLeadId?: string;
+  createdFromLeadName?: string;
 };
 
 export type AccountRecord = {
@@ -258,6 +273,7 @@ export type CRMDetailSection<T extends CRMRecord> = {
     | "emails"
     | "notes"
     | "connected-records"
+    | "contacts"
     | "social"
     | "links"
     | "generic";

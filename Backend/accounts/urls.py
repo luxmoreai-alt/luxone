@@ -3,7 +3,7 @@ from django.urls import path
 
 from .views import AccountAttachmentDetailAPIView, AccountViewSet
 
-router = DefaultRouter(trailing_slash=False)
+router = DefaultRouter()
 router.register("accounts", AccountViewSet, basename="account")
 
 urlpatterns = [

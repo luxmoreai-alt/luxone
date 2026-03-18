@@ -2,7 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import CompanyViewSet, admin_dashboard, admin_login
 
-router = DefaultRouter(trailing_slash=False)
+router = DefaultRouter()
 router.register(r'companies', CompanyViewSet, basename='company')
 
 urlpatterns = [

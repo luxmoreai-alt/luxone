@@ -1,6 +1,10 @@
 import { apiRequest } from "../../api/client";
 import type { AccountRecord, Note } from "../shared/crmTypes";
 
+function endpoint(path: string): string {
+  return path.endsWith("/") ? path : `${path}/`;
+}
+
 type BackendAccount = {
   id: number;
   name?: string;
@@ -117,13 +121,13 @@ function toBackendPayload(payload: Partial<CreateAccountPayload>): Record<string
 }
 
 export async function getAccounts(): Promise<AccountRecord[]> {
-  const data = await apiRequest<BackendAccount[] | Paginated<BackendAccount>>("/accounts");
+  const data = await apiRequest<BackendAccount[] | Paginated<BackendAccount>>(endpoint("/accounts"));
   return toList(data).map(normalizeAccount);
 }
 
 export async function getAccountById(id: string): Promise<AccountRecord | null> {
   try {
-    const data = await apiRequest<BackendAccount>(`/accounts/${id}`);
+    const data = await apiRequest<BackendAccount>(endpoint(`/accounts/${id}`));
     return normalizeAccount(data);
   } catch (error) {
     if (error instanceof Error && error.message.includes("404")) {
@@ -155,7 +159,7 @@ export async function updateAccount(
   payload: Partial<CreateAccountPayload>
 ): Promise<AccountRecord> {
   const body = toBackendPayload(payload);
-  const data = await apiRequest<BackendAccount>(`/accounts/${id}`, {
+  const data = await apiRequest<BackendAccount>(endpoint(`/accounts/${id}`), {
     method: "PATCH",
     body: JSON.stringify(body),
   });
@@ -163,12 +167,12 @@ export async function updateAccount(
 }
 
 export async function deleteAccount(id: string): Promise<void> {
-  await apiRequest(`/accounts/${id}`, { method: "DELETE" });
+  await apiRequest(endpoint(`/accounts/${id}`), { method: "DELETE" });
 }
 
 export async function createAccount(payload: CreateAccountPayload): Promise<AccountRecord> {
   const body = toBackendPayload(payload);
-  const data = await apiRequest<BackendAccount>("/accounts", {
+  const data = await apiRequest<BackendAccount>(endpoint("/accounts"), {
     method: "POST",
     body: JSON.stringify(body),
   });
@@ -176,7 +180,7 @@ export async function createAccount(payload: CreateAccountPayload): Promise<Acco
 }
 
 export async function addAccountNote(id: string, note: string): Promise<void> {
-  await apiRequest(`/accounts/${id}/notes`, {
+  await apiRequest(endpoint(`/accounts/${id}/notes`), {
     method: "POST",
     body: JSON.stringify({ note }),
   });
@@ -184,7 +188,7 @@ export async function addAccountNote(id: string, note: string): Promise<void> {
 
 export async function getAccountNotes(id: string): Promise<Note[]> {
   try {
-    const data = await apiRequest<BackendNote[]>(`/accounts/${id}/notes`);
+    const data = await apiRequest<BackendNote[]>(endpoint(`/accounts/${id}/notes`));
     return data.map((item) => ({
       id: String(item.id),
       parentId: id,
@@ -202,7 +206,7 @@ export async function createAccountTask(
   id: string,
   payload: { subject: string; description?: string }
 ): Promise<void> {
-  await apiRequest(`/accounts/${id}/create-task`, {
+  await apiRequest(endpoint(`/accounts/${id}/create-task`), {
     method: "POST",
     body: JSON.stringify({
       subject: payload.subject,
@@ -215,7 +219,7 @@ export async function logAccountCall(
   id: string,
   payload: { call_summary: string; call_outcome?: string }
 ): Promise<void> {
-  await apiRequest(`/accounts/${id}/log-call`, {
+  await apiRequest(endpoint(`/accounts/${id}/log-call`), {
     method: "POST",
     body: JSON.stringify({
       call_summary: payload.call_summary,
@@ -228,7 +232,7 @@ export async function scheduleAccountMeeting(
   id: string,
   payload: { meeting_subject: string; agenda?: string }
 ): Promise<void> {
-  await apiRequest(`/accounts/${id}/schedule-meeting`, {
+  await apiRequest(endpoint(`/accounts/${id}/schedule-meeting`), {
     method: "POST",
     body: JSON.stringify({
       meeting_subject: payload.meeting_subject,
@@ -241,11 +245,65 @@ export async function sendAccountEmail(
   id: string,
   payload: { subject: string; body: string }
 ): Promise<void> {
-  await apiRequest(`/accounts/${id}/send-email`, {
+  await apiRequest(endpoint(`/accounts/${id}/send-email`), {
     method: "POST",
     body: JSON.stringify({
       subject: payload.subject,
       body: payload.body,
     }),
   });
+}
+
+export async function getAccountContacts(id: string): Promise<import("../shared/crmTypes").ContactRecord[]> {
+  try {
+    const data = await apiRequest<any>(endpoint(`/accounts/${id}/contacts`));
+    const list = Array.isArray(data) ? data : (data as any).results ?? [];
+    return list.map((item: any) => ({
+      id: String(item.id),
+      contactName: `${item.first_name ?? ""} ${item.last_name ?? ""}`.trim(),
+      firstName: item.first_name ?? "",
+      lastName: item.last_name ?? "",
+      accountName: item.account_info?.name ?? item.account_name ?? "",
+      accountId: item.account ? String(item.account) : undefined,
+      contactOwner: item.owner_details?.email ?? "",
+      email: item.email ?? "",
+      otherPhone: item.other_phone ?? "",
+      phone: item.phone ?? "",
+      mobile: item.mobile ?? "",
+      fax: "",
+      leadSource: "",
+      vendorName: "",
+      title: item.title ?? "",
+      department: item.department ?? "",
+      homePhone: "",
+      tags: [],
+      avatar: `${(item.first_name ?? "")[0] ?? ""}${(item.last_name ?? "")[0] ?? ""}`.toUpperCase(),
+      createdAt: item.created_at ?? "",
+      updatedAt: item.updated_at ?? "",
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function getAccountDeals(id: string): Promise<import("../shared/crmTypes").Deal[]> {
+  try {
+    const data = await apiRequest<any>(endpoint(`/accounts/${id}/deals`));
+    const list = Array.isArray(data) ? data : (data as any).results ?? [];
+    return list.map((item: any) => ({
+      id: String(item.id),
+      parentId: id,
+      dealName: item.deal_name ?? item.name ?? "Untitled Deal",
+      amount: Number(item.amount ?? 0),
+      stage: item.stage ?? "",
+      probability: Number(item.probability ?? 0),
+      closingDate: item.closing_date ?? "",
+      type: item.type ?? "",
+      accountName: item.account_name ?? "",
+      contactName: item.contact_name ?? "",
+      ownerEmail: item.owner_email ?? "",
+    }));
+  } catch {
+    return [];
+  }
 }

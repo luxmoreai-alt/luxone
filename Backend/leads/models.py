@@ -51,6 +51,13 @@ class Lead(models.Model):
         null=True,
         blank=True,
     )
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        related_name="leads",
+        null=True,
+        blank=True,
+    )
     converted_account = models.ForeignKey(
         "accounts.Account",
         on_delete=models.SET_NULL,
@@ -80,6 +87,7 @@ class Lead(models.Model):
     skype_id = models.CharField(max_length=100, blank=True, null=True)
     secondary_email = models.EmailField(blank=True, null=True)
     description = models.TextField(blank=True, null=True)
+    tags = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

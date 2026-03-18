@@ -89,17 +89,29 @@ class ContactService:
 
     @transaction.atomic
     def create_contact(self, *, data: dict[str, Any], user) -> Contact:
+
+        # Ensure owner exists
         if not data.get("contact_owner"):
             data["contact_owner"] = user
-        contact = Contact.objects.create(**data)
+
+        # Only allow model fields
+        allowed_fields = {
+            f.name for f in Contact._meta.get_fields()
+            if f.concrete and not f.auto_created
+        }
+
+        cleaned_data = {k: v for k, v in data.items() if k in allowed_fields}
+
+        contact = Contact.objects.create(**cleaned_data)
+
         self.log_activity(
             contact=contact,
             action="Contact created",
             description="Contact created",
             user=user,
         )
-        return contact
 
+        return contact
     @transaction.atomic
     def update_contact(self, *, contact: Contact, data: dict[str, Any], user) -> Contact:
         changed_messages = []

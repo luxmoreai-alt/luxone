@@ -1,8 +1,37 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Phone, CalendarCheck, CalendarDays, Activity } from "lucide-react";
 import type { CRMColumn, CRMRecord, CRMRowAction } from "../../lib/shared/crmTypes";
 import CRMRowMoreOptionsMenu from "./CRMRowMoreOptionsMenu";
 import CRMRowUtilityIcons from "./CRMRowUtilityIcons";
 import CRMTableHeaderMenu from "./CRMTableHeaderMenu";
+
+type ActivityBadge = { date: string; type: "call" | "task" | "meeting" | "other"; action: string };
+
+function ActivityReminderBadge({ activity, onClick }: { activity: ActivityBadge; onClick?: () => void }) {
+  const iconMap = {
+    call: <Phone className="h-3 w-3" />,
+    task: <CalendarCheck className="h-3 w-3" />,
+    meeting: <CalendarDays className="h-3 w-3" />,
+    other: <Activity className="h-3 w-3" />,
+  };
+  const colorMap = {
+    call: "bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200",
+    task: "bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200",
+    meeting: "bg-purple-100 text-purple-700 border-purple-200 hover:bg-purple-200",
+    other: "bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200",
+  };
+  return (
+    <button
+      type="button"
+      title={activity.action}
+      onClick={onClick}
+      className={`inline-flex cursor-pointer items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] font-medium transition-colors ${colorMap[activity.type]}`}
+    >
+      {iconMap[activity.type]}
+      {activity.date}
+    </button>
+  );
+}
 
 type CRMTableProps<T extends CRMRecord> = {
   rows: T[];
@@ -19,6 +48,7 @@ type CRMTableProps<T extends CRMRecord> = {
   onOpenRow: (row: T) => void;
   onOpenNotes?: (row: T) => void;
   onOpenActivityAction?: (row: T, actionKey: string) => void;
+  onActivityBadgeClick?: (row: T) => void;
   onRowAction: (actionKey: string, row: T) => void;
   onSortColumn: (columnKey: string, direction: "asc" | "desc") => void;
   onToggleHideColumn: (columnKey: string) => void;
@@ -41,6 +71,7 @@ export default function CRMTable<T extends CRMRecord>({
   onOpenRow,
   onOpenNotes,
   onOpenActivityAction,
+  onActivityBadgeClick,
   onRowAction,
   onSortColumn,
   onToggleHideColumn,
@@ -154,10 +185,17 @@ export default function CRMTable<T extends CRMRecord>({
 
               {showActivity ? (
                 <td className="px-2 py-2" onClick={(event) => event.stopPropagation()}>
-                  <CRMRowUtilityIcons
-                    showNotes={false}
-                    onOpenActivityAction={(actionKey) => onOpenActivityAction?.(row, actionKey)}
-                  />
+                  {(row as { nextActivity?: ActivityBadge }).nextActivity ? (
+                    <ActivityReminderBadge
+                      activity={(row as { nextActivity: ActivityBadge }).nextActivity}
+                      onClick={() => onActivityBadgeClick?.(row)}
+                    />
+                  ) : (
+                    <CRMRowUtilityIcons
+                      showNotes={false}
+                      onOpenActivityAction={(actionKey) => onOpenActivityAction?.(row, actionKey)}
+                    />
+                  )}
                 </td>
               ) : null}
 

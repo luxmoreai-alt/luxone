@@ -1,5 +1,6 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import EmailValidator
+from django.db import models as django_models
 from django.db import transaction
 from django.db.models import Prefetch
 from django_filters.rest_framework import DjangoFilterBackend
@@ -11,7 +12,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from activities.serializers import LeadActivitySerializer
-from activities.models import LeadActivity
+from activities.models import LeadActivity, Call
+from django.utils import timezone
 from notes.serializers import LeadNoteSerializer
 from notes.models import LeadNote
 
@@ -20,6 +22,7 @@ from .models import Lead
 from .pagination import LeadPagination
 from .serializers import (
     LeadActionSerializer,
+    LeadAddTagsSerializer,
     LeadCallSerializer,
     LeadCloneResponseSerializer,
     LeadConvertRequestSerializer,
@@ -60,8 +63,10 @@ class LeadViewSet(viewsets.ModelViewSet):
     ]
 
     def get_queryset(self):
-        return (
-            Lead.objects.select_related("owner")
+        user = self.request.user
+
+        base_qs = (
+            Lead.objects.select_related("owner", "organization")
             .prefetch_related(
                 Prefetch(
                     "activities",
@@ -72,8 +77,31 @@ class LeadViewSet(viewsets.ModelViewSet):
                     queryset=LeadNote.objects.select_related("created_by"),
                 ),
             )
-            .all()
         )
+
+        # ── Backwards-compatible fallback ─────────────────────────────────────
+        user_org = getattr(user, "organization_id", None)
+        if not user_org:
+            qs = base_qs.all()
+        else:
+            role = getattr(user, "role", "employee")
+
+            if role == "admin":
+                qs = base_qs.filter(organization_id=user_org)
+            elif role == "manager":
+                team_ids = user.team_members.values_list("id", flat=True)
+                qs = base_qs.filter(organization_id=user_org).filter(
+                    django_models.Q(owner=user) | django_models.Q(owner__in=team_ids)
+                )
+            else:
+                qs = base_qs.filter(organization_id=user_org, owner=user)
+
+        # ── Admin/manager: filter by specific owner (for viewing employee data) ──
+        owner_id = self.request.query_params.get("owner_id")
+        if owner_id and getattr(user, "role", "employee") in ("admin", "manager"):
+            qs = qs.filter(owner_id=owner_id)
+
+        return qs
 
     def get_serializer_class(self):
         if self.action == "list":
@@ -97,12 +125,19 @@ class LeadViewSet(viewsets.ModelViewSet):
         return LeadDetailSerializer
 
     def perform_create(self, serializer):
-        lead = serializer.save()
+        user = self.request.user
+        # Auto-assign owner and organization from the creating user
+        save_kwargs = {}
+        if not serializer.validated_data.get("owner"):
+            save_kwargs["owner"] = user
+        if not serializer.validated_data.get("organization") and getattr(user, "organization_id", None):
+            save_kwargs["organization_id"] = user.organization_id
+        lead = serializer.save(**save_kwargs)
         create_activity_log(
             lead=lead,
             action="Lead Created",
             description="Lead record created.",
-            user=self.request.user,
+            user=user,
         )
 
     def perform_update(self, serializer):
@@ -428,10 +463,9 @@ class LeadViewSet(viewsets.ModelViewSet):
         lead = self.get_object()
         serializer = LeadCallSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        description = serializer.validated_data["call_summary"]
+        call_summary = serializer.validated_data["call_summary"]
         outcome = serializer.validated_data.get("call_outcome", "").strip()
-        if outcome:
-            description = f"{description} | {outcome}"
+        description = f"{call_summary} | {outcome}" if outcome else call_summary
 
         create_activity_log(
             lead=lead,
@@ -439,6 +473,25 @@ class LeadViewSet(viewsets.ModelViewSet):
             description=description,
             user=request.user,
         )
+
+        call_type_value = serializer.validated_data.get("call_type", "Outbound")
+        call_start_time = serializer.validated_data.get("call_start_time") or timezone.now()
+        reminder_value = serializer.validated_data.get("reminder", "None")
+
+        Call.objects.create(
+            subject=call_summary,
+            call_type=call_type_value,
+            call_status=Call.CallStatus.COMPLETED,
+            call_start_time=call_start_time,
+            duration_minutes=serializer.validated_data.get("duration_minutes", 0),
+            duration_seconds=serializer.validated_data.get("duration_seconds", 0),
+            reminder=reminder_value,
+            voice_recording=serializer.validated_data.get("voice_recording", ""),
+            lead=lead,
+            owner=request.user,
+            purpose=outcome,
+        )
+
         return Response({"message": "Call logged successfully"}, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"], url_path="schedule-meeting")
@@ -458,6 +511,18 @@ class LeadViewSet(viewsets.ModelViewSet):
             user=request.user,
         )
         return Response({"message": "Meeting scheduled successfully"}, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="add-tags")
+    def add_tags(self, request, pk=None):
+        lead = self.get_object()
+        serializer = LeadAddTagsSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        new_tags = serializer.validated_data["tags"]
+        existing = lead.tags if isinstance(lead.tags, list) else []
+        merged = list(dict.fromkeys(existing + new_tags))
+        lead.tags = merged
+        lead.save(update_fields=["tags"])
+        return Response({"tags": lead.tags}, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["post"], url_path="send-email")
     def send_email(self, request, pk=None):

@@ -35,14 +35,6 @@ export default function LeadsPage() {
     return () => window.removeEventListener("crm:imported", handleImport as EventListener);
   }, [loadLeads]);
 
-  if (loading) {
-    return (
-      <div className="p-6 text-sm text-slate-600">
-        Loading leads...
-      </div>
-    );
-  }
-
   const handleDeleteRow = async (id: string) => {
     await deleteLead(id);
     setRows((prev) => prev.filter((r) => r.id !== id));
@@ -52,6 +44,7 @@ export default function LeadsPage() {
     <CRMModuleListPage
       config={leadModuleConfig}
       rows={rows}
+      loading={loading}
       showNotes={true}
       showActivity={true}
       onDeleteRow={handleDeleteRow}

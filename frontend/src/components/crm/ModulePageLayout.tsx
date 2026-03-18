@@ -1,25 +1,22 @@
 import { useState } from "react";
 import ModuleToolbar from "./ModuleToolbar";
 import FilterSidebar from "./FilterSidebar";
-
+import type { FilterSection } from "../../lib/shared/crmTypes";
+import TasksKanbanBoard from "../../pages/activities/tasks/TasksKanbanBoard";
 type Column = {
   key: string;
   label: string;
-};
-
-type FilterSection = {
-  title: string;
-  items: string[];
+  minWidth?: string;
 };
 
 type ModulePageLayoutProps = {
-  title: string;
   viewName: string;
   createButtonLabel: string;
   filterTitle: string;
   filterSections: FilterSection[];
   columns: Column[];
   data: Record<string, string>[];
+  onCreateClick?: () => void;
 };
 
 export default function ModulePageLayout({
@@ -27,6 +24,7 @@ export default function ModulePageLayout({
   createButtonLabel,
   filterTitle,
   filterSections,
+  onCreateClick,
 }: ModulePageLayoutProps) {
   const [isFilterOpen, setIsFilterOpen] = useState(true);
 
@@ -37,7 +35,7 @@ export default function ModulePageLayout({
           createButtonLabel={createButtonLabel}
           isFilterOpen={isFilterOpen}
           onToggleFilter={() => setIsFilterOpen((prev) => !prev)}
-          onCreateClick={() => {}}
+          onCreateClick={onCreateClick ?? (() => {})}
         />
 
       <div className="flex gap-3 p-3">
@@ -46,13 +44,8 @@ export default function ModulePageLayout({
         )}
 
         <div className="flex min-h-[520px] min-w-0 flex-1 items-center justify-center border border-slate-200 bg-white">
-          <div className="text-center">
-            <h3 className="text-lg font-semibold text-slate-700">
-              Table Placeholder
-            </h3>
-            <p className="mt-2 text-sm text-slate-500">
-              Real table will be merged later.
-            </p>
+          <div className="flex-1">
+            <TasksKanbanBoard />
           </div>
         </div>
       </div>

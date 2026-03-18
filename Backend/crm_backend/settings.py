@@ -55,6 +55,7 @@ INSTALLED_APPS = [
     'drf_yasg',
     
     # Local apps
+    'organizations',       # multi-org / RBAC
     'authentication',
     'leads',
     'accounts',
@@ -62,6 +63,7 @@ INSTALLED_APPS = [
     'deals',
     'campaigns',
     'activities',
+    'project',
     'notes',
     'django_filters',
     'saas_admin',

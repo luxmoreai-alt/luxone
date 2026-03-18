@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useAuth } from "../../hooks/useAuth";
 import {
   BarChart3,
   BadgeDollarSign,
@@ -57,6 +58,7 @@ type WorkspaceItem = {
   label: string;
   icon: React.ElementType;
   expandable?: boolean;
+  path?: string;
   children?: SubMenuItem[];
 };
 
@@ -126,7 +128,7 @@ const workspaceItems: WorkspaceItem[] = [
     ],
   },
   { label: "Services", icon: Wrench, expandable: false },
-  { label: "Projects", icon: Folder, expandable: false },
+  { label: "Projects", icon: Folder, expandable: false, path: "/projects" },
   { label: "Voice of the Customer", icon: SquareKanban, expandable: false },
 ];
 
@@ -141,38 +143,48 @@ const getParentMenuByPath = (pathname: string) => {
   return null;
 };
 
+const getInitialOpenMenus = () => ({
+  Sales: true,
+  Activities: false,
+  Inventory: false,
+  Support: false,
+  Integrations: false,
+});
+
 export default function Sidebar({
   sidebarOpen,
   setSidebarOpen,
 }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
-    Sales: true,
-    Activities: false,
-    Inventory: false,
-    Support: false,
-    Integrations: false,
-  });
+  const { isAdmin, isManager } = useAuth();
+  const [openMenus, setOpenMenus] = useState<Record<string, boolean>>(
+    getInitialOpenMenus
+  );
 
   useEffect(() => {
     const parentMenu = getParentMenuByPath(location.pathname);
 
-    if (parentMenu) {
-      setOpenMenus((prev) => ({
-        ...prev,
-        [parentMenu]: true,
-      }));
-    }
+    setOpenMenus((prev) => {
+      const nextState: Record<string, boolean> = {};
+      Object.keys(prev).forEach((key) => {
+        nextState[key] = key === parentMenu;
+      });
+      return nextState;
+    });
   }, [location.pathname]);
 
   const handleToggleMenu = (label: string) => {
     if (!sidebarOpen) return;
 
-    setOpenMenus((prev) => ({
-      ...prev,
-      [label]: !prev[label],
-    }));
+    setOpenMenus((prev) => {
+      const nextState: Record<string, boolean> = {};
+      Object.keys(prev).forEach((key) => {
+        nextState[key] = key === label ? !prev[key] : false;
+      });
+
+      return nextState;
+    });
   };
 
   const handlePlusClick = (label: string) => {
@@ -181,11 +193,11 @@ export default function Sidebar({
 
   return (
     <aside
-      className={`hidden shrink-0 overflow-hidden bg-[#1f3566] text-white transition-all duration-300 md:flex md:flex-col ${
+      className={`hidden shrink-0 overflow-y-auto bg-[#1f3566] text-white transition-all duration-300 md:flex md:flex-col ${
         sidebarOpen ? "w-56" : "w-14"
       }`}
     >
-      <div className={sidebarOpen ? "min-w-[224px]" : "min-w-[56px]"}>
+      <div className={`flex flex-col ${sidebarOpen ? "min-w-[224px]" : "min-w-[56px]"}`}>
         {sidebarOpen ? (
           <div className="flex items-center justify-between px-3 pt-3 pb-2">
             <div className="flex items-center">
@@ -249,6 +261,24 @@ export default function Sidebar({
                 </button>
               );
             })}
+
+            {(isAdmin || isManager) && (
+              <button
+                type="button"
+                onClick={() => navigate("/home")}
+                title={!sidebarOpen ? "My Team" : undefined}
+                className={[
+                  "flex w-full items-center rounded-lg text-left text-[14px] transition",
+                  sidebarOpen ? "gap-2 px-2.5 py-2" : "justify-center px-2 py-2.5",
+                  location.pathname === "/home"
+                    ? "bg-white/12 font-semibold"
+                    : "text-white hover:bg-white/8",
+                ].join(" ")}
+              >
+                <Users size={17} />
+                {sidebarOpen && <span>My Team</span>}
+              </button>
+            )}
           </div>
         </nav>
 
@@ -280,7 +310,9 @@ export default function Sidebar({
                       <button
                         type="button"
                         onClick={() =>
-                          item.expandable && handleToggleMenu(item.label)
+                          item.expandable
+                            ? handleToggleMenu(item.label)
+                            : item.path && navigate(item.path)
                         }
                         className="flex flex-1 items-center gap-2 text-left"
                       >
@@ -361,7 +393,11 @@ export default function Sidebar({
                     key={item.label}
                     type="button"
                     title={item.label}
-                    onClick={() => item.children?.[0] && navigate(item.children[0].path)}
+                    onClick={() =>
+                      item.path
+                        ? navigate(item.path)
+                        : item.children?.[0] && navigate(item.children[0].path)
+                    }
                     className="flex w-full items-center justify-center rounded-lg px-2 py-2.5 transition hover:bg-white/8"
                   >
                     <Icon size={17} />
