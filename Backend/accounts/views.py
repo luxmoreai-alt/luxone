@@ -34,6 +34,22 @@ from .serializers import (
 )
 from .services import account_service
 
+ACCOUNT_TYPE_ALIASES = {
+    "analyst": Account.AccountType.ANALYST,
+    "competitor": Account.AccountType.COMPETITOR,
+    "customer": Account.AccountType.CUSTOMER,
+    "client": Account.AccountType.CUSTOMER,
+    "integrator": Account.AccountType.INTEGRATOR,
+    "investor": Account.AccountType.INVESTOR,
+    "partner": Account.AccountType.PARTNER,
+    "press": Account.AccountType.PRESS,
+    "prospect": Account.AccountType.PROSPECT,
+    "reseller": Account.AccountType.RESELLER,
+    "distributor": Account.AccountType.RESELLER,
+    "dealer": Account.AccountType.RESELLER,
+    "other": Account.AccountType.OTHER,
+}
+
 
 class AccountViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, AccountPermission]
@@ -42,6 +58,40 @@ class AccountViewSet(viewsets.ModelViewSet):
     search_fields = ["account_name", "phone", "website", "industry", "account_owner__email"]
     ordering_fields = ["created_at", "updated_at", "account_name", "annual_revenue", "employees"]
     ordering = ["-created_at"]
+
+    def _resolve_user_value(self, raw_value):
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+
+        if raw_value in (None, ""):
+            return None
+
+        if isinstance(raw_value, int):
+            return User.objects.filter(pk=raw_value).first()
+
+        value = str(raw_value).strip()
+        if not value:
+            return None
+
+        if value.isdigit():
+            return User.objects.filter(pk=int(value)).first()
+
+        lowered = value.lower()
+        return (
+            User.objects.filter(email__iexact=lowered).first()
+            or User.objects.filter(email__istartswith=lowered).first()
+        )
+
+    def _normalize_account_type(self, raw_value):
+        if raw_value in (None, ""):
+            return None
+
+        value = str(raw_value).strip()
+        if not value:
+            return None
+
+        return ACCOUNT_TYPE_ALIASES.get(value.lower(), value)
 
     def get_queryset(self):
         queryset = account_service.list_accounts(user=self.request.user)
@@ -195,6 +245,19 @@ class AccountViewSet(viewsets.ModelViewSet):
             if not normalized.get("account_name"):
                 errors.append({"row": index, "errors": {"account_name": ["account_name is required."]}})
                 continue
+
+            owner_value = normalized.get("account_owner", normalized.get("owner"))
+            if owner_value not in (None, ""):
+                owner = self._resolve_user_value(owner_value)
+                normalized["account_owner"] = (owner or request.user).pk
+                normalized.pop("owner", None)
+
+            account_type = self._normalize_account_type(normalized.get("account_type"))
+            if account_type:
+                normalized["account_type"] = account_type
+
+            if not normalized.get("account_owner"):
+                normalized["account_owner"] = request.user.pk
 
             serializer = AccountWriteSerializer(data=normalized, context={"request": request})
             if not serializer.is_valid():

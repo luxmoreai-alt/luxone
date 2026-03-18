@@ -110,6 +110,15 @@ export default function MeetingDetailPage() {
             Back to meetings
           </button>
           <div className="flex items-center gap-3">
+            {id && (
+              <button
+                type="button"
+                onClick={() => navigate(`/meetings/${id}/edit`)}
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+              >
+                Edit Meeting
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setFilterOpen((prev) => !prev)}

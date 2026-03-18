@@ -66,7 +66,7 @@ export default function CRMModuleListPage<T extends CRMRecord>({
   config,
   rows,
   loading = false,
-  pageSize = 5,
+  pageSize = 1000,
   showNotes = true,
   showActivity = false,
   onDeleteRow,
@@ -509,7 +509,7 @@ export default function CRMModuleListPage<T extends CRMRecord>({
               }
             />}
 
-            {!loading && (
+            {!loading && processedRows.length > pageSize && (
               <CRMPagination
                 page={page}
                 pageSize={pageSize}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import DashboardLayout from "../../../components/layout/DashboardLayout";
 import { apiRequest } from "../../../api/client";
 import {
@@ -48,6 +48,27 @@ type BackendUser = {
   email: string;
 };
 
+type MeetingResponse = {
+  id: number;
+  title: string;
+  description?: string;
+  meeting_venue: VenueType;
+  location?: string;
+  all_day: boolean;
+  start_date: string;
+  end_date?: string | null;
+  host?: string;
+  participants?: Participant[];
+  related_to?: RelatedToType;
+  repeat?: RepeatType;
+  participants_reminder?: ReminderType;
+  status?: string;
+  lead?: number | null;
+  lead_name?: string | null;
+  contact?: number | null;
+  contact_name?: string | null;
+};
+
 type Paginated<T> = { results: T[] };
 
 function formatDateForInput(date: Date) {
@@ -69,6 +90,8 @@ function toList<T>(data: T[] | Paginated<T>): T[] {
 
 export default function CreateMeetingPage() {
   const navigate = useNavigate();
+  const { id } = useParams<{ id?: string }>();
+  const isEditing = Boolean(id);
 
   const start = useMemo(() => {
     const now = new Date();
@@ -155,6 +178,57 @@ export default function CreateMeetingPage() {
   }, [userOptions]);
 
   const [participants, setParticipants] = useState<Participant[]>([]);
+
+  useEffect(() => {
+    if (!id) {
+      return;
+    }
+
+    let isMounted = true;
+
+    apiRequest<MeetingResponse>(`/meetings/${id}/`)
+      .then((meeting) => {
+        if (!isMounted) {
+          return;
+        }
+
+        const startDate = new Date(meeting.start_date);
+        const endDate = meeting.end_date ? new Date(meeting.end_date) : new Date(meeting.start_date);
+        const relatedType = (meeting.related_to as RelatedToType) || (meeting.contact ? "Contact" : meeting.lead ? "Lead" : "None");
+        const relatedId = relatedType === "Contact" ? meeting.contact ?? null : relatedType === "Lead" ? meeting.lead ?? null : null;
+        const relatedName = relatedType === "Contact" ? meeting.contact_name ?? "" : relatedType === "Lead" ? meeting.lead_name ?? "" : "";
+
+        setFormData({
+          title: meeting.title ?? "",
+          description: meeting.description ?? "",
+          meeting_venue: meeting.meeting_venue ?? "In-office",
+          location: meeting.location ?? "",
+          all_day: Boolean(meeting.all_day),
+          from_date: formatDateForInput(startDate),
+          from_time: formatTimeForInput(startDate),
+          to_date: formatDateForInput(endDate),
+          to_time: formatTimeForInput(endDate),
+          host: meeting.host ?? "",
+          related_to: relatedType,
+          repeat: meeting.repeat ?? "None",
+          participants_reminder: meeting.participants_reminder ?? "None",
+          status: meeting.status ?? "Scheduled",
+        });
+        setParticipants(Array.isArray(meeting.participants) ? meeting.participants : []);
+        setSelectedRelatedId(relatedId);
+        setSelectedRelatedName(relatedName);
+        setRelatedSearch("");
+      })
+      .catch((err) => {
+        if (isMounted) {
+          setError(err instanceof Error ? err.message : "Failed to load meeting");
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [id]);
 
   const filteredContacts = contactOptions.filter(
     (c) =>
@@ -252,13 +326,13 @@ export default function CreateMeetingPage() {
     try {
       setLoading(true);
       setError(null);
-      await apiRequest("/meetings/", {
-        method: "POST",
+      await apiRequest(isEditing ? `/meetings/${id}/` : "/meetings/", {
+        method: isEditing ? "PATCH" : "POST",
         body: JSON.stringify(buildPayload()),
       });
       navigate("/meetings");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create meeting");
+      setError(err instanceof Error ? err.message : `Failed to ${isEditing ? "update" : "create"} meeting`);
     } finally {
       setLoading(false);
     }
@@ -274,7 +348,7 @@ export default function CreateMeetingPage() {
             <form onSubmit={handleSubmit}>
               <div className="max-h-[80vh] overflow-y-auto px-7 py-6">
                 <h1 className="mb-6 text-[18px] font-semibold text-slate-900">
-                  Meeting Information
+                  {isEditing ? "Edit Meeting" : "Meeting Information"}
                 </h1>
 
                 {error && (
@@ -604,7 +678,7 @@ export default function CreateMeetingPage() {
                   disabled={loading}
                   className="rounded-md bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {loading ? "Saving..." : "Save"}
+                  {loading ? "Saving..." : isEditing ? "Update" : "Save"}
                 </button>
               </div>
             </form>

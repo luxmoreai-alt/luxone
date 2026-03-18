@@ -7,6 +7,15 @@ function endpoint(path: string): string {
   return path.endsWith("/") ? path : `${path}/`;
 }
 
+function normalizeApiPath(pathOrUrl: string): string {
+  if (!/^https?:\/\//i.test(pathOrUrl)) {
+    return pathOrUrl;
+  }
+
+  const parsed = new URL(pathOrUrl);
+  return `${parsed.pathname}${parsed.search}`;
+}
+
 type BackendContact = {
   id: number;
   salutation?: string | null;
@@ -236,10 +245,24 @@ function validateCreateContactPayload(payload: Partial<CreateContactPayload>) {
 }
 
 export async function getContacts(): Promise<ContactRecord[]> {
-  const data = await apiRequest<BackendContact[] | Paginated<BackendContact>>(
-    endpoint("/contacts")
-  );
-  return toList(data).map(normalizeContact);
+  const contacts: BackendContact[] = [];
+  let nextUrl: string | null = endpoint("/contacts");
+
+  while (nextUrl) {
+    const data: BackendContact[] | Paginated<BackendContact> = await apiRequest<BackendContact[] | Paginated<BackendContact>>(
+      normalizeApiPath(nextUrl)
+    );
+
+    if (Array.isArray(data)) {
+      contacts.push(...data);
+      nextUrl = null;
+    } else {
+      contacts.push(...data.results);
+      nextUrl = data.next;
+    }
+  }
+
+  return contacts.map(normalizeContact);
 }
 
 export async function getContactById(id: string): Promise<ContactRecord | null> {

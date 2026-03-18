@@ -140,6 +140,7 @@ export default function App() {
 
         <Route path="/meetings" element={<MeetingsPage />} />
         <Route path="/meetings/create" element={<CreateMeetingPage />} />
+        <Route path="/meetings/:id/edit" element={<CreateMeetingPage />} />
         <Route path="/meetings/:id" element={<MeetingDetailPage />} />
 
         <Route path="/calls" element={<CallsPage />} />

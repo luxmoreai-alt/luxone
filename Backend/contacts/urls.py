@@ -1,5 +1,5 @@
 from rest_framework.routers import DefaultRouter
-from django.urls import path
+from django.urls import re_path
 
 from .views import ContactViewSet
 
@@ -10,6 +10,6 @@ contact_import_view = ContactViewSet.as_view({"post": "import_records"})
 
 urlpatterns = [
     *router.urls,
-    path("contact/import", contact_import_view),
-    path("contacts/import", contact_import_view),
+    re_path(r"^contact/import/?$", contact_import_view),
+    re_path(r"^contacts/import/?$", contact_import_view),
 ]

@@ -89,12 +89,13 @@ const phonePattern = /^\+?[0-9\-().\s]{7,20}$/;
 const buildModuleConfig = (moduleKey: string): ModuleConfig | null => {
   if (moduleKey === "leads") {
     return {
-      endpoint: "/leads/import",
+      endpoint: "/leads/import/",
       fields: [
         { key: "full_name", label: "Full Name", virtual: true },
         { key: "first_name", label: "First Name", required: true },
         { key: "last_name", label: "Last Name", required: true },
         { key: "company", label: "Company", required: true },
+        { key: "owner", label: "Lead Owner" },
         { key: "email", label: "Email", required: true },
         { key: "phone", label: "Phone" },
         { key: "mobile", label: "Mobile" },
@@ -114,6 +115,7 @@ const buildModuleConfig = (moduleKey: string): ModuleConfig | null => {
         { key: "skype_id", label: "Skype ID" },
         { key: "secondary_email", label: "Secondary Email" },
         { key: "description", label: "Description" },
+        { key: "tags", label: "Tags" },
       ],
       aliasDictionary: {
         lead_name: "full_name",
@@ -144,6 +146,9 @@ const buildModuleConfig = (moduleKey: string): ModuleConfig | null => {
         "skype id": "skype_id",
         "country/region": "country",
         "state/province": "state",
+        "lead owner": "owner",
+        owner: "owner",
+        tags: "tags",
       },
       emailFields: new Set(["email", "secondary_email"]),
       phoneFields: new Set(["phone", "mobile"]),
@@ -156,11 +161,16 @@ const buildModuleConfig = (moduleKey: string): ModuleConfig | null => {
 
   if (moduleKey === "contacts") {
     return {
-      endpoint: "/contacts/import",
+      endpoint: "/contacts/import/",
       fields: [
+        { key: "contact_id", label: "Contact ID", virtual: true },
         { key: "full_name", label: "Full Name", virtual: true },
         { key: "first_name", label: "First Name", required: true },
         { key: "last_name", label: "Last Name", required: true },
+        { key: "contact_owner", label: "Contact Owner" },
+        { key: "owner", label: "Owner" },
+        { key: "contact_owner_id", label: "Contact Owner ID", virtual: true },
+        { key: "account", label: "Account ID" },
         { key: "email", label: "Email" },
         { key: "phone", label: "Phone" },
         { key: "mobile", label: "Mobile" },
@@ -176,6 +186,61 @@ const buildModuleConfig = (moduleKey: string): ModuleConfig | null => {
         { key: "date_of_birth", label: "Date of Birth" },
         { key: "lead_source", label: "Lead Source" },
         { key: "vendor_name", label: "Vendor Name" },
+        { key: "fax", label: "Fax" },
+        { key: "country", label: "Country" },
+        { key: "street", label: "Street" },
+        { key: "city", label: "City" },
+        { key: "state", label: "State" },
+        { key: "zip_code", label: "Zip Code" },
+        { key: "description", label: "Description" },
+        { key: "vendor_id", label: "Vendor ID", virtual: true },
+        { key: "email_opt_out", label: "Email Opt Out", virtual: true },
+        { key: "skype_id", label: "Skype ID", virtual: true },
+        { key: "created_by", label: "Created By", virtual: true },
+        { key: "created_by_id", label: "Created By ID", virtual: true },
+        { key: "modified_by", label: "Modified By", virtual: true },
+        { key: "modified_by_id", label: "Modified By ID", virtual: true },
+        { key: "created_time", label: "Created Time", virtual: true },
+        { key: "modified_time", label: "Modified Time", virtual: true },
+        { key: "last_activity_time", label: "Last Activity Time", virtual: true },
+        { key: "twitter", label: "Twitter", virtual: true },
+        { key: "tag", label: "Tag", virtual: true },
+        { key: "reporting_to", label: "Reporting To", virtual: true },
+        { key: "reporting_to_id", label: "Reporting To ID", virtual: true },
+        { key: "unsubscribed_mode", label: "Unsubscribed Mode", virtual: true },
+        { key: "unsubscribed_time", label: "Unsubscribed Time", virtual: true },
+        { key: "record_id", label: "Record ID", virtual: true },
+        { key: "change_log_time", label: "Change Log Time", virtual: true },
+        { key: "mailing_address", label: "Mailing Address", virtual: true },
+        { key: "other_address", label: "Other Address", virtual: true },
+        { key: "connected_to", label: "Connected To", virtual: true },
+        { key: "connected_to_id", label: "Connected To Id", virtual: true },
+        { key: "most_recent_visit", label: "Most Recent Visit", virtual: true },
+        { key: "first_page_visited", label: "First Page Visited", virtual: true },
+        { key: "average_time_spent_minutes", label: "Average Time Spent (Minutes)", virtual: true },
+        { key: "number_of_chats", label: "Number Of Chats", virtual: true },
+        { key: "referrer", label: "Referrer", virtual: true },
+        { key: "visitor_score", label: "Visitor Score", virtual: true },
+        { key: "first_visit", label: "First Visit", virtual: true },
+        { key: "days_visited", label: "Days Visited", virtual: true },
+        { key: "mailing_address_coordinates", label: "Mailing Address - Coordinates", virtual: true },
+        { key: "mailing_address_flat_house_no_building_apartment_name", label: "Mailing Address - Flat / House No./ Building / Apartment Name", virtual: true },
+        { key: "mailing_address_street_address", label: "Mailing Address - Street Address", virtual: true },
+        { key: "mailing_address_city", label: "Mailing Address - City", virtual: true },
+        { key: "mailing_address_state_province", label: "Mailing Address - State / Province", virtual: true },
+        { key: "mailing_address_zip_postal_code", label: "Mailing Address - Zip / Postal Code", virtual: true },
+        { key: "mailing_address_country_region", label: "Mailing Address - Country / Region", virtual: true },
+        { key: "mailing_address_latitude", label: "Mailing Address - Latitude", virtual: true },
+        { key: "mailing_address_longitude", label: "Mailing Address - Longitude", virtual: true },
+        { key: "other_address_coordinates", label: "Other Address - Coordinates", virtual: true },
+        { key: "other_address_flat_house_no_building_apartment_name", label: "Other Address - Flat / House No./ Building / Apartment Name", virtual: true },
+        { key: "other_address_street_address", label: "Other Address - Street Address", virtual: true },
+        { key: "other_address_city", label: "Other Address - City", virtual: true },
+        { key: "other_address_state_province", label: "Other Address - State / Province", virtual: true },
+        { key: "other_address_zip_postal_code", label: "Other Address - Zip / Postal Code", virtual: true },
+        { key: "other_address_country_region", label: "Other Address - Country / Region", virtual: true },
+        { key: "other_address_latitude", label: "Other Address - Latitude", virtual: true },
+        { key: "other_address_longitude", label: "Other Address - Longitude", virtual: true },
       ],
       aliasDictionary: {
         contact_name: "full_name",
@@ -198,6 +263,51 @@ const buildModuleConfig = (moduleKey: string): ModuleConfig | null => {
         "assistant phone": "assistant_phone",
         "date of birth": "date_of_birth",
         "lead source": "lead_source",
+        "contact owner": "contact_owner",
+        owner: "owner",
+        account: "account",
+        fax: "fax",
+        country: "country",
+        street: "street",
+        city: "city",
+        state: "state",
+        zipcode: "zip_code",
+        "zip code": "zip_code",
+        description: "description",
+        vendor: "vendor_name",
+        "contact id": "contact_id",
+        "contact owner id": "contact_owner_id",
+        "vendor id": "vendor_id",
+        "asst phone": "assistant_phone",
+        "email opt out": "email_opt_out",
+        "skype id": "skype_id",
+        "created by": "created_by",
+        "created by id": "created_by_id",
+        "modified by": "modified_by",
+        "modified by id": "modified_by_id",
+        "created time": "created_time",
+        "modified time": "modified_time",
+        "last activity time": "last_activity_time",
+        twitter: "twitter",
+        tag: "tag",
+        "reporting to": "reporting_to",
+        "reporting to id": "reporting_to_id",
+        "unsubscribed mode": "unsubscribed_mode",
+        "unsubscribed time": "unsubscribed_time",
+        "record id": "record_id",
+        "change log time": "change_log_time",
+        "mailing address": "mailing_address",
+        "other address": "other_address",
+        "connected to": "connected_to",
+        "connected to id": "connected_to_id",
+        "most recent visit": "most_recent_visit",
+        "first page visited": "first_page_visited",
+        "average time spent minutes": "average_time_spent_minutes",
+        "number of chats": "number_of_chats",
+        referrer: "referrer",
+        "visitor score": "visitor_score",
+        "first visit": "first_visit",
+        "days visited": "days_visited",
       },
       emailFields: new Set(["email", "secondary_email"]),
       phoneFields: new Set(["phone", "mobile", "other_phone", "home_phone", "assistant_phone"]),
@@ -210,15 +320,24 @@ const buildModuleConfig = (moduleKey: string): ModuleConfig | null => {
 
   if (moduleKey === "accounts") {
     return {
-      endpoint: "/accounts/import",
+      endpoint: "/accounts/import/",
       fields: [
+        { key: "account_id", label: "Account ID", virtual: true },
+        { key: "owner", label: "Account Owner" },
+        { key: "account_owner_id", label: "Account Owner ID", virtual: true },
         { key: "account_name", label: "Account Name", required: true },
+        { key: "name", label: "Name" },
         { key: "account_number", label: "Account Number" },
         { key: "account_type", label: "Account Type" },
         { key: "account_site", label: "Account Site" },
+        { key: "parent_account", label: "Parent Account" },
         { key: "industry", label: "Industry" },
         { key: "annual_revenue", label: "Annual Revenue" },
         { key: "employees", label: "Employees" },
+        { key: "employee_count", label: "Employee Count" },
+        { key: "sic_code", label: "SIC Code" },
+        { key: "ownership", label: "Ownership" },
+        { key: "rating", label: "Rating" },
         { key: "phone", label: "Phone" },
         { key: "fax", label: "Fax" },
         { key: "website", label: "Website" },
@@ -226,38 +345,113 @@ const buildModuleConfig = (moduleKey: string): ModuleConfig | null => {
         { key: "billing_address", label: "Billing Address" },
         { key: "shipping_address", label: "Shipping Address" },
         { key: "description", label: "Description" },
+        { key: "created_by", label: "Created By", virtual: true },
+        { key: "created_by_id", label: "Created By ID", virtual: true },
+        { key: "modified_by", label: "Modified By", virtual: true },
+        { key: "modified_by_id", label: "Modified By ID", virtual: true },
+        { key: "created_time", label: "Created Time", virtual: true },
+        { key: "modified_time", label: "Modified Time", virtual: true },
+        { key: "last_activity_time", label: "Last Activity Time", virtual: true },
+        { key: "tag", label: "Tag", virtual: true },
+        { key: "record_id", label: "Record ID", virtual: true },
+        { key: "change_log_time", label: "Change Log Time", virtual: true },
+        { key: "connected_to", label: "Connected To", virtual: true },
+        { key: "connected_to_id", label: "Connected To Id", virtual: true },
+        { key: "billing_address_coordinates", label: "Billing Address - Coordinates", virtual: true },
+        { key: "billing_address_flat_house_no_building_apartment_name", label: "Billing Address - Flat / House No./ Building / Apartment Name", virtual: true },
+        { key: "billing_address_street_address", label: "Billing Address - Street Address", virtual: true },
+        { key: "billing_address_city", label: "Billing Address - City", virtual: true },
+        { key: "billing_address_state_province", label: "Billing Address - State / Province", virtual: true },
+        { key: "billing_address_zip_postal_code", label: "Billing Address - Zip / Postal Code", virtual: true },
+        { key: "billing_address_country_region", label: "Billing Address - Country / Region", virtual: true },
+        { key: "billing_address_latitude", label: "Billing Address - Latitude", virtual: true },
+        { key: "billing_address_longitude", label: "Billing Address - Longitude", virtual: true },
+        { key: "shipping_address_coordinates", label: "Shipping Address - Coordinates", virtual: true },
+        { key: "shipping_address_flat_house_no_building_apartment_name", label: "Shipping Address - Flat / House No./ Building / Apartment Name", virtual: true },
+        { key: "shipping_address_street_address", label: "Shipping Address - Street Address", virtual: true },
+        { key: "shipping_address_city", label: "Shipping Address - City", virtual: true },
+        { key: "shipping_address_state_province", label: "Shipping Address - State / Province", virtual: true },
+        { key: "shipping_address_zip_postal_code", label: "Shipping Address - Zip / Postal Code", virtual: true },
+        { key: "shipping_address_country_region", label: "Shipping Address - Country / Region", virtual: true },
+        { key: "shipping_address_latitude", label: "Shipping Address - Latitude", virtual: true },
+        { key: "shipping_address_longitude", label: "Shipping Address - Longitude", virtual: true },
       ],
       aliasDictionary: {
         name: "account_name",
+        "account id": "account_id",
+        owner: "owner",
+        "account owner": "owner",
+        "account owner id": "account_owner_id",
         "account name": "account_name",
         "account number": "account_number",
         "account type": "account_type",
         "account site": "account_site",
+        "parent account": "parent_account",
         industry: "industry",
         "annual revenue": "annual_revenue",
         employees: "employees",
         "employee count": "employees",
+        "sic code": "sic_code",
+        ownership: "ownership",
+        rating: "rating",
         "billing address": "billing_address",
         "shipping address": "shipping_address",
+        "created by": "created_by",
+        "created by id": "created_by_id",
+        "modified by": "modified_by",
+        "modified by id": "modified_by_id",
+        "created time": "created_time",
+        "modified time": "modified_time",
+        "last activity time": "last_activity_time",
+        tag: "tag",
+        "record id": "record_id",
+        "change log time": "change_log_time",
+        "connected to": "connected_to",
+        "connected to id": "connected_to_id",
+        "billing address coordinates": "billing_address_coordinates",
+        "billing address flat house no building apartment name": "billing_address_flat_house_no_building_apartment_name",
+        "billing address street address": "billing_address_street_address",
+        "billing address city": "billing_address_city",
+        "billing address state province": "billing_address_state_province",
+        "billing address zip postal code": "billing_address_zip_postal_code",
+        "billing address country region": "billing_address_country_region",
+        "billing address latitude": "billing_address_latitude",
+        "billing address longitude": "billing_address_longitude",
+        "shipping address coordinates": "shipping_address_coordinates",
+        "shipping address flat house no building apartment name": "shipping_address_flat_house_no_building_apartment_name",
+        "shipping address street address": "shipping_address_street_address",
+        "shipping address city": "shipping_address_city",
+        "shipping address state province": "shipping_address_state_province",
+        "shipping address zip postal code": "shipping_address_zip_postal_code",
+        "shipping address country region": "shipping_address_country_region",
+        "shipping address latitude": "shipping_address_latitude",
+        "shipping address longitude": "shipping_address_longitude",
       },
       emailFields: new Set<string>(),
       phoneFields: new Set(["phone", "fax"]),
       numberFields: new Set(["annual_revenue"]),
-      integerFields: new Set(["employees"]),
+      integerFields: new Set(["employees", "employee_count"]),
       dateFields: new Set<string>(),
     };
   }
 
   if (moduleKey === "deals") {
     return {
-      endpoint: "/deals/import",
+      endpoint: "/deals/import/",
       fields: [
+        { key: "deal_owner", label: "Deal Owner" },
+        { key: "owner", label: "Owner" },
         { key: "deal_name", label: "Deal Name", required: true },
+        { key: "name", label: "Name" },
+        { key: "account", label: "Account ID" },
         { key: "account_name", label: "Account Name", required: true },
+        { key: "contact", label: "Contact ID" },
         { key: "contact_email", label: "Contact Email" },
+        { key: "lead", label: "Lead ID" },
         { key: "lead_email", label: "Lead Email" },
         { key: "amount", label: "Amount" },
         { key: "expected_revenue", label: "Expected Revenue" },
+        { key: "value", label: "Value" },
         { key: "stage", label: "Stage" },
         { key: "probability", label: "Probability" },
         { key: "closing_date", label: "Closing Date" },
@@ -270,16 +464,27 @@ const buildModuleConfig = (moduleKey: string): ModuleConfig | null => {
       ],
       aliasDictionary: {
         name: "deal_name",
+        owner: "owner",
+        "deal owner": "deal_owner",
         "deal name": "deal_name",
+        account: "account",
         "account name": "account_name",
+        contact: "contact",
         "contact email": "contact_email",
+        lead: "lead",
         "lead email": "lead_email",
         "expected revenue": "expected_revenue",
+        value: "value",
         "close date": "closing_date",
+        "closing date": "closing_date",
+        nextstep: "next_step",
+        "next step": "next_step",
+        "forecast category": "forecast_category",
+        description: "description",
       },
       emailFields: new Set(["contact_email", "lead_email"]),
       phoneFields: new Set<string>(),
-      numberFields: new Set(["amount", "expected_revenue", "probability"]),
+      numberFields: new Set(["amount", "expected_revenue", "value", "probability"]),
       integerFields: new Set(["probability"]),
       dateFields: new Set(["closing_date"]),
     };
@@ -293,6 +498,11 @@ type ParsedFile = {
   rows: Record<string, unknown>[];
 };
 
+type ImportErrorItem = {
+  row?: number;
+  errors?: Record<string, unknown>;
+};
+
 const SUPPORTED_EXTENSIONS = ["csv", "xml", "docx", "pdf", "xlsx"] as const;
 
 const getFileExtension = (file: File) => file.name.split(".").pop()?.toLowerCase() ?? "";
@@ -301,6 +511,19 @@ const detectDelimiter = (line: string) => {
   if (line.includes("\t")) return "\t";
   if (line.includes("|")) return "|";
   return ",";
+};
+
+const flattenImportErrors = (value: unknown): string[] => {
+  if (typeof value === "string") return value.trim() ? [value.trim()] : [];
+  if (Array.isArray(value)) return value.flatMap(flattenImportErrors);
+  if (value && typeof value === "object") {
+    return Object.entries(value).flatMap(([key, nested]) => {
+      const messages = flattenImportErrors(nested);
+      if (!messages.length) return [];
+      return messages.map((message) => `${key}: ${message}`);
+    });
+  }
+  return [];
 };
 
 const parseTextRows = (text: string): ParsedFile => {
@@ -683,6 +906,9 @@ export default function CRMImportPage({
 
   const buildRecords = () => {
     if (!moduleConfig) return [];
+    const virtualFieldKeys = new Set(
+      moduleConfig.fields.filter((field) => field.virtual).map((field) => field.key)
+    );
     const records: Record<string, unknown>[] = [];
     rows.forEach((row) => {
       const record: Record<string, unknown> = {};
@@ -698,6 +924,10 @@ export default function CRMImportPage({
           const lastName = parts.join(" ");
           if (!record.first_name && firstName) record.first_name = firstName;
           if (!record.last_name && lastName) record.last_name = lastName;
+          return;
+        }
+
+        if (virtualFieldKeys.has(fieldKey)) {
           return;
         }
 
@@ -848,6 +1078,7 @@ export default function CRMImportPage({
         imported,
         skipped,
         errors: errors.length,
+        errorDetails: errors,
       });
 
       setStep(4);
@@ -1057,11 +1288,32 @@ export default function CRMImportPage({
                   Import Summary
                 </h3>
                 {importSummary ? (
-                  <div className="grid grid-cols-2 gap-4 text-[13px] text-slate-700">
-                    <div>Total Records: {String(importSummary.total ?? 0)}</div>
-                    <div>Imported: {String(importSummary.imported ?? 0)}</div>
-                    <div>Skipped: {String(importSummary.skipped ?? 0)}</div>
-                    <div>Errors: {String(importSummary.errors ?? 0)}</div>
+                  <div className="space-y-5">
+                    <div className="grid grid-cols-2 gap-4 text-[13px] text-slate-700">
+                      <div>Total Records: {String(importSummary.total ?? 0)}</div>
+                      <div>Imported: {String(importSummary.imported ?? 0)}</div>
+                      <div>Skipped: {String(importSummary.skipped ?? 0)}</div>
+                      <div>Errors: {String(importSummary.errors ?? 0)}</div>
+                    </div>
+
+                    {Array.isArray((importSummary as { errorDetails?: ImportErrorItem[] }).errorDetails) &&
+                      ((importSummary as { errorDetails?: ImportErrorItem[] }).errorDetails?.length ?? 0) > 0 && (
+                        <div className="rounded-[6px] border border-red-200 bg-red-50 p-4">
+                          <h4 className="mb-3 text-[13px] font-semibold text-red-700">
+                            Import Errors
+                          </h4>
+                          <div className="max-h-56 space-y-2 overflow-y-auto text-[12px] text-red-700">
+                            {((importSummary as { errorDetails?: ImportErrorItem[] }).errorDetails ?? []).map((item, index) => (
+                              <div key={`import-error-${index}`} className="rounded-[4px] bg-white/70 px-3 py-2">
+                                <div className="font-medium">Row {item.row ?? index + 1}</div>
+                                <div>
+                                  {flattenImportErrors(item.errors).join(" | ") || "Unknown validation error"}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                   </div>
                 ) : (
                   <p className="text-[13px] text-slate-600">

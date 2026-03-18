@@ -1,4 +1,6 @@
 from django.core.exceptions import ObjectDoesNotExist
+from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.http import Http404
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
@@ -8,6 +10,7 @@ from rest_framework.response import Response
 
 from deals.models import Deal
 from deals.serializers import DealListSerializer
+from accounts.models import Account
 
 from .filters import ContactFilter
 from .permissions import ContactPermission
@@ -23,6 +26,18 @@ from .serializers import (
     ContactWriteSerializer,
 )
 from .services import contact_service
+
+User = get_user_model()
+
+LEAD_SOURCE_ALIASES = {
+    "employee referral": "External Referral",
+    "referral": "External Referral",
+    "external referral": "External Referral",
+    "web": "Web Download",
+    "website": "Web Download",
+    "web download": "Web Download",
+    "ad": "Advertisement",
+}
 
 
 class ContactViewSet(viewsets.ModelViewSet):
@@ -187,6 +202,194 @@ class ContactViewSet(viewsets.ModelViewSet):
         )
 
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    def _resolve_user_value(self, raw_value):
+        if raw_value in (None, ""):
+            return None
+
+        if isinstance(raw_value, int):
+            return User.objects.filter(pk=raw_value).first()
+
+        value = str(raw_value).strip()
+        if not value:
+            return None
+
+        if value.isdigit():
+            return User.objects.filter(pk=int(value)).first()
+
+        lowered = value.lower()
+        return (
+            User.objects.filter(email__iexact=lowered).first()
+            or User.objects.filter(email__istartswith=lowered).first()
+        )
+
+    def _resolve_account_value(self, raw_value, request_user):
+        if raw_value in (None, ""):
+            return None
+
+        if isinstance(raw_value, int):
+            return Account.objects.filter(pk=raw_value).first()
+
+        value = str(raw_value).strip()
+        if not value:
+            return None
+
+        if value.isdigit():
+            return Account.objects.filter(pk=int(value)).first()
+
+        account = Account.objects.filter(account_name__iexact=value).first()
+        if account:
+            return account
+
+        return Account.objects.create(
+            account_name=value,
+            account_owner=request_user,
+        )
+
+    @action(detail=False, methods=["post"], url_path="import")
+    def import_records(self, request):
+        payload = request.data.get("records", request.data)
+        if not isinstance(payload, list):
+            return Response(
+                {"detail": "Expected a list of records."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if len(payload) == 0:
+            return Response(
+                {"detail": "No records provided."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if len(payload) > 5000:
+            return Response(
+                {"detail": "CSV exceeds the limit of 5000 records."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        allowed_fields = set(ContactWriteSerializer.Meta.fields)
+        allowed_fields.update({"account_name", "owner"})
+        invalid_columns = sorted(
+            {key for row in payload if isinstance(row, dict) for key in row.keys()} - allowed_fields
+        )
+        if invalid_columns:
+            return Response(
+                {"detail": "Invalid columns.", "invalid_columns": invalid_columns},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        errors = []
+        normalized_records = []
+        seen_emails = set()
+
+        for index, row in enumerate(payload, start=1):
+            if not isinstance(row, dict):
+                errors.append({"row": index, "errors": {"row": ["Row data is invalid."]}})
+                continue
+
+            normalized = {}
+            for key, value in row.items():
+                if value is None:
+                    continue
+                if isinstance(value, str):
+                    value = value.strip()
+                    if value == "":
+                        continue
+                if key == "email" and isinstance(value, str):
+                    value = value.lower()
+                normalized[key] = value
+
+            if not normalized:
+                errors.append({"row": index, "errors": {"row": ["Row is empty."]}})
+                continue
+
+            if not normalized.get("first_name") or not normalized.get("last_name"):
+                errors.append({
+                    "row": index,
+                    "errors": {"missing_fields": ["first_name", "last_name"]},
+                })
+                continue
+
+            owner_value = normalized.get("contact_owner", normalized.get("owner"))
+            if owner_value not in (None, ""):
+                owner = self._resolve_user_value(owner_value)
+                normalized["contact_owner"] = (owner or request.user).pk
+                normalized.pop("owner", None)
+
+            account_value = normalized.get("account", normalized.get("account_name"))
+            if account_value not in (None, ""):
+                account = self._resolve_account_value(account_value, request.user)
+                if not account:
+                    errors.append({"row": index, "errors": {"account": [f"Account '{account_value}' was not found."]}})
+                    continue
+                normalized["account"] = account.pk
+                normalized.pop("account_name", None)
+
+            if not normalized.get("account"):
+                errors.append({"row": index, "errors": {"account": ["Account is required."]}})
+                continue
+
+            lead_source = normalized.get("lead_source")
+            if isinstance(lead_source, str):
+                canonical = LEAD_SOURCE_ALIASES.get(lead_source.strip().lower(), lead_source.strip())
+                normalized["lead_source"] = canonical
+
+            email = normalized.get("email")
+            if email:
+                if email in seen_emails:
+                    errors.append({"row": index, "errors": {"email": ["Duplicate email in file."]}})
+                    continue
+                seen_emails.add(email)
+
+            if not normalized.get("owner"):
+                normalized["owner"] = request.user.pk
+
+            serializer = ContactWriteSerializer(
+                data=normalized,
+                context={"request": request},
+            )
+            if not serializer.is_valid():
+                errors.append({"row": index, "errors": serializer.errors})
+                continue
+
+            normalized_records.append(serializer.validated_data)
+
+        existing_emails = set()
+        if seen_emails:
+            existing_emails = set(
+                contact_service.list_contacts(user=request.user)
+                .filter(email__in=seen_emails)
+                .values_list("email", flat=True)
+            )
+
+        valid_records = []
+        skipped_count = 0
+        for row_index, data in enumerate(normalized_records, start=1):
+            email = data.get("email")
+            if email and email in existing_emails:
+                errors.append({"row": row_index, "errors": {"email": ["Email already exists."]}})
+                skipped_count += 1
+                continue
+            valid_records.append(data)
+
+        created_count = 0
+        if valid_records:
+            with transaction.atomic():
+                for data in valid_records:
+                    contact_service.create_contact(data=data, user=request.user)
+                    created_count += 1
+
+        return Response(
+            {
+                "message": "Contacts import completed.",
+                "total": len(payload),
+                "imported_count": created_count,
+                "skipped_count": skipped_count,
+                "error_count": len(errors),
+                "errors": errors,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
     # Timeline
 

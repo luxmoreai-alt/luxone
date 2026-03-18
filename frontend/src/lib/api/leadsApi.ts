@@ -92,6 +92,13 @@ type BackendLeadConnectedRecord = {
   created_at?: string;
 };
 
+type PaginatedResponse<T> = {
+  count?: number;
+  next?: string | null;
+  previous?: string | null;
+  results: T[];
+};
+
 function buildHeaders(): Record<string, string> {
   const token = localStorage.getItem("accessToken");
   const tenantDb = localStorage.getItem("tenantDb");
@@ -101,14 +108,6 @@ function buildHeaders(): Record<string, string> {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(tenantDb ? { "X-Tenant-DB": tenantDb } : {}),
   };
-}
-
-function extractResults<T>(data: unknown): T[] {
-  if (Array.isArray(data)) return data as T[];
-  if (data && typeof data === "object" && Array.isArray((data as { results?: unknown[] }).results)) {
-    return (data as { results: T[] }).results;
-  }
-  return [];
 }
 
 function normalizeLeadList(item: BackendLeadList): LeadRecord {
@@ -190,10 +189,24 @@ function normalizeLeadDetail(item: BackendLeadDetail): LeadRecord {
 }
 
 export async function getLeads(): Promise<LeadRecord[]> {
-  const res = await fetch(api("/leads"), { headers: buildHeaders() });
-  if (!res.ok) throw new Error("Failed to load leads");
-  const data = await res.json();
-  return extractResults<BackendLeadList>(data).map(normalizeLeadList);
+  const allLeads: BackendLeadList[] = [];
+  let nextUrl: string | null = api("/leads?page_size=100");
+
+  while (nextUrl) {
+    const res = await fetch(nextUrl, { headers: buildHeaders() });
+    if (!res.ok) throw new Error("Failed to load leads");
+    const data = (await res.json()) as BackendLeadList[] | PaginatedResponse<BackendLeadList>;
+
+    if (Array.isArray(data)) {
+      allLeads.push(...data);
+      nextUrl = null;
+    } else {
+      allLeads.push(...(data.results ?? []));
+      nextUrl = data.next ?? null;
+    }
+  }
+
+  return allLeads.map(normalizeLeadList);
 }
 
 export async function getLeadById(id: string): Promise<LeadRecord | null> {
