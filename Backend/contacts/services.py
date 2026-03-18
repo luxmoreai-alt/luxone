@@ -101,21 +101,28 @@ class ContactService:
             data["email"] = _normalize_email(data["email"])
         if not data.get("contact_owner"):
             data["contact_owner"] = user
+
+        allowed_fields = {
+            f.name for f in Contact._meta.get_fields()
+            if f.concrete and not f.auto_created
+        }
+        cleaned_data = {k: v for k, v in data.items() if k in allowed_fields}
+
         existing_contact = None
-        if data.get("created_from_lead"):
+        if cleaned_data.get("created_from_lead"):
             existing_contact = (
                 Contact.objects.filter(
-                    created_from_lead=data["created_from_lead"],
+                    created_from_lead=cleaned_data["created_from_lead"],
                     is_active=True,
                 )
                 .select_related("account", "contact_owner")
                 .first()
             )
-        if not existing_contact and data.get("email"):
+        if not existing_contact and cleaned_data.get("email"):
             existing_contact = (
                 Contact.objects.filter(
-                    email__iexact=data["email"],
-                    account=data["account"],
+                    email__iexact=cleaned_data["email"],
+                    account=cleaned_data["account"],
                     is_active=True,
                 )
                 .select_related("account", "contact_owner")
@@ -124,7 +131,7 @@ class ContactService:
 
         if existing_contact:
             updated_fields = []
-            for field, value in data.items():
+            for field, value in cleaned_data.items():
                 if value in (None, "", []) or getattr(existing_contact, field) == value:
                     continue
                 setattr(existing_contact, field, value)
@@ -133,13 +140,14 @@ class ContactService:
                 existing_contact.save(update_fields=[*updated_fields, "updated_at"])
             contact = existing_contact
         else:
-            contact = Contact.objects.create(**data)
+            contact = Contact.objects.create(**cleaned_data)
         self.log_activity(
             contact=contact,
             action="Contact created",
             description="Contact created",
             user=user,
         )
+
         return contact
 
     @transaction.atomic

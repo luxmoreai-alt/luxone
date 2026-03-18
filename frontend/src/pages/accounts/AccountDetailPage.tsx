@@ -1,13 +1,19 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
-import CRMModuleDetailPage from "../crm/CRMModuleDetailPage";
+import { useNavigate, useParams } from "react-router-dom";
 import { accountModuleConfig } from "../../components/modules/accounts/accountsMockData";
-import { getAccountById, getAccountNotes } from "../../lib/api/accountsApi";
+import {
+  getAccountById,
+  getAccountContacts,
+  getAccountDeals,
+  getAccountNotes,
+} from "../../lib/api/accountsApi";
 import { loadAccountLinkedData } from "../../lib/api/linkedRecordsApi";
 import type { AccountRecord, Note } from "../../lib/shared/crmTypes";
+import CRMModuleDetailPage from "../crm/CRMModuleDetailPage";
 
 export default function AccountDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [account, setAccount] = useState<AccountRecord | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
   const [linkedData, setLinkedData] = useState<any | null>(null);
@@ -21,25 +27,39 @@ export default function AccountDetailPage() {
       try {
         setLoading(true);
         setError(null);
-        const accountData = await getAccountById(id);
+
+        const [accountData, notesData, contactsData, dealsData] = await Promise.all([
+          getAccountById(id),
+          getAccountNotes(id).catch(() => []),
+          getAccountContacts(id).catch(() => []),
+          getAccountDeals(id).catch(() => []),
+        ]);
+
         if (!accountData) {
           setAccount(null);
           setLinkedData(null);
           return;
         }
-        setAccount(accountData);
-        setLoading(false);
 
-        const [notesData, related] = await Promise.all([
-          getAccountNotes(id).catch(() => []),
-          loadAccountLinkedData(accountData).catch(() => null),
-        ]);
+        setAccount(accountData);
         setNotes(notesData);
-        setLinkedData(related);
+
+        const related = await loadAccountLinkedData(accountData).catch(() => null);
+        setLinkedData({
+          ...related,
+          contacts: related?.contacts?.length
+            ? related.contacts
+            : contactsData.map((contact) => ({
+                id: contact.id,
+                name: contact.contactName,
+                email: contact.email,
+                phone: contact.phone,
+              })),
+          deals: related?.deals?.length ? related.deals : dealsData,
+        });
       } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Failed to load account"
-        );
+        setError(err instanceof Error ? err.message : "Failed to load account");
+      } finally {
         setLoading(false);
       }
     };
@@ -47,19 +67,8 @@ export default function AccountDetailPage() {
     void load();
   }, [id]);
 
-  if (loading) {
-    return (
-      <div className="p-6 text-sm text-slate-600">Loading account...</div>
-    );
-  }
-
-  if (error || !account) {
-    return (
-      <div className="p-6 text-sm text-rose-600">
-        {error ?? "Account not found."}
-      </div>
-    );
-  }
+  if (loading) return <div className="p-6 text-sm text-slate-600">Loading account...</div>;
+  if (error || !account) return <div className="p-6 text-sm text-rose-600">{error ?? "Account not found."}</div>;
 
   return (
     <CRMModuleDetailPage
@@ -84,6 +93,12 @@ export default function AccountDetailPage() {
         purchaseOrders: linkedData?.purchaseOrders || [],
         invoices: linkedData?.invoices || [],
         timeline: linkedData?.timeline || [],
+      }}
+      onAction={(action) => {
+        if (action === "Edit") navigate(`/accounts/${id}/edit`);
+      }}
+      onNavigate={(type, navId) => {
+        navigate(`/${type}s/${navId}`);
       }}
     />
   );

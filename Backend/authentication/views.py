@@ -1,15 +1,19 @@
-from rest_framework import status
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.contrib.auth import authenticate, get_user_model
 from rest_framework_simplejwt.tokens import RefreshToken
 from drf_yasg.utils import swagger_auto_schema
 
 from .serializers import (
     CheckEmailSerializer, LoginSerializer, SendOTPSerializer,
-    VerifyOTPSerializer, ResetPasswordSerializer
+    VerifyOTPSerializer, ResetPasswordSerializer,
+    UserCreateSerializer, UserDetailSerializer, UserUpdateSerializer,
+    SetPasswordSerializer,
 )
+from .permissions import IsOrgAdmin, IsAdminOrManager
 from .models import OTP
 from .services import generate_and_send_otp
 from .utils import custom_response
@@ -59,6 +63,7 @@ def build_auth_payload(user, db_name):
             "id": user.pk,
             "email": user.email,
             "is_admin": getattr(user, "is_admin", False),
+            "role": getattr(user, "role", "employee"),
         },
     }
 
@@ -74,7 +79,14 @@ class CheckEmailView(APIView):
 
             if db_name and user:
                 set_current_db_name(db_name)
-                return Response(custom_response(success=True, message="Email found"), status=status.HTTP_200_OK)
+                return Response(custom_response(
+                    success=True,
+                    message="Email found",
+                    data={
+                        "role": getattr(user, "role", "employee"),
+                        "email": user.email,
+                    }
+                ), status=status.HTTP_200_OK)
             return Response(custom_response(success=False, message="Admin not registered or company inactive"), status=status.HTTP_404_NOT_FOUND)
         return Response(custom_response(success=False, message=serializer.errors), status=status.HTTP_400_BAD_REQUEST)
 
@@ -93,11 +105,20 @@ class LoginView(APIView):
                 return Response(custom_response(success=False, message="Invalid login context"), status=status.HTTP_401_UNAUTHORIZED)
 
             set_current_db_name(db_name)
-            user = authenticate(email=email, password=password)
-            if user and user.is_active:
-                data = build_auth_payload(user, db_name)
-                return Response(custom_response(success=True, message="Login successful", data=data), status=status.HTTP_200_OK)
-            return Response(custom_response(success=False, message="Invalid password or deactivated"), status=status.HTTP_401_UNAUTHORIZED)
+
+            # Authenticate directly against the tenant database.
+            # Django's authenticate() always queries the 'default' DB, which misses
+            # manager/employee accounts stored only in tenant databases.
+            try:
+                user = User.objects.using(db_name).get(email__iexact=email, is_active=True)
+            except User.DoesNotExist:
+                return Response(custom_response(success=False, message="Invalid password or deactivated"), status=status.HTTP_401_UNAUTHORIZED)
+
+            if not user.check_password(password):
+                return Response(custom_response(success=False, message="Invalid password or deactivated"), status=status.HTTP_401_UNAUTHORIZED)
+
+            data = build_auth_payload(user, db_name)
+            return Response(custom_response(success=True, message="Login successful", data=data), status=status.HTTP_200_OK)
         return Response(custom_response(success=False, message=serializer.errors), status=status.HTTP_400_BAD_REQUEST)
 
 class SendOTPView(APIView):
@@ -160,6 +181,168 @@ class ForgotPasswordView(APIView):
                 return Response(custom_response(success=False, message="Failed to send OTP"), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             return Response(custom_response(success=False, message="Admin not registered"), status=status.HTTP_404_NOT_FOUND)
         return Response(custom_response(success=False, message=serializer.errors), status=status.HTTP_400_BAD_REQUEST)
+
+class UserListView(APIView):
+    """Legacy endpoint — kept for backwards compatibility."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        users = User.objects.filter(is_active=True).values("id", "email")
+        return Response(list(users), status=status.HTTP_200_OK)
+
+
+# ── User Management ViewSet ────────────────────────────────────────────────────
+
+class UserManagementViewSet(viewsets.ViewSet):
+    """
+    Full user management for admin/manager.
+
+    Endpoints:
+      GET    /api/auth/manage-users/           list users (role-scoped)
+      POST   /api/auth/manage-users/           create user
+      GET    /api/auth/manage-users/{id}/      user detail
+      PATCH  /api/auth/manage-users/{id}/      update role / manager / active (admin only)
+      DELETE /api/auth/manage-users/{id}/      deactivate user (admin only)
+      POST   /api/auth/manage-users/{id}/set-password/  reset password (admin only)
+      GET    /api/auth/manage-users/me/        current user profile
+    """
+    permission_classes = [IsAuthenticated, IsAdminOrManager]
+
+    def _scoped_queryset(self, user):
+        """Returns users visible to the requesting user."""
+        from organizations.services import get_team_members
+
+        org_id = getattr(user, "organization_id", None)
+        if not org_id:
+            return User.objects.filter(is_active=True)
+
+        role = getattr(user, "role", "employee")
+        base = User.objects.filter(organization_id=org_id).select_related("manager", "organization")
+
+        if role == "admin":
+            return base
+        if role == "manager":
+            team_ids = list(get_team_members(user).values_list("id", flat=True))
+            team_ids.append(user.pk)
+            return base.filter(pk__in=team_ids)
+        return base.filter(pk=user.pk)
+
+    # ── GET /manage-users/ ────────────────────────────────────────────────
+    def list(self, request):
+        qs = self._scoped_queryset(request.user)
+        serializer = UserDetailSerializer(qs, many=True)
+        return Response(serializer.data)
+
+    # ── POST /manage-users/ ───────────────────────────────────────────────
+    def create(self, request):
+        serializer = UserCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        creator = request.user
+        creator_role = getattr(creator, "role", "employee")
+
+        # Determine role
+        requested_role = data.get("role", User.Role.EMPLOYEE)
+        if creator_role == "manager":
+            # Managers can only create employees assigned to themselves
+            assigned_role = User.Role.EMPLOYEE
+            manager_for_new_user = creator
+        else:
+            # Admin — can set any role
+            assigned_role = requested_role
+            manager_for_new_user = data.get("manager", None)
+
+        # Validate: admin cannot be created by a manager
+        if creator_role == "manager" and requested_role in ("admin", "manager"):
+            return Response(
+                {"detail": "Managers can only create employee accounts."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Create the user
+        new_user = User.objects.create_user(
+            email=data["email"],
+            password=data["password"],
+        )
+        new_user.role = assigned_role
+        new_user.organization = creator.organization
+        new_user.manager = manager_for_new_user
+        new_user.is_active = True
+        new_user.save()
+
+        return Response(
+            UserDetailSerializer(new_user).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    # ── GET /manage-users/{id}/ ───────────────────────────────────────────
+    def retrieve(self, request, pk=None):
+        qs = self._scoped_queryset(request.user)
+        user = qs.filter(pk=pk).first()
+        if not user:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(UserDetailSerializer(user).data)
+
+    # ── PATCH /manage-users/{id}/ ─────────────────────────────────────────
+    def partial_update(self, request, pk=None):
+        if getattr(request.user, "role", None) != "admin":
+            return Response(
+                {"detail": "Only admins can update user details."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        qs = self._scoped_queryset(request.user)
+        user = qs.filter(pk=pk).first()
+        if not user:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = UserUpdateSerializer(user, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(UserDetailSerializer(user).data)
+
+    # ── DELETE /manage-users/{id}/ ────────────────────────────────────────
+    def destroy(self, request, pk=None):
+        if getattr(request.user, "role", None) != "admin":
+            return Response(
+                {"detail": "Only admins can deactivate users."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if str(request.user.pk) == str(pk):
+            return Response(
+                {"detail": "You cannot deactivate your own account."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        qs = self._scoped_queryset(request.user)
+        user = qs.filter(pk=pk).first()
+        if not user:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        user.is_active = False
+        user.save(update_fields=["is_active"])
+        return Response({"detail": f"User {user.email} has been deactivated."})
+
+    # ── POST /manage-users/{id}/set-password/ ────────────────────────────
+    @action(detail=True, methods=["post"], url_path="set-password",
+            permission_classes=[IsAuthenticated, IsOrgAdmin])
+    def set_password(self, request, pk=None):
+        qs = self._scoped_queryset(request.user)
+        user = qs.filter(pk=pk).first()
+        if not user:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = SetPasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user.set_password(serializer.validated_data["new_password"])
+        user.save(update_fields=["password"])
+        return Response({"detail": f"Password updated for {user.email}."})
+
+    # ── GET /manage-users/me/ ─────────────────────────────────────────────
+    @action(detail=False, methods=["get"], url_path="me",
+            permission_classes=[IsAuthenticated])
+    def me(self, request):
+        return Response(UserDetailSerializer(request.user).data)
+
 
 class ResetPasswordView(APIView):
     permission_classes = [AllowAny]

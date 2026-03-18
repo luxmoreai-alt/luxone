@@ -4,8 +4,8 @@ import CRMModalBase from "../../components/crm/CRMModalBase";
 import { dealModuleConfig } from "../../components/modules/deals/dealsConfig";
 import InventoryLookupField from "../../inventory/components/InventoryLookupField";
 import type { LookupOption } from "../../inventory/types";
-import { invalidateLinkedDataCache, loadDealLinkedData } from "../../lib/api/linkedRecordsApi";
 import { addDealProduct, getDealById } from "../../lib/api/dealsApi";
+import { invalidateLinkedDataCache, loadDealLinkedData } from "../../lib/api/linkedRecordsApi";
 import type { Deal as CRMDeal } from "../../lib/shared/crmTypes";
 import CRMModuleDetailPage from "../crm/CRMModuleDetailPage";
 
@@ -58,12 +58,11 @@ export default function DealDetailPage() {
   const [productError, setProductError] = useState<string | null>(null);
 
   useEffect(() => {
-    const loadDeal = async () => {
+    const load = async () => {
       if (!id) {
         setError("Deal id is missing.");
         return;
       }
-
       try {
         setLoading(true);
         const data = await getDealById(id);
@@ -83,8 +82,7 @@ export default function DealDetailPage() {
         setLoading(false);
       }
     };
-
-    void loadDeal();
+    void load();
   }, [id]);
 
   const reloadDeal = async () => {
@@ -132,10 +130,6 @@ export default function DealDetailPage() {
     return <div className="p-6 text-rose-600">{error}</div>;
   }
 
-  if (!deal) {
-    return <div className="p-6">Loading...</div>;
-  }
-
   const liveTotal =
     Number(productForm.quantity || 0) * Number(productForm.unitPrice || 0) - Number(productForm.discount || 0);
 
@@ -143,7 +137,7 @@ export default function DealDetailPage() {
     <>
       <CRMModuleDetailPage
         config={dealModuleConfig}
-        rows={[deal]}
+        rows={deal ? [deal] : []}
         data={{
           notes: linkedData?.notes || [],
           deals: linkedData?.deals || [],

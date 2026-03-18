@@ -1,6 +1,63 @@
-import { Paperclip } from "lucide-react";
+import { Lock, Paperclip, Phone, CalendarCheck, CalendarDays, Activity, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import CRMModalBase from "./CRMModalBase";
+
+// ── Shared call helpers ────────────────────────────────────────────────────
+
+type CallType = "Outbound" | "Inbound";
+type ReminderType =
+  | "None"
+  | "At time of call"
+  | "5 minutes before"
+  | "10 minutes before"
+  | "15 minutes before"
+  | "30 minutes before"
+  | "1 hour before";
+
+function getTodayDate() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function getCurrentTime() {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function FullCallModalShell({
+  title,
+  children,
+  onClose,
+}: {
+  title: string;
+  children: React.ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 py-6">
+      <div className="flex max-h-[92vh] w-full max-w-[820px] flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
+          <h2 className="text-2xl font-semibold text-slate-900">{title}</h2>
+          <button onClick={onClose} className="rounded-md p-2 text-slate-500 hover:bg-slate-100">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="overflow-y-auto px-6 py-6">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function CallFormRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-[160px_minmax(0,1fr)] items-center gap-4">
+      <label className="text-right text-sm font-medium text-slate-600">{label}</label>
+      <div>{children}</div>
+    </div>
+  );
+}
+
+const fieldCls = "w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500";
 
 type BaseModalProps = {
   open: boolean;
@@ -301,6 +358,17 @@ export function MeetingModal({
   );
 }
 
+type FullCallPayload = {
+  call_summary: string;
+  call_outcome?: string;
+  call_type?: string;
+  call_start_time?: string;
+  reminder?: string;
+  duration_minutes?: number;
+  duration_seconds?: number;
+  voice_recording?: string;
+};
+
 export function ScheduleCallModal({
   open,
   onClose,
@@ -308,22 +376,43 @@ export function ScheduleCallModal({
   onSave,
 }: BaseModalProps & {
   recordName?: string;
-  onSave?: (payload: { call_summary: string; call_outcome?: string }) => Promise<void>;
+  onSave?: (payload: FullCallPayload) => Promise<void>;
 }) {
-  const [summary, setSummary] = useState(recordName ? `Call with ${recordName}` : "");
-  const [outcome, setOutcome] = useState("");
+  const [callType, setCallType] = useState<CallType>("Outbound");
+  const [startDate, setStartDate] = useState(getTodayDate());
+  const [startTime, setStartTime] = useState("13:00");
+  const [subject, setSubject] = useState(recordName ? `Call scheduled with ${recordName}` : "");
+  const [reminder, setReminder] = useState<ReminderType>("None");
+  const [purpose, setPurpose] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSave = async () => {
-    if (!summary.trim()) {
-      setError("Please enter call summary.");
-      return;
+  useEffect(() => {
+    if (open) {
+      setSubject(recordName ? `Call scheduled with ${recordName}` : "");
+      setCallType("Outbound");
+      setStartDate(getTodayDate());
+      setStartTime("13:00");
+      setReminder("None");
+      setPurpose("");
+      setError(null);
     }
+  }, [open, recordName]);
+
+  if (!open) return null;
+
+  const handleSave = async () => {
+    if (!subject.trim()) { setError("Subject is required."); return; }
     try {
       setSaving(true);
       setError(null);
-      await onSave?.({ call_summary: summary.trim(), call_outcome: outcome.trim() });
+      await onSave?.({
+        call_summary: subject.trim(),
+        call_outcome: purpose.trim(),
+        call_type: callType,
+        call_start_time: `${startDate}T${startTime}:00`,
+        reminder,
+      });
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to schedule call.");
@@ -333,24 +422,68 @@ export function ScheduleCallModal({
   };
 
   return (
-    <CRMModalBase
-      open={open}
-      title="Schedule a Call"
-      footer={
-        <>
-          <button onClick={onClose} disabled={saving} className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-50">Cancel</button>
-          <button onClick={() => void handleSave()} disabled={saving} className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white disabled:opacity-50">
-            {saving ? "Scheduling..." : "Schedule"}
-          </button>
-        </>
-      }
-    >
-      <div className="grid gap-3">
-        <input placeholder="Call Subject" value={summary} onChange={(e) => setSummary(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        <textarea rows={3} placeholder="Call Purpose / Outcome" value={outcome} onChange={(e) => setOutcome(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+    <FullCallModalShell title="Schedule a Call" onClose={onClose}>
+      <div className="space-y-8">
+        <section>
+          <h3 className="mb-5 text-xl font-semibold text-slate-800">Call Information</h3>
+          <div className="space-y-4">
+            <CallFormRow label="Call For">
+              <input value={recordName || "—"} readOnly className={`${fieldCls} bg-slate-50`} />
+            </CallFormRow>
+            <CallFormRow label="Call Type">
+              <div className="flex overflow-hidden rounded-md border border-slate-300">
+                <select value={callType} onChange={(e) => setCallType(e.target.value as CallType)} className="flex-1 px-3 py-2 text-sm outline-none">
+                  <option value="Outbound">Outbound</option>
+                  <option value="Inbound">Inbound</option>
+                </select>
+                <div className="flex items-center border-l border-slate-300 px-3 text-slate-400">
+                  <Lock className="h-4 w-4" />
+                </div>
+              </div>
+            </CallFormRow>
+            <CallFormRow label="Outgoing Call Status">
+              <div className="flex overflow-hidden rounded-md border border-slate-300 bg-slate-50">
+                <input value="Scheduled" readOnly className="flex-1 px-3 py-2 text-sm outline-none" />
+                <div className="flex items-center border-l border-slate-300 px-3 text-slate-400">
+                  <Lock className="h-4 w-4" />
+                </div>
+              </div>
+            </CallFormRow>
+            <CallFormRow label="Call Start Time">
+              <div className="grid grid-cols-2 overflow-hidden rounded-md border border-slate-300">
+                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="border-r border-slate-300 px-3 py-2 text-sm outline-none" />
+                <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="px-3 py-2 text-sm outline-none" />
+              </div>
+            </CallFormRow>
+            <CallFormRow label="Subject">
+              <input value={subject} onChange={(e) => setSubject(e.target.value)} className={fieldCls} />
+            </CallFormRow>
+            <CallFormRow label="Reminder">
+              <select value={reminder} onChange={(e) => setReminder(e.target.value as ReminderType)} className={fieldCls}>
+                <option>None</option>
+                <option>At time of call</option>
+                <option>5 minutes before</option>
+                <option>10 minutes before</option>
+                <option>15 minutes before</option>
+                <option>30 minutes before</option>
+                <option>1 hour before</option>
+              </select>
+            </CallFormRow>
+          </div>
+        </section>
+        <section>
+          <h4 className="mb-2 text-base font-semibold text-slate-800">Purpose of Outgoing Call</h4>
+          <textarea rows={4} value={purpose} onChange={(e) => setPurpose(e.target.value)} className={fieldCls} />
+        </section>
         {error && <p className="text-sm text-rose-600">{error}</p>}
       </div>
-    </CRMModalBase>
+      <div className="mt-6 flex justify-end gap-3 border-t border-slate-200 pt-4">
+        <button onClick={onClose} disabled={saving} className="rounded-md border border-slate-300 px-5 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50">Cancel</button>
+        <button onClick={() => void handleSave()} disabled={saving} className="rounded-md bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
+          {saving ? "Scheduling..." : "Schedule"}
+        </button>
+      </div>
+    </FullCallModalShell>
   );
 }
 
@@ -361,22 +494,53 @@ export function LogCallModal({
   onSave,
 }: BaseModalProps & {
   recordName?: string;
-  onSave?: (payload: { call_summary: string; call_outcome?: string }) => Promise<void>;
+  onSave?: (payload: FullCallPayload) => Promise<void>;
 }) {
-  const [summary, setSummary] = useState(recordName ? `Call with ${recordName}` : "");
-  const [outcome, setOutcome] = useState("");
+  const [callType, setCallType] = useState<CallType>("Outbound");
+  const [startDate, setStartDate] = useState(getTodayDate());
+  const [startTime, setStartTime] = useState(getCurrentTime());
+  const [durationMinutes, setDurationMinutes] = useState("0");
+  const [durationSeconds, setDurationSeconds] = useState("0");
+  const [subject, setSubject] = useState(recordName ? `Outbound call to ${recordName}` : "");
+  const [voiceRecording, setVoiceRecording] = useState("");
+  const [purpose, setPurpose] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSave = async () => {
-    if (!summary.trim()) {
-      setError("Please enter call summary.");
-      return;
+  useEffect(() => {
+    if (open) {
+      setSubject(recordName ? `Outbound call to ${recordName}` : "");
+      setCallType("Outbound");
+      setStartDate(getTodayDate());
+      setStartTime(getCurrentTime());
+      setDurationMinutes("0");
+      setDurationSeconds("0");
+      setVoiceRecording("");
+      setPurpose("");
+      setError(null);
     }
+  }, [open, recordName]);
+
+  useEffect(() => {
+    setSubject(`${callType} call to ${recordName || "Unknown"}`);
+  }, [callType, recordName]);
+
+  if (!open) return null;
+
+  const handleSave = async () => {
+    if (!subject.trim()) { setError("Subject is required."); return; }
     try {
       setSaving(true);
       setError(null);
-      await onSave?.({ call_summary: summary.trim(), call_outcome: outcome.trim() });
+      await onSave?.({
+        call_summary: subject.trim(),
+        call_outcome: purpose.trim(),
+        call_type: callType,
+        call_start_time: `${startDate}T${startTime}:00`,
+        duration_minutes: Number(durationMinutes) || 0,
+        duration_seconds: Number(durationSeconds) || 0,
+        voice_recording: voiceRecording.trim(),
+      });
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to log call.");
@@ -386,24 +550,63 @@ export function LogCallModal({
   };
 
   return (
-    <CRMModalBase
-      open={open}
-      title="Log a Call"
-      footer={
-        <>
-          <button onClick={onClose} disabled={saving} className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-50">Cancel</button>
-          <button onClick={() => void handleSave()} disabled={saving} className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white disabled:opacity-50">
-            {saving ? "Saving..." : "Save"}
-          </button>
-        </>
-      }
-    >
-      <div className="grid gap-3">
-        <input placeholder="Call Subject" value={summary} onChange={(e) => setSummary(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        <textarea rows={3} placeholder="Call Outcome" value={outcome} onChange={(e) => setOutcome(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+    <FullCallModalShell title="Log a Call" onClose={onClose}>
+      <div className="space-y-8">
+        <section>
+          <h3 className="mb-5 text-xl font-semibold text-slate-800">Call Information</h3>
+          <div className="space-y-4">
+            <CallFormRow label="Call For">
+              <input value={recordName || "—"} readOnly className={`${fieldCls} bg-slate-50`} />
+            </CallFormRow>
+            <CallFormRow label="Call Type">
+              <select value={callType} onChange={(e) => setCallType(e.target.value as CallType)} className={fieldCls}>
+                <option value="Outbound">Outbound</option>
+                <option value="Inbound">Inbound</option>
+              </select>
+            </CallFormRow>
+            <CallFormRow label="Outgoing Call Status">
+              <div className="flex overflow-hidden rounded-md border border-slate-300 bg-slate-50">
+                <input value="Completed" readOnly className="flex-1 px-3 py-2 text-sm outline-none" />
+                <div className="flex items-center border-l border-slate-300 px-3 text-slate-400">
+                  <Lock className="h-4 w-4" />
+                </div>
+              </div>
+            </CallFormRow>
+            <CallFormRow label="Call Start Time">
+              <div className="grid grid-cols-2 overflow-hidden rounded-md border border-slate-300">
+                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="border-r border-slate-300 px-3 py-2 text-sm outline-none" />
+                <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="px-3 py-2 text-sm outline-none" />
+              </div>
+            </CallFormRow>
+            <CallFormRow label="Call Duration">
+              <div className="flex items-center gap-2">
+                <input type="number" min="0" value={durationMinutes} onChange={(e) => setDurationMinutes(e.target.value)} className="w-24 rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+                <span className="text-sm text-slate-500">minutes</span>
+                <input type="number" min="0" max="59" value={durationSeconds} onChange={(e) => setDurationSeconds(e.target.value)} className="w-24 rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+                <span className="text-sm text-slate-500">seconds</span>
+              </div>
+            </CallFormRow>
+            <CallFormRow label="Subject">
+              <input value={subject} onChange={(e) => setSubject(e.target.value)} className={fieldCls} />
+            </CallFormRow>
+            <CallFormRow label="Voice Recording">
+              <input value={voiceRecording} onChange={(e) => setVoiceRecording(e.target.value)} placeholder="File path or URL" className={fieldCls} />
+            </CallFormRow>
+          </div>
+        </section>
+        <section>
+          <h4 className="mb-2 text-base font-semibold text-slate-800">Purpose of Outgoing Call</h4>
+          <textarea rows={4} value={purpose} onChange={(e) => setPurpose(e.target.value)} className={fieldCls} />
+        </section>
         {error && <p className="text-sm text-rose-600">{error}</p>}
       </div>
-    </CRMModalBase>
+      <div className="mt-6 flex justify-end gap-3 border-t border-slate-200 pt-4">
+        <button onClick={onClose} disabled={saving} className="rounded-md border border-slate-300 px-5 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50">Cancel</button>
+        <button onClick={() => void handleSave()} disabled={saving} className="rounded-md bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
+          {saving ? "Saving..." : "Save"}
+        </button>
+      </div>
+    </FullCallModalShell>
   );
 }
 
@@ -506,6 +709,310 @@ export function ConvertLeadModal({
           Create a new Deal for this Account
         </label>
       </div>
+      {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
+    </CRMModalBase>
+  );
+}
+
+// ── Activity Detail Modal ────────────────────────────────────────────────────
+
+type ActivityType = "call" | "task" | "meeting" | "other";
+
+const ACTIVITY_ICON: Record<ActivityType, React.ReactNode> = {
+  call:    <Phone className="h-5 w-5" />,
+  task:    <CalendarCheck className="h-5 w-5" />,
+  meeting: <CalendarDays className="h-5 w-5" />,
+  other:   <Activity className="h-5 w-5" />,
+};
+
+const ACTIVITY_COLOR: Record<ActivityType, { bg: string; text: string; badge: string }> = {
+  call:    { bg: "bg-orange-50",  text: "text-orange-700", badge: "bg-orange-100 border-orange-200 text-orange-700" },
+  task:    { bg: "bg-blue-50",    text: "text-blue-700",   badge: "bg-blue-100 border-blue-200 text-blue-700" },
+  meeting: { bg: "bg-purple-50",  text: "text-purple-700", badge: "bg-purple-100 border-purple-200 text-purple-700" },
+  other:   { bg: "bg-slate-50",   text: "text-slate-700",  badge: "bg-slate-100 border-slate-200 text-slate-700" },
+};
+
+const ACTIVITY_LABEL: Record<ActivityType, string> = {
+  call: "Call", task: "Task", meeting: "Meeting", other: "Activity",
+};
+
+export function ActivityDetailModal({
+  open,
+  onClose,
+  activity,
+  recordName,
+  onViewLead,
+}: BaseModalProps & {
+  activity?: { date: string; type: ActivityType; action: string; description?: string } | null;
+  recordName?: string;
+  onViewLead?: () => void;
+}) {
+  if (!open || !activity) return null;
+
+  const type = activity.type ?? "other";
+  const colors = ACTIVITY_COLOR[type];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
+      <div className="w-full max-w-md rounded-xl bg-white shadow-2xl">
+        {/* Header */}
+        <div className={`flex items-center justify-between rounded-t-xl px-5 py-4 ${colors.bg}`}>
+          <div className="flex items-center gap-3">
+            <span className={`flex h-9 w-9 items-center justify-center rounded-full border ${colors.badge}`}>
+              {ACTIVITY_ICON[type]}
+            </span>
+            <div>
+              <p className={`text-xs font-semibold uppercase tracking-wide ${colors.text}`}>
+                {ACTIVITY_LABEL[type]}
+              </p>
+              <p className="text-base font-semibold text-slate-900">{activity.action}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="rounded-md p-1.5 text-slate-500 hover:bg-white/60">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="space-y-3 px-5 py-4">
+          <div className="flex items-center justify-between text-sm">
+            <span className="font-medium text-slate-500">Date</span>
+            <span className="font-semibold text-slate-800">{activity.date}</span>
+          </div>
+          {recordName && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-medium text-slate-500">Related To</span>
+              <span className="font-semibold text-slate-800">{recordName}</span>
+            </div>
+          )}
+          {activity.description && (
+            <div className="text-sm">
+              <span className="font-medium text-slate-500">Description</span>
+              <p className="mt-1 rounded-md bg-slate-50 px-3 py-2 text-slate-700">{activity.description}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-4">
+          {onViewLead && (
+            <button
+              type="button"
+              onClick={() => { onViewLead(); onClose(); }}
+              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              View Lead
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Mass Delete Modal ────────────────────────────────────────────────────────
+
+export function MassDeleteModal({
+  open,
+  onClose,
+  count,
+  onConfirm,
+}: BaseModalProps & { count: number; onConfirm: () => Promise<void> }) {
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleConfirm = async () => {
+    try {
+      setDeleting(true);
+      setError(null);
+      await onConfirm();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Mass delete failed.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <CRMModalBase
+      open={open}
+      title="Mass Delete"
+      maxWidthClassName="max-w-sm"
+      footer={
+        <>
+          <button onClick={onClose} disabled={deleting} className="rounded-lg border border-slate-300 px-4 py-2 text-sm disabled:opacity-50">
+            Cancel
+          </button>
+          <button onClick={() => void handleConfirm()} disabled={deleting} className="rounded-lg bg-rose-600 px-4 py-2 text-sm text-white hover:bg-rose-700 disabled:opacity-50">
+            {deleting ? "Deleting..." : "Delete All"}
+          </button>
+        </>
+      }
+    >
+      <p className="text-sm text-slate-700">
+        Are you sure you want to delete all <span className="font-semibold">{count} record{count !== 1 ? "s" : ""}</span>? This action cannot be undone.
+      </p>
+      {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
+    </CRMModalBase>
+  );
+}
+
+// ── Mass Update Modal ────────────────────────────────────────────────────────
+
+export function MassUpdateModal({
+  open,
+  onClose,
+  count,
+  module,
+  onConfirm,
+}: BaseModalProps & {
+  count: number;
+  module: string;
+  onConfirm: (updates: Record<string, string>) => Promise<void>;
+}) {
+  const [owner, setOwner] = useState("");
+  const [status, setStatus] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const statusOptions: Record<string, string[]> = {
+    leads: ["New", "Contacted", "Qualified", "Lost", "Converted"],
+    deals: ["Qualification", "Needs Analysis", "Value Proposition", "Identify Decision Makers", "Proposal/Price Quote", "Negotiation/Review", "Closed Won", "Closed Lost"],
+    contacts: [],
+    accounts: ["Analyst", "Competitor", "Customer", "Distributor", "Integrator", "Investor", "Partner", "Press", "Prospect", "Reseller", "Other"],
+  };
+
+  const options = statusOptions[module] ?? [];
+  const statusLabel = module === "leads" ? "Lead Status" : module === "deals" ? "Stage" : module === "accounts" ? "Account Type" : "Status";
+
+  useEffect(() => {
+    if (open) { setOwner(""); setStatus(""); setError(null); }
+  }, [open]);
+
+  const handleConfirm = async () => {
+    const updates: Record<string, string> = {};
+    if (owner.trim()) updates.owner = owner.trim();
+    if (status) {
+      if (module === "leads") updates.lead_status = status;
+      else if (module === "deals") updates.stage = status;
+      else if (module === "accounts") updates.account_type = status;
+    }
+    if (Object.keys(updates).length === 0) {
+      setError("Please fill in at least one field to update.");
+      return;
+    }
+    try {
+      setSaving(true);
+      setError(null);
+      await onConfirm(updates);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Mass update failed.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <CRMModalBase
+      open={open}
+      title="Mass Update"
+      maxWidthClassName="max-w-md"
+      footer={
+        <>
+          <button onClick={onClose} disabled={saving} className="rounded-lg border border-slate-300 px-4 py-2 text-sm disabled:opacity-50">
+            Cancel
+          </button>
+          <button onClick={() => void handleConfirm()} disabled={saving} className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50">
+            {saving ? "Updating..." : `Update ${count} Record${count !== 1 ? "s" : ""}`}
+          </button>
+        </>
+      }
+    >
+      <p className="mb-4 text-sm text-slate-500">
+        The following changes will be applied to all <span className="font-semibold">{count} record{count !== 1 ? "s" : ""}</span> in the table.
+      </p>
+      <div className="space-y-4">
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Owner</label>
+          <input
+            type="text"
+            value={owner}
+            onChange={(e) => setOwner(e.target.value)}
+            placeholder="Leave blank to keep existing"
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+          />
+        </div>
+        {options.length > 0 && (
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">{statusLabel}</label>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+            >
+              <option value="">— Leave unchanged —</option>
+              {options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+            </select>
+          </div>
+        )}
+      </div>
+      {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
+    </CRMModalBase>
+  );
+}
+
+// ── Mass Convert Modal ───────────────────────────────────────────────────────
+
+export function MassConvertModal({
+  open,
+  onClose,
+  count,
+  onConfirm,
+}: BaseModalProps & { count: number; onConfirm: () => Promise<void> }) {
+  const [converting, setConverting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleConfirm = async () => {
+    try {
+      setConverting(true);
+      setError(null);
+      await onConfirm();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Mass convert failed.");
+    } finally {
+      setConverting(false);
+    }
+  };
+
+  return (
+    <CRMModalBase
+      open={open}
+      title="Mass Convert Leads"
+      maxWidthClassName="max-w-sm"
+      footer={
+        <>
+          <button onClick={onClose} disabled={converting} className="rounded-lg border border-slate-300 px-4 py-2 text-sm disabled:opacity-50">
+            Cancel
+          </button>
+          <button onClick={() => void handleConfirm()} disabled={converting} className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50">
+            {converting ? "Converting..." : "Convert All"}
+          </button>
+        </>
+      }
+    >
+      <p className="text-sm text-slate-700">
+        Convert all <span className="font-semibold">{count} lead{count !== 1 ? "s" : ""}</span> into Accounts and Contacts? Each lead will also create a new Deal.
+      </p>
       {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
     </CRMModalBase>
   );

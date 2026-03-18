@@ -25,6 +25,7 @@ type ModuleToolbarProps = {
   isFilterOpen: boolean;
   onToggleFilter: () => void;
   onCreateClick: () => void;
+  onMassAction?: (action: "mass-delete" | "mass-update" | "mass-convert") => void;
 };
 
 const defaultSortFields = [
@@ -56,6 +57,7 @@ export default function ModuleToolbar({
   isFilterOpen,
   onToggleFilter,
   onCreateClick,
+  onMassAction,
 }: ModuleToolbarProps) {
   const navigate = useNavigate();
 
@@ -65,6 +67,8 @@ export default function ModuleToolbar({
   const [fieldDropdownOpen, setFieldDropdownOpen] = useState(false);
   const [orderDropdownOpen, setOrderDropdownOpen] = useState(false);
   const [importMenuOpen, setImportMenuOpen] = useState(false);
+  const [ellipsisMenuOpen, setEllipsisMenuOpen] = useState(false);
+  const ellipsisMenuRef = useRef<HTMLDivElement | null>(null);
 
   const [selectedField, setSelectedField] = useState("None");
   const [selectedOrder, setSelectedOrder] = useState<"Ascending" | "Descending">(
@@ -117,6 +121,13 @@ export default function ModuleToolbar({
         !importMenuRef.current.contains(event.target as Node)
       ) {
         setImportMenuOpen(false);
+      }
+
+      if (
+        ellipsisMenuRef.current &&
+        !ellipsisMenuRef.current.contains(event.target as Node)
+      ) {
+        setEllipsisMenuOpen(false);
       }
 
       if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
@@ -215,9 +226,40 @@ export default function ModuleToolbar({
             </div>
           )}
 
-          <button className="cursor-pointer rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-slate-700 transition duration-150 hover:bg-slate-200 hover:shadow-sm">
-            <Ellipsis size={16} />
-          </button>
+          <div className="relative" ref={ellipsisMenuRef}>
+            <button
+              type="button"
+              onClick={() => setEllipsisMenuOpen((prev) => !prev)}
+              className="cursor-pointer rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-slate-700 transition duration-150 hover:bg-slate-200 hover:shadow-sm"
+            >
+              <Ellipsis size={16} />
+            </button>
+
+            {ellipsisMenuOpen && (
+              <div className="absolute right-0 top-[42px] z-50 min-w-[160px] rounded-md border border-slate-200 bg-white py-1 shadow-lg">
+                {(["Mass Delete", "Mass Update", "Mass Convert"] as const).map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => {
+                      setEllipsisMenuOpen(false);
+                      const actionMap = {
+                        "Mass Delete": "mass-delete",
+                        "Mass Update": "mass-update",
+                        "Mass Convert": "mass-convert",
+                      } as const;
+                      onMassAction?.(actionMap[item]);
+                    }}
+                    className={`block w-full px-4 py-2 text-left text-sm transition hover:bg-slate-100 ${
+                      item === "Mass Delete" ? "text-red-600 hover:bg-red-50" : "text-slate-700"
+                    }`}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

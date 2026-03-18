@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import CRMModuleListPage from "../crm/CRMModuleListPage";
 import { contactModuleConfig } from "../../components/modules/contacts/contactsMockData";
 import { deleteContact, getContacts } from "../../lib/api/contactsApi";
 import type { ContactRecord } from "../../lib/shared/crmTypes";
+import CRMModuleListPage from "../crm/CRMModuleListPage";
 
 export default function ContactsPage() {
   const [rows, setRows] = useState<ContactRecord[]>([]);
@@ -38,27 +38,20 @@ export default function ContactsPage() {
     return () => window.removeEventListener("crm:imported", handleImport as EventListener);
   }, [loadContacts]);
 
-  if (loading) {
-    return <div className="p-6 text-sm text-slate-600">Loading contacts...</div>;
-  }
-
-  if (error) {
-    return (
-      <div className="p-6 text-sm text-rose-600">
-        Unable to load contacts: {error}
-      </div>
-    );
-  }
-
   const handleDeleteRow = async (id: string) => {
     await deleteContact(id);
     setRows((prev) => prev.filter((r) => r.id !== id));
   };
 
+  if (error && !loading && rows.length === 0) {
+    return <div className="p-6 text-sm text-rose-600">{error}</div>;
+  }
+
   return (
     <CRMModuleListPage
       config={contactModuleConfig}
       rows={rows}
+      loading={loading}
       showNotes={true}
       showActivity={false}
       onDeleteRow={handleDeleteRow}

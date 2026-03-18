@@ -39,18 +39,6 @@ export default function DealsPage() {
     return () => window.removeEventListener("crm:imported", handleImport as EventListener);
   }, [loadDeals]);
 
-  if (loading) {
-    return (
-      <div className="p-6 text-sm text-slate-600">Loading deals…</div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="p-6 text-sm text-rose-600">Unable to load deals: {error}</div>
-    );
-  }
-
   const handleDeleteRow = async (id: string) => {
     await deleteDeal(id);
     setRows((prev) => prev.filter((row) => row.id !== id));
@@ -60,6 +48,7 @@ export default function DealsPage() {
     <CRMModuleListPage
       config={dealModuleConfig}
       rows={rows}
+      loading={loading}
       showNotes={false}
       showActivity={false}
       onDeleteRow={handleDeleteRow}

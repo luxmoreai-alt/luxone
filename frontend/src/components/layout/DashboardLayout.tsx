@@ -1,35 +1,48 @@
-import { useState, type ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
+import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
 
-type DashboardLayoutProps = {
-  children: ReactNode;
-};
+const InsideLayoutContext = createContext(false);
 
-export default function DashboardLayout({
-  children,
-}: DashboardLayoutProps) {
+export function DashboardLayoutRoute() {
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     if (typeof window === "undefined") return true;
     return window.innerWidth >= 768;
   });
 
   return (
+    <InsideLayoutContext.Provider value={true}>
+      <div className="flex h-screen overflow-hidden bg-slate-100">
+        <Sidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <Topbar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+          <main className="flex-1 min-h-0 overflow-y-auto p-5">
+            <Outlet />
+          </main>
+        </div>
+      </div>
+    </InsideLayoutContext.Provider>
+  );
+}
+
+export default function DashboardLayout({ children }: { children: ReactNode }) {
+  const isInsideLayout = useContext(InsideLayoutContext);
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return window.innerWidth >= 768;
+  });
+
+  if (isInsideLayout) {
+    return <>{children}</>;
+  }
+
+  return (
     <div className="flex h-screen overflow-hidden bg-slate-100">
-      <Sidebar
-        sidebarOpen={sidebarOpen}
-        setSidebarOpen={setSidebarOpen}
-      />
-
+      <Sidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <Topbar
-          sidebarOpen={sidebarOpen}
-          setSidebarOpen={setSidebarOpen}
-        />
-
-        <main className="flex-1 min-h-0 overflow-y-auto p-5">
-          {children}
-        </main>
+        <Topbar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+        <main className="flex-1 min-h-0 overflow-y-auto p-5">{children}</main>
       </div>
     </div>
   );

@@ -4,6 +4,9 @@ import Papa from "papaparse";
 import { FileText } from "lucide-react";
 import DashboardLayout from "../layout/DashboardLayout";
 import { apiRequest } from "../../api/client";
+import JSZip from "jszip";
+import { GlobalWorkerOptions, getDocument } from "pdfjs-dist/legacy/build/pdf";
+import * as XLSX from "xlsx";
 
 type CRMImportPageProps = {
   pageTitle: string;
@@ -34,6 +37,11 @@ type ModuleConfig = {
 const MAX_ROWS = 5000;
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 const PREVIEW_ROWS = 5;
+
+GlobalWorkerOptions.workerSrc = new URL(
+  "pdfjs-dist/legacy/build/pdf.worker.min.js",
+  import.meta.url
+).toString();
 
 const normalizeKey = (value: string) =>
   value
@@ -280,6 +288,240 @@ const buildModuleConfig = (moduleKey: string): ModuleConfig | null => {
   return null;
 };
 
+type ParsedFile = {
+  headers: string[];
+  rows: Record<string, unknown>[];
+};
+
+const SUPPORTED_EXTENSIONS = ["csv", "xml", "docx", "pdf", "xlsx"] as const;
+
+const getFileExtension = (file: File) => file.name.split(".").pop()?.toLowerCase() ?? "";
+
+const detectDelimiter = (line: string) => {
+  if (line.includes("\t")) return "\t";
+  if (line.includes("|")) return "|";
+  return ",";
+};
+
+const parseTextRows = (text: string): ParsedFile => {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length < 2) {
+    throw new Error("Text formats require a header row plus at least one data row.");
+  }
+
+  const delimiter = detectDelimiter(lines[0]);
+  const headers = lines[0].split(delimiter).map((value) => value.trim());
+  if (headers.length === 0) {
+    throw new Error("Could not detect columns in the uploaded file.");
+  }
+
+  const rows = lines
+    .slice(1)
+    .map((line) => {
+      const cells = line.split(delimiter);
+      const record: Record<string, unknown> = {};
+      headers.forEach((header, index) => {
+        const cell = cells[index]?.trim();
+        if (cell) {
+          record[header] = cell;
+        }
+      });
+      return record;
+    })
+    .filter((record) => Object.keys(record).length > 0);
+
+  if (rows.length === 0) {
+    throw new Error("No data rows could be parsed from the file.");
+  }
+
+  return { headers, rows };
+};
+
+const parseXmlRecords = (text: string): ParsedFile => {
+  const parser = new DOMParser();
+  const xml = parser.parseFromString(text, "application/xml");
+  const candidates = Array.from(
+    xml.querySelectorAll("record, row, item, entry, data, document")
+  );
+  const effectiveNodes = candidates.length
+    ? candidates
+    : xml.documentElement.children.length
+    ? Array.from(xml.documentElement.children)
+    : [];
+
+  if (effectiveNodes.length === 0) {
+    throw new Error("XML file contains no record nodes.");
+  }
+
+  const headersSet = new Set<string>();
+  const rows = effectiveNodes
+    .map((node) => {
+      const record: Record<string, unknown> = {};
+      Array.from(node.children).forEach((child) => {
+        const name = child.tagName.split(":").pop() ?? child.tagName;
+        const value = child.textContent?.trim();
+        if (value) {
+          record[name] = value;
+          headersSet.add(name);
+        }
+      });
+      return record;
+    })
+    .filter((record) => Object.keys(record).length > 0);
+
+  if (rows.length === 0) {
+    throw new Error("XML nodes did not contain any usable data.");
+  }
+
+  return { headers: Array.from(headersSet), rows };
+};
+
+const extractDocxText = async (file: File) => {
+  const buffer = await file.arrayBuffer();
+  const zip = await JSZip.loadAsync(buffer);
+  const documentFile = zip.file("word/document.xml");
+  if (!documentFile) {
+    throw new Error("DOCX file is missing the document.xml entry.");
+  }
+
+  const documentXml = await documentFile.async("string");
+  const parser = new DOMParser();
+  const xml = parser.parseFromString(documentXml, "application/xml");
+  const paragraphs = Array.from(xml.querySelectorAll("w\\:p, p"));
+  const lines = paragraphs
+    .map((para) =>
+      Array.from(para.querySelectorAll("w\\:t, t"))
+        .map((node) => node.textContent ?? "")
+        .join("")
+    )
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (!lines.length) {
+    throw new Error("DOCX file contains no textual content.");
+  }
+
+  return lines.join("\n");
+};
+
+const extractPdfText = async (file: File) => {
+  const arrayBuffer = await file.arrayBuffer();
+  const loadingTask = getDocument({ data: arrayBuffer });
+  const pdf = await loadingTask.promise;
+  const textChunks: string[] = [];
+
+  for (let i = 1; i <= pdf.numPages; i += 1) {
+    // eslint-disable-next-line no-await-in-loop
+    const page = await pdf.getPage(i);
+    // eslint-disable-next-line no-await-in-loop
+    const content = await page.getTextContent();
+    const pageText = content.items
+      .map((item) => ("str" in item ? item.str ?? "" : ""))
+      .join(" ");
+    textChunks.push(pageText);
+  }
+
+  pdf.destroy();
+  return textChunks.join("\n");
+};
+
+const parseCsvFile = async (file: File): Promise<ParsedFile> => {
+  const content = await file.text();
+  const parsed = Papa.parse<Record<string, unknown>>(content, {
+    header: true,
+    skipEmptyLines: "greedy",
+  });
+
+  if (parsed.errors?.length) {
+    throw new Error(parsed.errors[0]?.message || "Invalid CSV format.");
+  }
+
+  const cleanedRows = (parsed.data || []).filter((row) =>
+    Object.values(row || {}).some((value) => String(value ?? "").trim() !== "")
+  );
+
+  const headers = parsed.meta.fields ?? [];
+  if (headers.length === 0) {
+    throw new Error("CSV file has no headers.");
+  }
+
+  return { headers, rows: cleanedRows };
+};
+
+const parseXlsxFile = async (file: File): Promise<ParsedFile> => {
+  const buffer = await file.arrayBuffer();
+  const workbook = XLSX.read(buffer, { type: "array" });
+  const sheetName = workbook.SheetNames[0];
+  if (!sheetName) {
+    throw new Error("Excel file contains no worksheets.");
+  }
+
+  const worksheet = workbook.Sheets[sheetName];
+  const rawRows = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
+    header: 1,
+    blankrows: false,
+  });
+
+  if (rawRows.length === 0) {
+    throw new Error("Excel file contains no rows.");
+  }
+
+  const headerRow = rawRows[0] as unknown[];
+  const headers = headerRow.map((value, index) => {
+    const label = String(value ?? "").trim();
+    return label || `column_${index + 1}`;
+  });
+
+  const rows = rawRows
+    .slice(1)
+    .map((row) => {
+      const cells = Array.isArray(row) ? row : Object.values(row);
+      const record: Record<string, unknown> = {};
+      headers.forEach((header, index) => {
+        const cell = cells[index];
+        if (cell !== undefined && cell !== null && String(cell).trim() !== "") {
+          record[header] = cell;
+        }
+      });
+      return record;
+    })
+    .filter((record) => Object.keys(record).length > 0);
+
+  if (rows.length === 0) {
+    throw new Error("Excel file contains no data rows.");
+  }
+
+  return { headers, rows };
+};
+
+const parseFileByExtension = async (file: File): Promise<ParsedFile> => {
+  const ext = getFileExtension(file);
+  if (!SUPPORTED_EXTENSIONS.includes(ext as (typeof SUPPORTED_EXTENSIONS)[number])) {
+    throw new Error(
+      `Unsupported format. Please upload one of ${SUPPORTED_EXTENSIONS.join(", ").toUpperCase()}.`
+    );
+  }
+
+  switch (ext) {
+    case "csv":
+      return parseCsvFile(file);
+    case "xml":
+      return parseXmlRecords(await file.text());
+    case "docx":
+      return parseTextRows(await extractDocxText(file));
+    case "pdf":
+      return parseTextRows(await extractPdfText(file));
+    case "xlsx":
+      return parseXlsxFile(file);
+    default:
+      throw new Error("Unsupported file format.");
+  }
+};
+
 export default function CRMImportPage({
   pageTitle,
   moduleLabel,
@@ -368,9 +610,11 @@ export default function CRMImportPage({
     setSuccessMsg(null);
     setImportSummary(null);
 
-    const extension = file.name.split(".").pop()?.toLowerCase();
-    if (extension !== "csv") {
-      setErrorMsg("Only CSV files are supported.");
+    const extension = getFileExtension(file);
+    if (!SUPPORTED_EXTENSIONS.includes(extension as (typeof SUPPORTED_EXTENSIONS)[number])) {
+      setErrorMsg(
+        `Unsupported format. Please upload one of ${SUPPORTED_EXTENSIONS.join(", ").toUpperCase()}.`
+      );
       return;
     }
 
@@ -381,37 +625,22 @@ export default function CRMImportPage({
 
     setIsProcessing(true);
     try {
-      const content = await file.text();
-      const parsed = Papa.parse<Record<string, unknown>>(content, {
-        header: true,
-        skipEmptyLines: "greedy",
-      });
+      const parsedFile = await parseFileByExtension(file);
+      const parsedHeaders = parsedFile.headers;
+      const parsedRows = parsedFile.rows;
 
-      if (parsed.errors?.length) {
-        throw new Error(parsed.errors[0]?.message || "Invalid CSV format.");
-      }
-
-      const parsedHeaders = parsed.meta.fields ?? [];
-      if (parsedHeaders.length === 0) {
-        throw new Error("CSV file has no headers.");
-      }
-
-      const cleanedRows = (parsed.data || []).filter((row: Record<string, unknown>) =>
-        Object.values(row || {}).some((value) => String(value ?? "").trim() !== "")
-      );
-
-      if (cleanedRows.length > MAX_ROWS) {
-        throw new Error(`CSV exceeds the limit of ${MAX_ROWS} rows.`);
+      if (parsedRows.length > MAX_ROWS) {
+        throw new Error(`File exceeds the limit of ${MAX_ROWS} rows.`);
       }
 
       const initialMapping: Record<string, string> = {};
-      parsedHeaders.forEach((header: string) => {
+      parsedHeaders.forEach((header) => {
         initialMapping[header] = mapHeaderToField(header);
       });
 
       setSelectedFile(file);
       setHeaders(parsedHeaders);
-      setRows(cleanedRows);
+      setRows(parsedRows);
       setMapping(initialMapping);
       setStep(2);
       setSuccessMsg("File uploaded successfully.");
@@ -631,37 +860,7 @@ export default function CRMImportPage({
     }
   };
 
-  const renderStepper = () => (
-    <div className="mb-6 flex items-center gap-6 text-[13px] text-slate-500">
-      {[
-        { step: 1, label: "Upload" },
-        { step: 2, label: "Mapping" },
-        { step: 3, label: "Preview" },
-        { step: 4, label: "Import" },
-      ].map((item) => {
-        const isActive = step === item.step;
-        const isComplete = step > item.step;
-        return (
-          <div key={item.step} className="flex items-center gap-2">
-            <span
-              className={`flex h-6 w-6 items-center justify-center rounded-full text-[12px] font-semibold ${
-                isComplete
-                  ? "bg-emerald-100 text-emerald-600"
-                  : isActive
-                  ? "bg-blue-100 text-blue-600"
-                  : "bg-slate-100 text-slate-400"
-              }`}
-            >
-              {isComplete ? "?" : item.step}
-            </span>
-            <span className={isActive ? "text-slate-700 font-semibold" : ""}>
-              {item.label}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
+  
 
   return (
     <DashboardLayout>
@@ -680,7 +879,7 @@ export default function CRMImportPage({
               {pageTitle}
             </h2>
 
-            {renderStepper()}
+   
 
             {errorMsg && (
               <div className="mb-4 rounded-[6px] border border-red-200 bg-red-50 px-4 py-2 text-[13px] text-red-700">
@@ -703,7 +902,7 @@ export default function CRMImportPage({
                   <FileText size={20} />
                 </div>
                 <p className="mb-2 text-[14px] text-slate-600">
-                  Upload CSV file (max 10MB)
+                  Upload CSV, XML, DOCX, XLSX, or PDF file (max 10MB)
                 </p>
                 <p className="mb-3 text-[13px] text-slate-500">Drag & drop or</p>
                 <button
@@ -718,7 +917,7 @@ export default function CRMImportPage({
                   ref={fileInputRef}
                   type="file"
                   className="hidden"
-                  accept=".csv"
+                  accept=".csv,.xml,.docx,.xlsx,.pdf"
                   onChange={handleFileChange}
                 />
                 {selectedFile && (
@@ -738,7 +937,7 @@ export default function CRMImportPage({
                   Field Mapping
                 </h3>
                 <div className="grid grid-cols-[1fr_1fr] gap-3 text-[13px] text-slate-500">
-                  <span>CSV Column</span>
+                  <span>File Column</span>
                   <span>CRM Field</span>
                 </div>
                 <div className="mt-3 flex flex-col gap-3">
@@ -886,6 +1085,16 @@ export default function CRMImportPage({
                 Notes import is not supported in this flow.
               </div>
             )}
+
+            <div className="mt-10 flex justify-end">
+              <button
+                type="button"
+                onClick={() => navigate(backPath)}
+                className="rounded-md border border-slate-200 bg-white px-4 py-2 text-[13px] font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       </div>

@@ -38,14 +38,6 @@ export default function AccountsPage() {
     return () => window.removeEventListener("crm:imported", handleImport as EventListener);
   }, [loadAccounts]);
 
-  if (loading) {
-    return <div className="p-6 text-sm text-slate-600">Loading accounts...</div>;
-  }
-
-  if (error) {
-    return <div className="p-6 text-sm text-rose-600">Unable to load accounts: {error}</div>;
-  }
-
   const handleDeleteRow = async (id: string) => {
     await deleteAccount(id);
     setRows((prev) => prev.filter((r) => r.id !== id));
@@ -55,6 +47,7 @@ export default function AccountsPage() {
     <CRMModuleListPage
       config={accountModuleConfig}
       rows={rows}
+      loading={loading}
       showNotes={true}
       showActivity={false}
       onDeleteRow={handleDeleteRow}

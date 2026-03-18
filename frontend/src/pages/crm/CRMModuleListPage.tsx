@@ -1,14 +1,19 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { apiRequest } from "../../api/client";
 import ModuleToolbar from "../../components/crm/ModuleToolbar";
 import FilterSidebar from "../../components/crm/FilterSidebar";
 import CRMPagination from "../../components/crm/CRMPagination";
 import CRMTable from "../../components/crm/CRMTable";
 import {
+  ActivityDetailModal,
   AddTagsModal,
   ConvertLeadModal,
   DeleteModal,
   LogCallModal,
+  MassConvertModal,
+  MassDeleteModal,
+  MassUpdateModal,
   MeetingModal,
   NoteModal,
   ScheduleCallModal,
@@ -22,6 +27,7 @@ import type { CRMModuleConfig, CRMRecord } from "../../lib/shared/crmTypes";
 type CRMModuleListPageProps<T extends CRMRecord> = {
   config: CRMModuleConfig<T>;
   rows: T[];
+  loading?: boolean;
   pageSize?: number;
   showNotes?: boolean;
   showActivity?: boolean;
@@ -38,7 +44,11 @@ type ModalState =
   | "log-call"
   | "note"
   | "convert"
-  | "delete";
+  | "delete"
+  | "activity-detail"
+  | "mass-delete"
+  | "mass-update"
+  | "mass-convert";
 
 /** Extract display name from any CRM record */
 function getRecordName(row: CRMRecord): string {
@@ -55,6 +65,7 @@ function getRecordEmail(row: CRMRecord): string {
 export default function CRMModuleListPage<T extends CRMRecord>({
   config,
   rows,
+  loading = false,
   pageSize = 5,
   showNotes = true,
   showActivity = false,
@@ -227,28 +238,29 @@ export default function CRMModuleListPage<T extends CRMRecord>({
     if (config.module === "contacts") {
       const { createContactTask } = await import("../../lib/api/contactsApi");
       await createContactTask(activeRow.id, payload);
-      return;
-    }
-
-    if (config.module === "deals") {
+    } else if (config.module === "deals") {
       const { createDealTask } = await import("../../lib/api/dealsApi");
       await createDealTask(activeRow.id, payload);
-      return;
-    }
-
-    if (config.module === "accounts") {
+    } else if (config.module === "accounts") {
       const { createAccountTask } = await import("../../lib/api/accountsApi");
       await createAccountTask(activeRow.id, payload);
-      return;
-    }
-
-    if (config.module === "leads") {
+    } else if (config.module === "leads") {
       const { createLeadTask } = await import("../../lib/api/leadsApi");
       await createLeadTask(activeRow.id, payload);
-      return;
+    } else {
+      throw new Error(`Task action is not available for ${config.module}.`);
     }
 
-    throw new Error(`Task action is not available for ${config.module}.`);
+    // Also create a real Task record visible in the Tasks page
+    await apiRequest("/tasks/", {
+      method: "POST",
+      body: JSON.stringify({
+        subject: payload.subject,
+        description: payload.description || "",
+        status: "Not Started",
+        priority: "Normal",
+      }),
+    });
   };
 
   const handleCreateMeeting = async (payload: {
@@ -262,57 +274,82 @@ export default function CRMModuleListPage<T extends CRMRecord>({
     if (config.module === "deals") {
       const { scheduleDealMeeting } = await import("../../lib/api/dealsApi");
       await scheduleDealMeeting(activeRow.id, payload);
-      return;
-    }
-
-    if (config.module === "accounts") {
+    } else if (config.module === "accounts") {
       const { scheduleAccountMeeting } = await import("../../lib/api/accountsApi");
       await scheduleAccountMeeting(activeRow.id, payload);
-      return;
-    }
-
-    if (config.module === "leads") {
+    } else if (config.module === "leads") {
       const { scheduleLeadMeeting } = await import("../../lib/api/leadsApi");
       await scheduleLeadMeeting(activeRow.id, payload);
-      return;
+    } else {
+      throw new Error(`Meeting action is not available for ${config.module}.`);
     }
 
-    throw new Error(`Meeting action is not available for ${config.module}.`);
+    // Also create a real Meeting record visible in the Meetings page
+    const startDate = new Date();
+    startDate.setMinutes(0, 0, 0);
+    const endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
+    await apiRequest("/meetings/", {
+      method: "POST",
+      body: JSON.stringify({
+        title: payload.meeting_subject,
+        description: payload.agenda || "",
+        start_date: startDate.toISOString(),
+        end_date: endDate.toISOString(),
+        status: "Scheduled",
+      }),
+    });
   };
 
   const handleCallAction = async (payload: {
     call_summary: string;
     call_outcome?: string;
+    call_type?: string;
+    call_start_time?: string;
+    reminder?: string;
+    duration_minutes?: number;
+    duration_seconds?: number;
+    voice_recording?: string;
   }): Promise<void> => {
     if (!activeRow) {
       throw new Error("No record selected.");
     }
 
+    const isLog = activeModal === "log-call";
+    const callStartTime = payload.call_start_time ?? new Date().toISOString();
+
     if (config.module === "contacts") {
       const { logContactCall } = await import("../../lib/api/contactsApi");
       await logContactCall(activeRow.id, payload);
-      return;
-    }
-
-    if (config.module === "deals") {
+    } else if (config.module === "deals") {
       const { logDealCall } = await import("../../lib/api/dealsApi");
       await logDealCall(activeRow.id, payload);
-      return;
-    }
-
-    if (config.module === "accounts") {
+    } else if (config.module === "accounts") {
       const { logAccountCall } = await import("../../lib/api/accountsApi");
       await logAccountCall(activeRow.id, payload);
-      return;
-    }
-
-    if (config.module === "leads") {
+    } else if (config.module === "leads") {
       const { logLeadCall } = await import("../../lib/api/leadsApi");
       await logLeadCall(activeRow.id, payload);
+      // For leads, log_call backend creates the Call record — skip duplicate
       return;
+    } else {
+      throw new Error(`Call action is not available for ${config.module}.`);
     }
 
-    throw new Error(`Call action is not available for ${config.module}.`);
+    // Create a Call record visible in the Calls page (for non-lead modules)
+    await apiRequest("/calls/", {
+      method: "POST",
+      body: JSON.stringify({
+        subject: payload.call_summary,
+        call_type: payload.call_type ?? "Outbound",
+        call_status: isLog ? "Completed" : "Scheduled",
+        call_start_time: callStartTime,
+        duration_minutes: payload.duration_minutes ?? 0,
+        duration_seconds: payload.duration_seconds ?? 0,
+        purpose: payload.call_outcome || "",
+        reminder: payload.reminder ?? "None",
+        voice_recording: payload.voice_recording ?? "",
+      }),
+    });
   };
 
   const handleConvertLead = async (payload: {
@@ -325,6 +362,47 @@ export default function CRMModuleListPage<T extends CRMRecord>({
 
     const { convertLead } = await import("../../lib/api/leadsApi");
     await convertLead(activeRow.id, payload);
+  };
+
+  const handleMassDelete = async (): Promise<void> => {
+    if (config.module === "leads") {
+      const ids = processedRows.map((r) => r.id);
+      await apiRequest(`${config.baseRoute}/bulk-delete/`, {
+        method: "POST",
+        body: JSON.stringify({ ids }),
+      });
+    } else {
+      await Promise.all(
+        processedRows.map((r) =>
+          apiRequest(`${config.baseRoute}/${r.id}/`, { method: "DELETE" })
+        )
+      );
+    }
+    // Reload the page to reflect deleted records
+    window.location.reload();
+  };
+
+  const handleMassUpdate = async (updates: Record<string, string>): Promise<void> => {
+    await Promise.all(
+      processedRows.map((r) =>
+        apiRequest(`${config.baseRoute}/${r.id}/`, {
+          method: "PATCH",
+          body: JSON.stringify(updates),
+        })
+      )
+    );
+    window.location.reload();
+  };
+
+  const handleMassConvert = async (): Promise<void> => {
+    if (config.module !== "leads") return;
+    const { convertLead } = await import("../../lib/api/leadsApi");
+    await Promise.all(
+      processedRows.map((r) =>
+        convertLead(r.id, { create_deal: true })
+      )
+    );
+    window.location.reload();
   };
 
   const recordName = activeRow ? getRecordName(activeRow as CRMRecord) : "";
@@ -342,6 +420,7 @@ export default function CRMModuleListPage<T extends CRMRecord>({
             setFilterOpen((prev) => !prev);
           }}
           onCreateClick={() => navigate(`${config.baseRoute}/create`)}
+          onMassAction={(action) => setActiveModal(action)}
         />
 
         <div className="flex gap-3">
@@ -361,7 +440,17 @@ export default function CRMModuleListPage<T extends CRMRecord>({
           )}
 
           <div className="min-w-0 flex-1">
-            <CRMTable
+            {loading ? (
+              <div className="flex min-h-[400px] items-center justify-center rounded-xl border border-slate-200 bg-white">
+                <div className="flex items-center gap-3 text-slate-500">
+                  <svg className="h-5 w-5 animate-spin text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                  </svg>
+                  <span className="text-sm font-medium">Loading {config.title ?? "records"}…</span>
+                </div>
+              </div>
+            ) : <CRMTable
               rows={paginatedRows}
               columns={visibleColumns}
               rowActions={config.rowActions}
@@ -390,6 +479,7 @@ export default function CRMModuleListPage<T extends CRMRecord>({
               }}
               onOpenRow={handleOpenRow}
               onOpenNotes={(row) => openModal("note", row)}
+              onActivityBadgeClick={(row) => openModal("activity-detail", row)}
               onOpenActivityAction={(row, actionKey) => {
                 if (actionKey === "create-task") openModal("task", row);
                 if (actionKey === "create-meeting") openModal("meeting", row);
@@ -417,14 +507,16 @@ export default function CRMModuleListPage<T extends CRMRecord>({
               onFilterColumn={(columnKey, value) =>
                 setColumnFilters((prev) => ({ ...prev, [columnKey]: value }))
               }
-            />
+            />}
 
-            <CRMPagination
-              page={page}
-              pageSize={pageSize}
-              totalItems={processedRows.length}
-              onPageChange={setPage}
-            />
+            {!loading && (
+              <CRMPagination
+                page={page}
+                pageSize={pageSize}
+                totalItems={processedRows.length}
+                onPageChange={setPage}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -482,6 +574,32 @@ export default function CRMModuleListPage<T extends CRMRecord>({
         onClose={closeModal}
         onConfirm={handleDelete}
         recordName={recordName}
+      />
+      <ActivityDetailModal
+        open={activeModal === "activity-detail"}
+        onClose={closeModal}
+        activity={(activeRow as { nextActivity?: { date: string; type: "call" | "task" | "meeting" | "other"; action: string } } | null)?.nextActivity}
+        recordName={recordName}
+        onViewLead={config.module === "leads" && activeRow ? () => navigate(`${config.baseRoute}/${activeRow.id}`) : undefined}
+      />
+      <MassDeleteModal
+        open={activeModal === "mass-delete"}
+        onClose={closeModal}
+        count={processedRows.length}
+        onConfirm={handleMassDelete}
+      />
+      <MassUpdateModal
+        open={activeModal === "mass-update"}
+        onClose={closeModal}
+        count={processedRows.length}
+        module={config.module}
+        onConfirm={handleMassUpdate}
+      />
+      <MassConvertModal
+        open={activeModal === "mass-convert"}
+        onClose={closeModal}
+        count={processedRows.length}
+        onConfirm={handleMassConvert}
       />
     </DashboardLayout>
   );

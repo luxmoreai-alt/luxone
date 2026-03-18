@@ -48,6 +48,8 @@ urlpatterns = [
     path('api/', include('services.urls')),
     path('api/', include('integrations.urls')),
     path('api/', include('notes.urls')),
+    path('api/', include('activities.urls')),
+    path('api/', include('project.urls')),
     path('api/', include('saas_admin.urls')),
     path('api/send-email', send_email_view, name='send-email'),
     path('api/imports', import_file_view, name='import-file'),

@@ -3,7 +3,7 @@ from django.urls import path
 
 from .views import LeadNoteViewSet, NoteDetailAPIView
 
-router = DefaultRouter(trailing_slash=False)
+router = DefaultRouter()
 router.register("lead-notes", LeadNoteViewSet, basename="lead-note")
 
 urlpatterns = router.urls

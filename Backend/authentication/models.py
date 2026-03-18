@@ -28,12 +28,39 @@ class UserManager(BaseUserManager):
 
 
 class User(AbstractBaseUser, PermissionsMixin):
+
+    class Role(models.TextChoices):
+        ADMIN = "admin", "Admin"
+        MANAGER = "manager", "Manager"
+        EMPLOYEE = "employee", "Employee"
+
     email = models.EmailField(unique=True)
     is_admin = models.BooleanField(default=False)
     is_staff = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    # Multi-org / RBAC fields (nullable for safe migration)
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="users",
+    )
+    role = models.CharField(
+        max_length=20,
+        choices=Role.choices,
+        default=Role.EMPLOYEE,
+    )
+    manager = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="team_members",
+    )
 
     objects = UserManager()
 

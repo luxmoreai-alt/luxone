@@ -1,24 +1,37 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
-import LoginPage from "./pages/LoginPage";
-import OtpLoginPage from "./pages/OtpLoginPage";
+import { DashboardLayoutRoute } from "./components/layout/DashboardLayout";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import HomePage from "./pages/HomePage";
-import LeadsPage from "./pages/leads/LeadsPage";
-import LeadDetailPage from "./pages/leads/LeadDetailPage";
-import ContactsPage from "./pages/contacts/ContactsPage";
-import ContactDetailPage from "./pages/contacts/ContactDetailPage";
-import AccountsPage from "./pages/accounts/AccountsPage";
+import LoginPage from "./pages/LoginPage";
+import OtpLoginPage from "./pages/OtpLoginPage";
 import AccountDetailPage from "./pages/accounts/AccountDetailPage";
-import DealsPage from "./pages/deals/DealsPage";
-import DealDetailPage from "./pages/deals/DealDetailPage";
-import CreateLeadPage from "./pages/leads/CreateLeadPage";
-import CreateContactPage from "./pages/contacts/CreateContactPage";
-import CreateAccountPage from "./pages/accounts/CreateAccountPage";
-import CreateDealPage from "./pages/deals/CreateDealPage";
-import ImportPage from "./pages/crm/ImportPage";
+import AccountsPage from "./pages/accounts/AccountsPage";
+import CallsPage from "./pages/activities/calls";
+import CreateMeetingPage from "./pages/activities/meetings/CreateMeetingPage";
+import MeetingDetailPage from "./pages/activities/meetings/MeetingDetailPage";
+import MeetingsPage from "./pages/activities/meetings";
+import CreateTaskPage from "./pages/activities/tasks/CreateTaskPage";
+import TaskDetailPage from "./pages/activities/tasks/TaskDetailPage";
+import TasksPage from "./pages/activities/tasks";
 import CampaignsPage from "./pages/campaigns/CampaignsPage";
 import CreateCampaignPage from "./pages/campaigns/CreateCampaignPage";
+import ContactDetailPage from "./pages/contacts/ContactDetailPage";
+import ContactsPage from "./pages/contacts/ContactsPage";
+import ImportPage from "./pages/crm/ImportPage";
+import DealDetailPage from "./pages/deals/DealDetailPage";
+import DealsPage from "./pages/deals/DealsPage";
+import CreateAccountPage from "./pages/accounts/CreateAccountPage";
+import CreateContactPage from "./pages/contacts/CreateContactPage";
+import CreateDealPage from "./pages/deals/CreateDealPage";
+import CreateLeadPage from "./pages/leads/CreateLeadPage";
+import LeadDetailPage from "./pages/leads/LeadDetailPage";
+import LeadsPage from "./pages/leads/LeadsPage";
+import EmployeeProfilePage from "./pages/team/EmployeeProfilePage";
+import UserCreatePage from "./pages/team/UserCreatePage";
+import ProjectsPage from "./pages/projects/ProjectsPage";
+import CreateProjectPage from "./pages/projects/CreateProjectPage";
+import ProjectDetailPage from "./pages/projects/ProjectDetailPage";
 import InventoryListRoute from "./pages/inventory/InventoryListRoute";
 import InventoryFormRoute from "./pages/inventory/InventoryFormRoute";
 import InventoryDetailRoute from "./pages/inventory/InventoryDetailRoute";
@@ -45,8 +58,8 @@ import CompanyDetailsRoute from "./pages/servicesModule/CompanyDetailsRoute";
 import DomainMappingRoute from "./pages/servicesModule/DomainMappingRoute";
 import FiscalYearRoute from "./pages/servicesModule/FiscalYearRoute";
 import HolidaysRoute from "./pages/servicesModule/HolidaysRoute";
-import EmailIntegrationsPage from "./pages/integrations/EmailIntegrationsPage";
 import IntegrationsPage from "./pages/integrations/IntegrationsPage";
+import EmailIntegrationsPage from "./pages/integrations/EmailIntegrationsPage";
 import SocialIntegrationsPage from "./pages/integrations/SocialIntegrationsPage";
 import VisitorTrackingPage from "./pages/integrations/VisitorTrackingPage";
 
@@ -62,9 +75,11 @@ function RequireAuth({ children }: { children: ReactNode }) {
   useEffect(() => {
     const sync = () => setAuthenticated(hasSession());
     window.addEventListener("storage", sync);
+    window.addEventListener("auth:login", sync as EventListener);
     window.addEventListener("auth:logout", sync as EventListener);
     return () => {
       window.removeEventListener("storage", sync);
+      window.removeEventListener("auth:login", sync as EventListener);
       window.removeEventListener("auth:logout", sync as EventListener);
     };
   }, []);
@@ -84,108 +99,135 @@ export default function App() {
       <Route path="/otp-login" element={<OtpLoginPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
-      <Route path="/home" element={<RequireAuth><HomePage /></RequireAuth>} />
-      <Route path="/leads" element={<RequireAuth><LeadsPage /></RequireAuth>} />
-      <Route path="/leads/create" element={<RequireAuth><CreateLeadPage /></RequireAuth>} />
-      <Route path="/leads/:id/edit" element={<RequireAuth><CreateLeadPage /></RequireAuth>} />
-      <Route path="/leads/:id" element={<RequireAuth><LeadDetailPage /></RequireAuth>} />
+      <Route
+        element={
+          <RequireAuth>
+            <DashboardLayoutRoute />
+          </RequireAuth>
+        }
+      >
+        <Route path="/home" element={<HomePage />} />
 
-      <Route path="/contacts" element={<RequireAuth><ContactsPage /></RequireAuth>} />
-      <Route path="/contacts/create" element={<RequireAuth><CreateContactPage /></RequireAuth>} />
-      <Route path="/contacts/:id" element={<RequireAuth><ContactDetailPage /></RequireAuth>} />
+        <Route path="/leads" element={<LeadsPage />} />
+        <Route path="/leads/create" element={<CreateLeadPage />} />
+        <Route path="/leads/:id/edit" element={<CreateLeadPage />} />
+        <Route path="/leads/:id" element={<LeadDetailPage />} />
+        <Route path="/leads/import" element={<ImportPage />} />
+        <Route path="/leads/import-notes" element={<ImportPage />} />
 
-      <Route path="/accounts" element={<RequireAuth><AccountsPage /></RequireAuth>} />
-      <Route path="/accounts/create" element={<RequireAuth><CreateAccountPage /></RequireAuth>} />
-      <Route path="/accounts/:id" element={<RequireAuth><AccountDetailPage /></RequireAuth>} />
+        <Route path="/contacts" element={<ContactsPage />} />
+        <Route path="/contacts/create" element={<CreateContactPage />} />
+        <Route path="/contacts/:id" element={<ContactDetailPage />} />
+        <Route path="/contacts/import" element={<ImportPage />} />
+        <Route path="/contacts/import-notes" element={<ImportPage />} />
 
-      <Route path="/deals" element={<RequireAuth><DealsPage /></RequireAuth>} />
-      <Route path="/deals/create" element={<RequireAuth><CreateDealPage /></RequireAuth>} />
-      <Route path="/deals/:id" element={<RequireAuth><DealDetailPage /></RequireAuth>} />
+        <Route path="/accounts" element={<AccountsPage />} />
+        <Route path="/accounts/create" element={<CreateAccountPage />} />
+        <Route path="/accounts/:id" element={<AccountDetailPage />} />
+        <Route path="/accounts/import" element={<ImportPage />} />
+        <Route path="/accounts/import-notes" element={<ImportPage />} />
 
-      <Route path="/leads/import" element={<RequireAuth><ImportPage /></RequireAuth>} />
-      <Route path="/leads/import-notes" element={<RequireAuth><ImportPage /></RequireAuth>} />
-      <Route path="/contacts/import" element={<RequireAuth><ImportPage /></RequireAuth>} />
-      <Route path="/contacts/import-notes" element={<RequireAuth><ImportPage /></RequireAuth>} />
-      <Route path="/accounts/import" element={<RequireAuth><ImportPage /></RequireAuth>} />
-      <Route path="/accounts/import-notes" element={<RequireAuth><ImportPage /></RequireAuth>} />
-      <Route path="/deals/import" element={<RequireAuth><ImportPage /></RequireAuth>} />
-      <Route path="/deals/import-notes" element={<RequireAuth><ImportPage /></RequireAuth>} />
+        <Route path="/deals" element={<DealsPage />} />
+        <Route path="/deals/create" element={<CreateDealPage />} />
+        <Route path="/deals/:id" element={<DealDetailPage />} />
+        <Route path="/deals/import" element={<ImportPage />} />
+        <Route path="/deals/import-notes" element={<ImportPage />} />
 
-      <Route path="/campaigns" element={<RequireAuth><CampaignsPage /></RequireAuth>} />
-      <Route path="/campaigns/create" element={<RequireAuth><CreateCampaignPage /></RequireAuth>} />
-      <Route path="/campaigns/import" element={<RequireAuth><ImportPage /></RequireAuth>} />
-      <Route path="/campaigns/import-notes" element={<RequireAuth><ImportPage /></RequireAuth>} />
+        <Route path="/tasks" element={<TasksPage />} />
+        <Route path="/tasks/create" element={<CreateTaskPage />} />
+        <Route path="/tasks/:id/edit" element={<CreateTaskPage />} />
+        <Route path="/tasks/:id" element={<TaskDetailPage />} />
 
-      <Route path="/support/cases" element={<RequireAuth><CasesPage /></RequireAuth>} />
-      <Route path="/support/cases/create" element={<RequireAuth><CaseFormRoute /></RequireAuth>} />
-      <Route path="/support/cases/:id" element={<RequireAuth><CaseDetailRoute /></RequireAuth>} />
-      <Route path="/support/cases/:id/edit" element={<RequireAuth><CaseFormRoute /></RequireAuth>} />
-      <Route path="/support/cases/import" element={<RequireAuth><CaseImportRoute /></RequireAuth>} />
+        <Route path="/meetings" element={<MeetingsPage />} />
+        <Route path="/meetings/create" element={<CreateMeetingPage />} />
+        <Route path="/meetings/:id" element={<MeetingDetailPage />} />
 
-      <Route path="/support/solutions" element={<RequireAuth><SolutionsPage /></RequireAuth>} />
-      <Route path="/support/solutions/create" element={<RequireAuth><SolutionFormRoute /></RequireAuth>} />
-      <Route path="/support/solutions/:id" element={<RequireAuth><SolutionDetailRoute /></RequireAuth>} />
-      <Route path="/support/solutions/:id/edit" element={<RequireAuth><SolutionFormRoute /></RequireAuth>} />
-      <Route path="/support/solutions/import" element={<RequireAuth><SolutionImportRoute /></RequireAuth>} />
+        <Route path="/calls" element={<CallsPage />} />
 
-      <Route path="/services/promo" element={<RequireAuth><ServicesPromoRoute /></RequireAuth>} />
-      <Route path="/services/business-hours" element={<RequireAuth><BusinessHoursRoute /></RequireAuth>} />
-      <Route path="/services/business-hours/new" element={<RequireAuth><BusinessHoursRoute /></RequireAuth>} />
-      <Route path="/services/catalog" element={<RequireAuth><ServicesCatalogPage /></RequireAuth>} />
-      <Route path="/services/catalog/create" element={<RequireAuth><ServiceFormRoute /></RequireAuth>} />
-      <Route path="/services/catalog/:id" element={<RequireAuth><ServiceDetailRoute /></RequireAuth>} />
-      <Route path="/services/catalog/:id/edit" element={<RequireAuth><ServiceFormRoute /></RequireAuth>} />
-      <Route path="/services/appointments" element={<RequireAuth><AppointmentsPage /></RequireAuth>} />
-      <Route path="/services/appointments/create" element={<RequireAuth><AppointmentFormRoute /></RequireAuth>} />
-      <Route path="/services/appointments/:id" element={<RequireAuth><AppointmentDetailRoute /></RequireAuth>} />
-      <Route path="/services/appointments/:id/edit" element={<RequireAuth><AppointmentFormRoute /></RequireAuth>} />
-      <Route path="/services/job-sheets/create" element={<RequireAuth><JobSheetFormRoute /></RequireAuth>} />
-      <Route path="/services/job-sheets/:id" element={<RequireAuth><JobSheetDetailRoute /></RequireAuth>} />
-      <Route path="/services/job-sheets/:id/edit" element={<RequireAuth><JobSheetFormRoute /></RequireAuth>} />
-      <Route path="/services/settings/company-details" element={<RequireAuth><CompanyDetailsRoute /></RequireAuth>} />
-      <Route path="/services/settings/domain-mapping" element={<RequireAuth><DomainMappingRoute /></RequireAuth>} />
-      <Route path="/services/settings/fiscal-year" element={<RequireAuth><FiscalYearRoute /></RequireAuth>} />
-      <Route path="/services/settings/holidays" element={<RequireAuth><HolidaysRoute /></RequireAuth>} />
+        <Route path="/campaigns" element={<CampaignsPage />} />
+        <Route path="/campaigns/create" element={<CreateCampaignPage />} />
+        <Route path="/campaigns/import" element={<ImportPage />} />
+        <Route path="/campaigns/import-notes" element={<ImportPage />} />
 
-      <Route path="/integrations" element={<RequireAuth><IntegrationsPage /></RequireAuth>} />
-      <Route path="/integrations/email" element={<RequireAuth><EmailIntegrationsPage /></RequireAuth>} />
-      <Route path="/integrations/social" element={<RequireAuth><SocialIntegrationsPage /></RequireAuth>} />
-      <Route path="/integrations/visitors" element={<RequireAuth><VisitorTrackingPage /></RequireAuth>} />
+        <Route path="/projects" element={<ProjectsPage />} />
+        <Route path="/projects/create" element={<CreateProjectPage />} />
+        <Route path="/projects/:id/edit" element={<CreateProjectPage />} />
+        <Route path="/projects/:id" element={<ProjectDetailPage />} />
 
-      <Route path="/vendors" element={<RequireAuth><InventoryListRoute moduleKey="vendors" /></RequireAuth>} />
-      <Route path="/vendors/create" element={<RequireAuth><InventoryFormRoute moduleKey="vendors" /></RequireAuth>} />
-      <Route path="/vendors/:id" element={<RequireAuth><InventoryDetailRoute moduleKey="vendors" /></RequireAuth>} />
+        <Route path="/team/user/:id" element={<EmployeeProfilePage />} />
+        <Route path="/team/users/create" element={<UserCreatePage />} />
 
-      <Route path="/products" element={<RequireAuth><InventoryListRoute moduleKey="products" /></RequireAuth>} />
-      <Route path="/products/create" element={<RequireAuth><InventoryFormRoute moduleKey="products" /></RequireAuth>} />
-      <Route path="/products/:id" element={<RequireAuth><InventoryDetailRoute moduleKey="products" /></RequireAuth>} />
+        <Route path="/support/cases" element={<CasesPage />} />
+        <Route path="/support/cases/create" element={<CaseFormRoute />} />
+        <Route path="/support/cases/:id" element={<CaseDetailRoute />} />
+        <Route path="/support/cases/:id/edit" element={<CaseFormRoute />} />
+        <Route path="/support/cases/import" element={<CaseImportRoute />} />
 
-      <Route path="/price-books" element={<RequireAuth><InventoryListRoute moduleKey="price-books" /></RequireAuth>} />
-      <Route path="/price-books/create" element={<RequireAuth><InventoryFormRoute moduleKey="price-books" /></RequireAuth>} />
-      <Route path="/price-books/import" element={<RequireAuth><PriceBookImportPage /></RequireAuth>} />
-      <Route path="/price-books/:id" element={<RequireAuth><InventoryDetailRoute moduleKey="price-books" /></RequireAuth>} />
+        <Route path="/support/solutions" element={<SolutionsPage />} />
+        <Route path="/support/solutions/create" element={<SolutionFormRoute />} />
+        <Route path="/support/solutions/:id" element={<SolutionDetailRoute />} />
+        <Route path="/support/solutions/:id/edit" element={<SolutionFormRoute />} />
+        <Route path="/support/solutions/import" element={<SolutionImportRoute />} />
 
-      <Route path="/quotes" element={<RequireAuth><InventoryListRoute moduleKey="quotes" /></RequireAuth>} />
-      <Route path="/quotes/create" element={<RequireAuth><InventoryFormRoute moduleKey="quotes" /></RequireAuth>} />
-      <Route path="/quotes/:id" element={<RequireAuth><InventoryDetailRoute moduleKey="quotes" /></RequireAuth>} />
+        <Route path="/services/promo" element={<ServicesPromoRoute />} />
+        <Route path="/services/business-hours" element={<BusinessHoursRoute />} />
+        <Route path="/services/business-hours/new" element={<BusinessHoursRoute />} />
+        <Route path="/services/catalog" element={<ServicesCatalogPage />} />
+        <Route path="/services/catalog/create" element={<ServiceFormRoute />} />
+        <Route path="/services/catalog/:id" element={<ServiceDetailRoute />} />
+        <Route path="/services/catalog/:id/edit" element={<ServiceFormRoute />} />
+        <Route path="/services/appointments" element={<AppointmentsPage />} />
+        <Route path="/services/appointments/create" element={<AppointmentFormRoute />} />
+        <Route path="/services/appointments/:id" element={<AppointmentDetailRoute />} />
+        <Route path="/services/appointments/:id/edit" element={<AppointmentFormRoute />} />
+        <Route path="/services/job-sheets/create" element={<JobSheetFormRoute />} />
+        <Route path="/services/job-sheets/:id" element={<JobSheetDetailRoute />} />
+        <Route path="/services/job-sheets/:id/edit" element={<JobSheetFormRoute />} />
+        <Route path="/services/settings/company-details" element={<CompanyDetailsRoute />} />
+        <Route path="/services/settings/domain-mapping" element={<DomainMappingRoute />} />
+        <Route path="/services/settings/fiscal-year" element={<FiscalYearRoute />} />
+        <Route path="/services/settings/holidays" element={<HolidaysRoute />} />
 
-      <Route path="/sales-orders" element={<RequireAuth><InventoryListRoute moduleKey="sales-orders" /></RequireAuth>} />
-      <Route path="/sales-orders/create" element={<RequireAuth><InventoryFormRoute moduleKey="sales-orders" /></RequireAuth>} />
-      <Route path="/sales-orders/:id" element={<RequireAuth><InventoryDetailRoute moduleKey="sales-orders" /></RequireAuth>} />
+        <Route path="/integrations" element={<IntegrationsPage />} />
+        <Route path="/integrations/email" element={<EmailIntegrationsPage />} />
+        <Route path="/integrations/social" element={<SocialIntegrationsPage />} />
+        <Route path="/integrations/visitors" element={<VisitorTrackingPage />} />
 
-      <Route path="/purchase-orders" element={<RequireAuth><InventoryListRoute moduleKey="purchase-orders" /></RequireAuth>} />
-      <Route path="/purchase-orders/create" element={<RequireAuth><InventoryFormRoute moduleKey="purchase-orders" /></RequireAuth>} />
-      <Route path="/purchase-orders/:id" element={<RequireAuth><InventoryDetailRoute moduleKey="purchase-orders" /></RequireAuth>} />
+        <Route path="/vendors" element={<InventoryListRoute moduleKey="vendors" />} />
+        <Route path="/vendors/create" element={<InventoryFormRoute moduleKey="vendors" />} />
+        <Route path="/vendors/:id" element={<InventoryDetailRoute moduleKey="vendors" />} />
 
-      <Route path="/invoices" element={<RequireAuth><InventoryListRoute moduleKey="invoices" /></RequireAuth>} />
-      <Route path="/invoices/create" element={<RequireAuth><InventoryFormRoute moduleKey="invoices" /></RequireAuth>} />
-      <Route path="/invoices/:id" element={<RequireAuth><InventoryDetailRoute moduleKey="invoices" /></RequireAuth>} />
+        <Route path="/products" element={<InventoryListRoute moduleKey="products" />} />
+        <Route path="/products/create" element={<InventoryFormRoute moduleKey="products" />} />
+        <Route path="/products/:id" element={<InventoryDetailRoute moduleKey="products" />} />
 
-      <Route path="/configurator" element={<RequireAuth><InventoryListRoute moduleKey="configurator" /></RequireAuth>} />
-      <Route path="/configurator/create" element={<RequireAuth><InventoryFormRoute moduleKey="configurator" /></RequireAuth>} />
-      <Route path="/configurator/:id" element={<RequireAuth><InventoryDetailRoute moduleKey="configurator" /></RequireAuth>} />
+        <Route path="/price-books" element={<InventoryListRoute moduleKey="price-books" />} />
+        <Route path="/price-books/create" element={<InventoryFormRoute moduleKey="price-books" />} />
+        <Route path="/price-books/import" element={<PriceBookImportPage />} />
+        <Route path="/price-books/:id" element={<InventoryDetailRoute moduleKey="price-books" />} />
 
-      <Route path="*" element={<Navigate to="/home" replace />} />
+        <Route path="/quotes" element={<InventoryListRoute moduleKey="quotes" />} />
+        <Route path="/quotes/create" element={<InventoryFormRoute moduleKey="quotes" />} />
+        <Route path="/quotes/:id" element={<InventoryDetailRoute moduleKey="quotes" />} />
+
+        <Route path="/sales-orders" element={<InventoryListRoute moduleKey="sales-orders" />} />
+        <Route path="/sales-orders/create" element={<InventoryFormRoute moduleKey="sales-orders" />} />
+        <Route path="/sales-orders/:id" element={<InventoryDetailRoute moduleKey="sales-orders" />} />
+
+        <Route path="/purchase-orders" element={<InventoryListRoute moduleKey="purchase-orders" />} />
+        <Route path="/purchase-orders/create" element={<InventoryFormRoute moduleKey="purchase-orders" />} />
+        <Route path="/purchase-orders/:id" element={<InventoryDetailRoute moduleKey="purchase-orders" />} />
+
+        <Route path="/invoices" element={<InventoryListRoute moduleKey="invoices" />} />
+        <Route path="/invoices/create" element={<InventoryFormRoute moduleKey="invoices" />} />
+        <Route path="/invoices/:id" element={<InventoryDetailRoute moduleKey="invoices" />} />
+
+        <Route path="/configurator" element={<InventoryListRoute moduleKey="configurator" />} />
+        <Route path="/configurator/create" element={<InventoryFormRoute moduleKey="configurator" />} />
+        <Route path="/configurator/:id" element={<InventoryDetailRoute moduleKey="configurator" />} />
+
+        <Route path="*" element={<Navigate to="/home" replace />} />
+      </Route>
     </Routes>
   );
 }
