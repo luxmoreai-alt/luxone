@@ -19,6 +19,8 @@ from .serializers import (
     DealMeetingSerializer,
     DealNoteCreateSerializer,
     DealNoteSerializer,
+    DealProductCreateSerializer,
+    DealProductSerializer,
     DealStageUpdateSerializer,
     DealTimelineSerializer,
     DealWriteSerializer,
@@ -70,6 +72,10 @@ class DealViewSet(viewsets.ModelViewSet):
             return DealNoteCreateSerializer
         if self.action == "notes":
             return DealNoteSerializer
+        if self.action == "products" and self.request.method == "POST":
+            return DealProductCreateSerializer
+        if self.action == "products":
+            return DealProductSerializer
         if self.action == "timeline":
             return DealTimelineSerializer
         if self.action == "create_task":
@@ -393,3 +399,19 @@ class DealViewSet(viewsets.ModelViewSet):
             user=request.user,
         )
         return Response({"message": "Meeting scheduled successfully"}, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["get", "post"], url_path="products")
+    def products(self, request, pk=None):
+        deal = self.get_object()
+        if request.method == "GET":
+            products = deal_service.list_deal_products(deal=deal)
+            return Response(DealProductSerializer(products, many=True).data)
+
+        serializer = DealProductCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        line_item = deal_service.add_deal_product(
+            deal=deal,
+            data=serializer.validated_data,
+            user=request.user,
+        )
+        return Response(DealProductSerializer(line_item).data, status=status.HTTP_201_CREATED)

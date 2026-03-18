@@ -1,5 +1,6 @@
 export const leadRelatedList = [
   "Notes",
+  "Services",
   "Connected Records",
   "Cadences",
   "Attachments",

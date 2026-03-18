@@ -1,5 +1,8 @@
+import { useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import CRMCreatePage, { type CRMCreateSection } from "../../components/crm/CRMCreatePage";
 import { createAccount } from "../../lib/api/accountsApi";
+import { getLoggedInUserName } from "../../lib/auth/currentUser";
 import { ACCOUNT_TYPE_OPTIONS, INDUSTRY_OPTIONS } from "../../config/crm/createOptions";
 
 type AccountCreateValues = {
@@ -19,28 +22,11 @@ type AccountCreateValues = {
   description: string;
 };
 
-const initialValues: AccountCreateValues = {
-  accountOwner: "",
-  accountName: "",
-  accountType: "",
-  phone: "",
-  website: "",
-  industry: "",
-  annualRevenue: "",
-  employees: "",
-  country: "",
-  street: "",
-  city: "",
-  state: "",
-  zipCode: "",
-  description: "",
-};
-
 const sections: CRMCreateSection[] = [
   {
     title: "Account Information",
     fields: [
-      { name: "accountOwner", label: "Account Owner", type: "owner" },
+      { name: "accountOwner", label: "Account Owner", type: "owner", readOnly: true },
       { name: "accountName", label: "Account Name", type: "text" },
       { name: "accountType", label: "Account Type", type: "select", options: ACCOUNT_TYPE_OPTIONS },
       { name: "phone", label: "Phone", type: "text" },
@@ -70,6 +56,28 @@ const sections: CRMCreateSection[] = [
 ];
 
 export default function CreateAccountPage() {
+  const [searchParams] = useSearchParams();
+
+  const initialValues = useMemo<AccountCreateValues>(
+    () => ({
+      accountOwner: searchParams.get("owner") ?? getLoggedInUserName(),
+      accountName: searchParams.get("accountName") ?? "",
+      accountType: "",
+      phone: "",
+      website: "",
+      industry: "",
+      annualRevenue: "",
+      employees: "",
+      country: "",
+      street: "",
+      city: "",
+      state: "",
+      zipCode: "",
+      description: "",
+    }),
+    [searchParams]
+  );
+
   const handleSubmit = async (values: AccountCreateValues) => {
     await createAccount({
       accountOwner: values.accountOwner,

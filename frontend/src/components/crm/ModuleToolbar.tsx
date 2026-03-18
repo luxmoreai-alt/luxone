@@ -18,6 +18,9 @@ import {
 type ModuleToolbarProps = {
   viewName: string;
   createButtonLabel: string;
+  baseRoute?: string;
+  importPrimaryLabel?: string;
+  showImportActions?: boolean;
   sortFields?: string[];
   isFilterOpen: boolean;
   onToggleFilter: () => void;
@@ -46,6 +49,9 @@ const defaultSortFields = [
 export default function ModuleToolbar({
   viewName,
   createButtonLabel,
+  baseRoute,
+  importPrimaryLabel,
+  showImportActions = true,
   sortFields,
   isFilterOpen,
   onToggleFilter,
@@ -82,19 +88,27 @@ export default function ModuleToolbar({
     return "Record";
   }, [createButtonLabel]);
 
-  const importPrimaryLabel = useMemo(
+  const fallbackImportPrimaryLabel = useMemo(
     () => `Import ${singularModuleName}s`,
     [singularModuleName]
   );
 
   const moduleBaseRoute = useMemo(() => {
+    if (baseRoute) return baseRoute;
     const normalized = singularModuleName.toLowerCase();
 
     if (normalized === "contact") return "/contacts";
     if (normalized === "account") return "/accounts";
     if (normalized === "deal") return "/deals";
+    if (normalized === "product") return "/products";
+    if (normalized === "price book") return "/price-books";
+    if (normalized === "quote") return "/quotes";
+    if (normalized === "sales order") return "/sales-orders";
+    if (normalized === "purchase order") return "/purchase-orders";
+    if (normalized === "invoice") return "/invoices";
+    if (normalized === "vendor") return "/vendors";
     return "/leads";
-  }, [singularModuleName]);
+  }, [baseRoute, singularModuleName]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -169,35 +183,37 @@ export default function ModuleToolbar({
             {createButtonLabel}
           </button>
 
-          <div className="relative" ref={importMenuRef}>
-            <button
-              type="button"
-              onClick={() => setImportMenuOpen((prev) => !prev)}
-              className="cursor-pointer rounded-md bg-gradient-to-b from-blue-500 to-blue-600 px-3 py-2 text-white transition duration-150 hover:shadow-sm"
-            >
-              <ChevronDown size={16} />
-            </button>
+          {showImportActions && (
+            <div className="relative" ref={importMenuRef}>
+              <button
+                type="button"
+                onClick={() => setImportMenuOpen((prev) => !prev)}
+                className="cursor-pointer rounded-md bg-gradient-to-b from-blue-500 to-blue-600 px-3 py-2 text-white transition duration-150 hover:shadow-sm"
+              >
+                <ChevronDown size={16} />
+              </button>
 
-            {importMenuOpen && (
-              <div className="absolute right-0 top-[42px] z-50 min-w-[170px] rounded-md border border-slate-200 bg-white py-1 shadow-lg">
-                <button
-                  type="button"
-                  onClick={handleImportPrimary}
-                  className="block w-full px-4 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-100"
-                >
-                  {importPrimaryLabel}
-                </button>
+              {importMenuOpen && (
+                <div className="absolute right-0 top-[42px] z-50 min-w-[170px] rounded-md border border-slate-200 bg-white py-1 shadow-lg">
+                  <button
+                    type="button"
+                    onClick={handleImportPrimary}
+                    className="block w-full px-4 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-100"
+                  >
+                    {importPrimaryLabel ?? fallbackImportPrimaryLabel}
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={handleImportNotes}
-                  className="block w-full px-4 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-100"
-                >
-                  Import Notes
-                </button>
-              </div>
-            )}
-          </div>
+                  <button
+                    type="button"
+                    onClick={handleImportNotes}
+                    className="block w-full px-4 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-100"
+                  >
+                    Import Notes
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           <button className="cursor-pointer rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-slate-700 transition duration-150 hover:bg-slate-200 hover:shadow-sm">
             <Ellipsis size={16} />

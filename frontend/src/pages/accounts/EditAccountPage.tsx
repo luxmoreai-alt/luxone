@@ -25,7 +25,7 @@ const sections: CRMCreateSection[] = [
   {
     title: "Account Information",
     fields: [
-      { name: "accountOwner", label: "Account Owner", type: "owner" },
+      { name: "accountOwner", label: "Account Owner", type: "owner", readOnly: true },
       { name: "accountName", label: "Account Name", type: "text" },
       { name: "accountType", label: "Account Type", type: "select", options: ACCOUNT_TYPE_OPTIONS },
       { name: "phone", label: "Phone", type: "text" },

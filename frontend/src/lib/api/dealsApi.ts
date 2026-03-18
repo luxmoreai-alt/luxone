@@ -1,5 +1,5 @@
 import { apiRequest } from "../../api/client";
-import type { Deal as DealRecord } from "../shared/crmTypes";
+import type { Deal as DealRecord, Product as DealProductRecord } from "../shared/crmTypes";
 
 type BackendDeal = {
   id: number | string;
@@ -19,8 +19,12 @@ type BackendDeal = {
   lead_name?: string | null;
   owner?: number | null;
   owner_email?: string | null;
+  owner_name?: string | null;
+  owner_details?: { name?: string | null; email?: string | null } | null;
   created_at?: string;
   updated_at?: string;
+  account_info?: { id?: number | null; name?: string | null } | null;
+  contact_info?: { id?: number | null; name?: string | null } | null;
 };
 
 type BackendAccount = {
@@ -33,6 +37,17 @@ type BackendContact = {
   id: number;
   first_name?: string;
   last_name?: string;
+};
+
+type BackendDealProduct = {
+  id: number | string;
+  product: number | string;
+  product_name?: string | null;
+  product_code?: string | null;
+  quantity?: number | string | null;
+  unit_price?: number | string | null;
+  discount?: number | string | null;
+  total_price?: number | string | null;
 };
 
 type Paginated<T> = {
@@ -62,11 +77,11 @@ function normalizeDeal(item: BackendDeal): DealRecord {
     probability: Number(item.probability ?? 0),
     closingDate,
     type: item.account_name || "",
-    accountName: item.account_name ?? "",
-    contactName: item.contact_name ?? "",
+    accountName: item.account_name ?? item.account_info?.name ?? "",
+    contactName: item.contact_name ?? item.contact_info?.name ?? "",
     leadName: item.lead_name ?? "",
-    dealOwner: item.owner_email ?? "",
-    ownerEmail: item.owner_email ?? "",
+    dealOwner: item.owner_name ?? item.owner_details?.name ?? item.owner_email ?? "Assigned to you",
+    ownerEmail: item.owner_email ?? item.owner_details?.email ?? "",
     value: Number(value ?? 0),
     createdAt: item.created_at ?? "",
     updatedAt: item.updated_at ?? "",
@@ -118,6 +133,13 @@ export type CreateDealPayload = {
   forecastCategory?: string;
 };
 
+export type CreateDealProductPayload = {
+  productId: string;
+  quantity: number;
+  unitPrice: number;
+  discount?: number;
+};
+
 function toBackendPayload(
   payload: Partial<CreateDealPayload>,
   accountId: number,
@@ -164,6 +186,18 @@ function toBackendPayload(
 export async function getDeals(): Promise<DealRecord[]> {
   const data = await apiRequest<BackendDeal[] | Paginated<BackendDeal>>("/deals");
   return toList(data).map(normalizeDeal);
+}
+
+export async function getDealById(id: string): Promise<DealRecord | null> {
+  try {
+    const data = await apiRequest<BackendDeal>(`/deals/${id}`);
+    return normalizeDeal(data);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("404")) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 export async function createDeal(payload: CreateDealPayload): Promise<DealRecord> {
@@ -235,4 +269,39 @@ export async function scheduleDealMeeting(
       agenda: payload.agenda ?? "",
     }),
   });
+}
+
+function normalizeDealProduct(dealId: string, item: BackendDealProduct): DealProductRecord {
+  return {
+    id: String(item.id),
+    parentId: dealId,
+    productId: String(item.product),
+    productName: item.product_name ?? "Product",
+    quantity: Number(item.quantity ?? 0),
+    unitPrice: Number(item.unit_price ?? 0),
+    discount: Number(item.discount ?? 0),
+    amount: Number(item.unit_price ?? 0),
+    total: Number(item.total_price ?? 0),
+  };
+}
+
+export async function getDealProducts(id: string): Promise<DealProductRecord[]> {
+  const data = await apiRequest<BackendDealProduct[]>(`/deals/${id}/products`);
+  return data.map((item) => normalizeDealProduct(id, item));
+}
+
+export async function addDealProduct(
+  id: string,
+  payload: CreateDealProductPayload
+): Promise<DealProductRecord> {
+  const data = await apiRequest<BackendDealProduct>(`/deals/${id}/products`, {
+    method: "POST",
+    body: JSON.stringify({
+      product: Number(payload.productId),
+      quantity: payload.quantity,
+      unit_price: payload.unitPrice,
+      discount: payload.discount ?? 0,
+    }),
+  });
+  return normalizeDealProduct(id, data);
 }

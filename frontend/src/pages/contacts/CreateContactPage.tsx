@@ -1,5 +1,10 @@
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import CRMCreatePage, { type CRMCreateSection } from "../../components/crm/CRMCreatePage";
+import { getAccounts } from "../../lib/api/accountsApi";
 import { createContact } from "../../lib/api/contactsApi";
+import { getLeadById } from "../../lib/api/leadsApi";
+import { getLoggedInUserName } from "../../lib/auth/currentUser";
 import { SALUTATION_OPTIONS } from "../../config/crm/createOptions";
 
 type ContactCreateValues = {
@@ -25,7 +30,7 @@ type ContactCreateValues = {
   description: string;
 };
 
-const initialValues: ContactCreateValues = {
+const baseInitialValues: ContactCreateValues = {
   contactOwner: "",
   salutation: "",
   firstName: "",
@@ -48,52 +53,126 @@ const initialValues: ContactCreateValues = {
   description: "",
 };
 
-const sections: CRMCreateSection[] = [
-  {
-    title: "Contact Information",
-    fields: [
-      { name: "contactOwner", label: "Contact Owner", type: "owner" },
-      {
-        name: "salutation",
-        label: "First Name",
-        type: "name-composite",
-        options: SALUTATION_OPTIONS,
-        secondaryName: "firstName",
-      },
-      { name: "accountName", label: "Account Name", type: "text" },
-      { name: "title", label: "Title", type: "text" },
-      { name: "department", label: "Department", type: "text" },
-      { name: "email", label: "Email", type: "email" },
-      { name: "phone", label: "Phone", type: "text" },
-
-      { name: "lastName", label: "Last Name", type: "text" },
-      { name: "mobile", label: "Mobile", type: "text" },
-      { name: "otherPhone", label: "Other Phone", type: "text" },
-      { name: "fax", label: "Fax", type: "text" },
-      { name: "assistant", label: "Assistant", type: "text" },
-      { name: "assistantPhone", label: "Assistant Phone", type: "text" },
-    ],
-  },
-  {
-    title: "Address Information",
-    cardStyle: "boxed",
-    cardTitle: "Mailing Address",
-    widthClassName: "w-[48%]",
-    fields: [
-      { name: "country", label: "Country / Region", type: "country" },
-      { name: "street", label: "Street", type: "text" },
-      { name: "city", label: "City", type: "text" },
-      { name: "state", label: "State / Province", type: "state" },
-      { name: "zipCode", label: "Zip / Postal Code", type: "text" },
-    ],
-  },
-  {
-    title: "Description Information",
-    fields: [{ name: "description", label: "Description", type: "textarea", rows: 5 }],
-  },
-];
-
 export default function CreateContactPage() {
+  const [searchParams] = useSearchParams();
+  const [accountOptions, setAccountOptions] = useState<string[]>([]);
+  const [initialValues, setInitialValues] = useState<ContactCreateValues>({
+    ...baseInitialValues,
+    contactOwner: getLoggedInUserName(),
+  });
+
+  useEffect(() => {
+    const loadAccounts = async () => {
+      try {
+        const accounts = await getAccounts();
+        setAccountOptions(accounts.map((account) => account.accountName).filter(Boolean));
+      } catch {
+        setAccountOptions([]);
+      }
+    };
+
+    void loadAccounts();
+  }, []);
+
+  useEffect(() => {
+    const leadId = searchParams.get("leadId");
+    const accountName = searchParams.get("accountName") ?? "";
+    const contactName = searchParams.get("contactName") ?? "";
+    const ownerName = searchParams.get("owner") ?? getLoggedInUserName();
+
+    const hydrateFromLead = async () => {
+      if (!leadId) {
+        const [firstName, ...rest] = contactName.split(" ").filter(Boolean);
+        setInitialValues({
+          ...baseInitialValues,
+          contactOwner: ownerName,
+          accountName,
+          firstName: firstName ?? "",
+          lastName: rest.join(" "),
+        });
+        return;
+      }
+
+      try {
+        const lead = await getLeadById(leadId);
+        if (!lead) return;
+        setInitialValues({
+          ...baseInitialValues,
+          contactOwner: lead.leadOwner || ownerName,
+          firstName: lead.firstName,
+          lastName: lead.lastName,
+          accountName: lead.company,
+          title: lead.title,
+          email: lead.email,
+          phone: lead.phone,
+          mobile: lead.mobile,
+          country: lead.country,
+          street: lead.address,
+          city: lead.city,
+          state: lead.state,
+          zipCode: lead.zipCode,
+          description: lead.description,
+        });
+      } catch {
+        setInitialValues((prev) => ({
+          ...prev,
+          contactOwner: ownerName,
+          accountName,
+        }));
+      }
+    };
+
+    void hydrateFromLead();
+  }, [searchParams]);
+
+  const sections: CRMCreateSection[] = useMemo(
+    () => [
+      {
+        title: "Contact Information",
+        fields: [
+          { name: "contactOwner", label: "Contact Owner", type: "owner", readOnly: true },
+          {
+            name: "salutation",
+            label: "First Name",
+            type: "name-composite",
+            options: SALUTATION_OPTIONS,
+            secondaryName: "firstName",
+          },
+          { name: "accountName", label: "Account Name", type: "lookup", options: accountOptions, placeholder: "Search or select an account" },
+          { name: "title", label: "Title", type: "text" },
+          { name: "department", label: "Department", type: "text" },
+          { name: "email", label: "Email", type: "email" },
+          { name: "phone", label: "Phone", type: "text" },
+
+          { name: "lastName", label: "Last Name", type: "text" },
+          { name: "mobile", label: "Mobile", type: "text" },
+          { name: "otherPhone", label: "Other Phone", type: "text" },
+          { name: "fax", label: "Fax", type: "text" },
+          { name: "assistant", label: "Assistant", type: "text" },
+          { name: "assistantPhone", label: "Assistant Phone", type: "text" },
+        ],
+      },
+      {
+        title: "Address Information",
+        cardStyle: "boxed",
+        cardTitle: "Mailing Address",
+        widthClassName: "w-[48%]",
+        fields: [
+          { name: "country", label: "Country / Region", type: "country" },
+          { name: "street", label: "Street", type: "text" },
+          { name: "city", label: "City", type: "text" },
+          { name: "state", label: "State / Province", type: "state" },
+          { name: "zipCode", label: "Zip / Postal Code", type: "text" },
+        ],
+      },
+      {
+        title: "Description Information",
+        fields: [{ name: "description", label: "Description", type: "textarea", rows: 5 }],
+      },
+    ],
+    [accountOptions]
+  );
+
   const handleSubmit = async (values: ContactCreateValues) => {
     await createContact({
       contactOwner: values.contactOwner,

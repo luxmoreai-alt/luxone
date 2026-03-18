@@ -4,6 +4,7 @@ import {
   CalendarDays,
   Gauge,
   Grid2x2,
+  Menu,
   Plus,
   Search,
   Settings,
@@ -35,29 +36,40 @@ type LoggedInUser = {
 };
 
 const getPageTitle = (pathname: string) => {
-  switch (pathname) {
-    case "/home":
-      return "Home";
-    case "/leads":
-      return "Leads";
-    case "/contacts":
-      return "Contacts";
-    case "/accounts":
-      return "Accounts";
-    case "/deals":
-      return "Deals";
-    case "/reports":
-      return "Reports";
-    case "/analytics":
-      return "Analytics";
-    case "/my-requests":
-      return "My Requests";
-    default:
-      return "";
-  }
+  if (pathname === "/home") return "Home";
+  if (pathname === "/leads" || pathname.startsWith("/leads/")) return "Leads";
+  if (pathname === "/contacts" || pathname.startsWith("/contacts/")) return "Contacts";
+  if (pathname === "/accounts" || pathname.startsWith("/accounts/")) return "Accounts";
+  if (pathname === "/deals" || pathname.startsWith("/deals/")) return "Deals";
+  if (pathname === "/campaigns" || pathname.startsWith("/campaigns/")) return "Campaigns";
+  if (pathname === "/support/cases" || pathname.startsWith("/support/cases/")) return "Cases";
+  if (pathname === "/support/solutions" || pathname.startsWith("/support/solutions/")) return "Solutions";
+  if (pathname === "/services/promo" || pathname.startsWith("/services/promo/")) return "Services";
+  if (pathname === "/services/business-hours" || pathname.startsWith("/services/business-hours/")) return "Business Hours";
+  if (pathname === "/services/catalog" || pathname.startsWith("/services/catalog/")) return "Services Catalog";
+  if (pathname === "/services/appointments" || pathname.startsWith("/services/appointments/")) return "Appointments";
+  if (pathname === "/services/job-sheets" || pathname.startsWith("/services/job-sheets/")) return "Job Sheets";
+  if (pathname === "/services/settings/company-details") return "Company Details";
+  if (pathname === "/services/settings/domain-mapping") return "Domain Mapping";
+  if (pathname === "/services/settings/fiscal-year") return "Fiscal Year";
+  if (pathname === "/services/settings/holidays") return "Holidays";
+  if (pathname === "/products" || pathname.startsWith("/products/")) return "Products";
+  if (pathname === "/price-books" || pathname.startsWith("/price-books/")) return "Price Books";
+  if (pathname === "/quotes" || pathname.startsWith("/quotes/")) return "Quotes";
+  if (pathname === "/sales-orders" || pathname.startsWith("/sales-orders/")) return "Sales Orders";
+  if (pathname === "/purchase-orders" || pathname.startsWith("/purchase-orders/")) return "Purchase Orders";
+  if (pathname === "/invoices" || pathname.startsWith("/invoices/")) return "Invoices";
+  if (pathname === "/vendors" || pathname.startsWith("/vendors/")) return "Vendors";
+  if (pathname === "/reports") return "Reports";
+  if (pathname === "/analytics") return "Analytics";
+  if (pathname === "/my-requests") return "My Requests";
+  return "";
 };
 
-export default function Topbar(_: TopbarProps) {
+export default function Topbar({
+  sidebarOpen,
+  setSidebarOpen,
+}: TopbarProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const pageTitle = getPageTitle(location.pathname);
@@ -103,6 +115,15 @@ export default function Topbar(_: TopbarProps) {
     <>
       <header className="flex h-[62px] items-center justify-between border-b border-slate-200 bg-white px-4">
         <div className="flex items-center">
+          <button
+            type="button"
+            onClick={() => setSidebarOpen((prev) => !prev)}
+            className="mr-3 flex h-[36px] w-[36px] items-center justify-center rounded-md hover:bg-slate-100 md:hidden"
+            aria-label={sidebarOpen ? "Close sidebar" : "Open sidebar"}
+          >
+            <Menu size={18} />
+          </button>
+
           <h1 className="text-[18px] font-medium text-slate-800">{pageTitle}</h1>
         </div>
 

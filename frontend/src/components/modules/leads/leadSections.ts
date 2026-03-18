@@ -57,6 +57,7 @@ export const leadSections: CRMDetailSection<LeadRecord>[] = [
     fields: [{ key: "description", label: "Description" }],
   },
   { id: "notes-section", title: "Notes", type: "notes" },
+  { id: "services-section", title: "Services", type: "services" },
   { id: "connected-records-section", title: "Connected Records", type: "connected-records" },
   { id: "cadences-section", title: "Cadences", type: "cadences" },
   { id: "attachments-section", title: "Attachments", type: "attachments" },

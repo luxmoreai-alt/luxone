@@ -8,4 +8,8 @@ router.register("contacts", ContactViewSet, basename="contact")
 
 contact_import_view = ContactViewSet.as_view({"post": "import_records"})
 
-urlpatterns = [*router.urls, path("contact/import", contact_import_view)]
+urlpatterns = [
+    *router.urls,
+    path("contact/import", contact_import_view),
+    path("contacts/import", contact_import_view),
+]

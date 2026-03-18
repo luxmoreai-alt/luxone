@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import CRMDetailHeader from "../../components/crm/CRMDetailHeader";
 import CRMEmptyState from "../../components/crm/CRMEmptyState";
@@ -18,6 +18,7 @@ import type {
   Meeting,
   Note,
   Product,
+  Solution,
   TimelineItem,
   ConnectedRecord,
   Case,
@@ -38,6 +39,9 @@ type CRMDetailData = {
   attachments: Attachment[];
   connectedRecords: ConnectedRecord[];
   cases: Case[];
+  solutions: Solution[];
+  contacts?: Array<{ id: string; name: string; email?: string; phone?: string }>;
+  accounts?: Array<{ id: string; name: string; industry?: string; phone?: string }>;
   quotes: Quote[];
   salesOrders: SalesOrder[];
   purchaseOrders: PurchaseOrder[];
@@ -49,9 +53,24 @@ type CRMModuleDetailPageProps<T extends CRMRecord> = {
   config: CRMModuleConfig<T>;
   rows: T[];
   data: CRMDetailData;
+  sectionActions?: Record<string, ReactNode | undefined>;
 };
 
-export default function CRMModuleDetailPage<T extends CRMRecord>({ config, rows, data }: CRMModuleDetailPageProps<T>) {
+export default function CRMModuleDetailPage<T extends CRMRecord>({
+  config,
+  rows,
+  data,
+  sectionActions = {},
+}: CRMModuleDetailPageProps<T>) {
+  const isLongTextField = (fieldKey: string) => {
+    const normalized = fieldKey.toLowerCase();
+    return (
+      normalized.includes("email") ||
+      normalized.includes("website") ||
+      normalized.includes("address")
+    );
+  };
+
   const { id } = useParams();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"overview" | "timeline">("overview");
@@ -98,6 +117,14 @@ export default function CRMModuleDetailPage<T extends CRMRecord>({ config, rows,
   }, [activeTab, config.relatedListItems, sectionIdMap]);
 
   const renderSectionByType = (type: string) => {
+    const socialRecords = data.connectedRecords.filter((item) => {
+      const recordType = item.recordType.toLowerCase();
+      return recordType.includes("social") || recordType.includes("facebook") || recordType.includes("x message");
+    });
+    const serviceRecords = data.connectedRecords.filter((item) =>
+      item.recordType.toLowerCase().includes("service")
+    );
+
     if (type === "attachments") {
       return data.attachments.length ? (
         <div className="space-y-2">{data.attachments.map((item) => <div key={item.id} className="rounded-md border border-slate-200 p-3 text-sm text-slate-700">{item.fileName} • {item.fileType}</div>)}</div>
@@ -140,9 +167,30 @@ export default function CRMModuleDetailPage<T extends CRMRecord>({ config, rows,
 
     if (type === "products") {
       return data.products.length ? (
-        <div className="space-y-2">{data.products.map((item) => <div key={item.id} className="rounded-md border border-slate-200 p-3 text-sm text-slate-700">{item.productName} • Qty {item.quantity}</div>)}</div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-left text-sm">
+            <thead className="bg-slate-50">
+              <tr>
+                {["Product", "Quantity", "Price", "Discount", "Total"].map((header) => (
+                  <th key={header} className="px-3 py-2 font-medium text-slate-600">{header}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.products.map((item) => (
+                <tr key={item.id} className="border-t border-slate-100 text-slate-700">
+                  <td className="px-3 py-2">{item.productName}</td>
+                  <td className="px-3 py-2">{item.quantity}</td>
+                  <td className="px-3 py-2">{item.unitPrice ?? item.amount}</td>
+                  <td className="px-3 py-2">{item.discount ?? 0}</td>
+                  <td className="px-3 py-2 font-medium">{item.total ?? item.amount}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : (
-        <CRMEmptyState message="No products available." />
+        <CRMEmptyState message="No products added to this record yet." />
       );
     }
 
@@ -170,11 +218,60 @@ export default function CRMModuleDetailPage<T extends CRMRecord>({ config, rows,
       );
     }
 
+    if (type === "social") {
+      return socialRecords.length ? (
+        <div className="space-y-2">{socialRecords.map((item) => <div key={item.id} className="rounded-md border border-slate-200 p-3 text-sm text-slate-700">{item.recordType}: {item.name}</div>)}</div>
+      ) : (
+        <CRMEmptyState message="No social activity available." />
+      );
+    }
+
+    if (type === "services") {
+      return serviceRecords.length ? (
+        <div className="space-y-2">
+          {serviceRecords.map((item) => (
+            <div key={item.id} className="rounded-md border border-slate-200 p-3 text-sm text-slate-700">
+              <div className="font-medium text-slate-800">{item.recordType}: {item.name}</div>
+              <div className="mt-1 text-xs text-slate-500">
+                {[item.owner, item.status].filter(Boolean).join(" | ") || "Linked service record"}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <CRMEmptyState message="No services linked yet." />
+      );
+    }
+
     if (type === "cases") {
       return data.cases.length ? (
         <div className="space-y-2">{data.cases.map((item) => <div key={item.id} className="rounded-md border border-slate-200 p-3 text-sm text-slate-700">{item.caseNumber} • {item.subject}</div>)}</div>
       ) : (
         <CRMEmptyState message="No cases available." />
+      );
+    }
+
+    if (type === "solutions") {
+      return data.solutions.length ? (
+        <div className="space-y-2">{data.solutions.map((item) => <div key={item.id} className="rounded-md border border-slate-200 p-3 text-sm text-slate-700">{item.solutionNumber} â€¢ {item.solutionTitle}</div>)}</div>
+      ) : (
+        <CRMEmptyState message="No solutions available." />
+      );
+    }
+
+    if (type === "contacts") {
+      return (data.contacts || []).length ? (
+        <div className="space-y-2">{(data.contacts || []).map((item) => <div key={item.id} className="rounded-md border border-slate-200 p-3 text-sm text-slate-700">{item.name}{item.email ? ` â€¢ ${item.email}` : item.phone ? ` â€¢ ${item.phone}` : ""}</div>)}</div>
+      ) : (
+        <CRMEmptyState message="No contacts available." />
+      );
+    }
+
+    if (type === "accounts") {
+      return (data.accounts || []).length ? (
+        <div className="space-y-2">{(data.accounts || []).map((item) => <div key={item.id} className="rounded-md border border-slate-200 p-3 text-sm text-slate-700">{item.name}{item.industry ? ` â€¢ ${item.industry}` : item.phone ? ` â€¢ ${item.phone}` : ""}</div>)}</div>
+      ) : (
+        <CRMEmptyState message="No accounts available." />
       );
     }
 
@@ -214,6 +311,13 @@ export default function CRMModuleDetailPage<T extends CRMRecord>({ config, rows,
   };
 
   if (!record) return null;
+
+  const formatFieldValue = (fieldKey: string, value: unknown) => {
+    if (value === null || value === undefined || value === "") {
+      return fieldKey.toLowerCase().includes("owner") ? "Assigned to you" : "Not provided";
+    }
+    return String(value);
+  };
 
   const avatarValue = (record as { avatar?: unknown }).avatar;
   const avatar =
@@ -257,9 +361,15 @@ export default function CRMModuleDetailPage<T extends CRMRecord>({ config, rows,
                 <CRMSectionCard title="Top Summary Block">
                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                     {config.summaryFields.map((field) => (
-                      <div key={field.key}>
+                      <div key={field.key} className="min-w-0">
                         <p className="text-xs uppercase tracking-wide text-slate-500">{field.label}</p>
-                        <p className="mt-1 text-sm text-slate-800">{String(record[field.key] || "-")}</p>
+                        <p
+                          className={`mt-1 text-sm text-slate-800 ${
+                            isLongTextField(field.key) ? "break-all whitespace-normal" : "break-words"
+                          }`}
+                        >
+                          {formatFieldValue(field.key, record[field.key])}
+                        </p>
                       </div>
                     ))}
                   </div>
@@ -268,7 +378,7 @@ export default function CRMModuleDetailPage<T extends CRMRecord>({ config, rows,
 
               {config.detailSections.map((section) => (
                 <section key={section.id} id={section.id} className="scroll-mt-24">
-                  <CRMSectionCard title={section.title}>
+                  <CRMSectionCard title={section.title} action={sectionActions[section.id]}>
                     {section.type === "info" && section.fields ? (
                       <CRMInfoGrid record={record} fields={section.fields as never} />
                     ) : (

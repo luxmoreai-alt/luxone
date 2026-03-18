@@ -47,7 +47,7 @@ const sections: CRMCreateSection[] = [
   {
     title: "Lead Information",
     fields: [
-      { name: "leadOwner", label: "Lead Owner", type: "owner" },
+      { name: "leadOwner", label: "Lead Owner", type: "owner", readOnly: true },
       { name: "salutation", label: "First Name", type: "name-composite", options: SALUTATION_OPTIONS, secondaryName: "firstName" },
       { name: "title", label: "Title", type: "text" },
       { name: "phone", label: "Phone", type: "text" },

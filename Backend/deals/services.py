@@ -1,20 +1,22 @@
 from __future__ import annotations
 
 import csv
+from decimal import Decimal
 from dataclasses import dataclass
 from io import StringIO
 from typing import Any
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.db.models import QuerySet
+from django.db.models import QuerySet, Sum
 
 from activities.services import create_deal_activity
 from accounts.models import Account
 from contacts.models import Contact
+from inventory.models import InventoryLinkedRecord
 from notes.services import create_deal_note, list_deal_notes
 
-from .models import Deal, DealStage
+from .models import Deal, DealProduct, DealStage
 from .permissions import filter_queryset_for_user
 
 User = get_user_model()
@@ -91,18 +93,53 @@ class DealService:
         queryset = (
             Deal.objects.filter(is_active=True)
             .select_related("account", "contact", "deal_owner", "stage")
-            .prefetch_related("notes", "activities")
         )
         return filter_queryset_for_user(queryset, user)
 
     def get_deal_detail(self, *, deal_id: int, user) -> Deal:
         return self.list_deals(user=user).get(pk=deal_id)
 
+    def list_deal_products(self, *, deal: Deal):
+        return deal.products.filter(is_active=True).select_related("product")
+
+    @transaction.atomic
+    def add_deal_product(self, *, deal: Deal, data: dict[str, Any], user) -> DealProduct:
+        quantity = Decimal(data["quantity"])
+        unit_price = Decimal(data["unit_price"])
+        discount = Decimal(data.get("discount") or 0)
+        total_price = (quantity * unit_price) - discount
+
+        line_item = DealProduct.objects.create(
+            deal=deal,
+            product=data["product"],
+            quantity=quantity,
+            unit_price=unit_price,
+            discount=discount,
+            total_price=total_price,
+        )
+        self._sync_deal_totals(deal=deal)
+        self._sync_product_link(line_item=line_item)
+        self.log_activity(
+            deal=deal,
+            action="Product added",
+            description=f"{line_item.product.product_name} added to deal",
+            user=user,
+        )
+        return line_item
+
     @transaction.atomic
     def create_deal(self, *, data: dict[str, Any], user) -> Deal:
         ensure_default_stages()
+        contact = data.get("contact")
+        account = data.get("account")
+        if contact and account and contact.account_id and contact.account_id != account.id:
+            raise ValueError("contact: Selected contact must belong to the selected account.")
         if not data.get("deal_owner"):
-            data["deal_owner"] = user
+            data["deal_owner"] = (
+                getattr(contact, "contact_owner", None)
+                or getattr(account, "account_owner", None)
+                or user
+            )
         stage = data.get("stage")
         if not stage:
             stage = DealStage.objects.get(stage_name="Qualification")
@@ -130,6 +167,11 @@ class DealService:
         old_closing_date = deal.closing_date
         old_stage_name = deal.stage.stage_name
         stage_explicitly_changed = "stage" in data
+        next_account = data.get("account", deal.account)
+        next_contact = data.get("contact", deal.contact)
+
+        if next_contact and next_account and next_contact.account_id and next_contact.account_id != next_account.id:
+            raise ValueError("contact: Selected contact must belong to the selected account.")
 
         for field, value in data.items():
             setattr(deal, field, value)
@@ -320,6 +362,31 @@ class DealService:
             user=user,
         )
 
+    def _sync_deal_totals(self, *, deal: Deal) -> Deal:
+        active_items = deal.products.filter(is_active=True)
+        total_amount = active_items.aggregate(total=Sum("total_price"))["total"] or Decimal("0.00")
+        deal.amount = total_amount
+        if deal.expected_revenue in (None, Decimal("0.00")) or deal.expected_revenue != total_amount:
+            deal.expected_revenue = total_amount
+        deal.save(update_fields=["amount", "expected_revenue", "updated_at"])
+        return deal
+
+    def _sync_product_link(self, *, line_item: DealProduct) -> InventoryLinkedRecord:
+        return InventoryLinkedRecord.objects.create(
+            product=line_item.product,
+            deal=line_item.deal,
+            account=line_item.deal.account,
+            contact=line_item.deal.contact,
+            relationship_label="Deal Line Item",
+            metadata={
+                "deal_product_id": line_item.id,
+                "quantity": str(line_item.quantity),
+                "unit_price": str(line_item.unit_price),
+                "discount": str(line_item.discount),
+                "total_price": str(line_item.total_price),
+            },
+        )
+
 
 deal_service = DealService()
 
@@ -327,11 +394,12 @@ deal_service = DealService()
 def create_deal_from_lead(*, lead, account, contact, owner=None, deal_name=None, deal_value=None):
     ensure_default_stages()
     qualification = DealStage.objects.get(stage_name="Qualification")
+    default_deal_name = f"{lead.company} - {lead.first_name} {lead.last_name} Deal".strip()
     deal = Deal.objects.create(
         account=account,
         contact=contact,
         lead=lead,
-        deal_name=deal_name or f"{lead.company} Opportunity",
+        deal_name=deal_name or default_deal_name,
         stage=qualification,
         amount=deal_value,
         expected_revenue=deal_value,

@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from decimal import Decimal
 
 from core.base_models import BaseModel
 
@@ -157,3 +158,31 @@ class Deal(BaseModel):
 
     def __str__(self):
         return self.deal_name
+
+
+class DealProduct(BaseModel):
+    deal = models.ForeignKey(
+        "deals.Deal",
+        on_delete=models.CASCADE,
+        related_name="products",
+    )
+    product = models.ForeignKey(
+        "inventory.Product",
+        on_delete=models.PROTECT,
+        related_name="deal_products",
+    )
+    quantity = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal("1.00"))
+    unit_price = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal("0.00"))
+    discount = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal("0.00"))
+    total_price = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal("0.00"))
+
+    class Meta:
+        ordering = ["created_at", "id"]
+        indexes = [
+            models.Index(fields=["deal", "created_at"]),
+            models.Index(fields=["product"]),
+            models.Index(fields=["is_active"]),
+        ]
+
+    def __str__(self):
+        return f"{self.deal_id}:{self.product_id}"

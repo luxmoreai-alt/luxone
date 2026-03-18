@@ -21,10 +21,12 @@ type BackendContact = {
   owner?: number | null;
   contact_owner?: number | null;
   owner_email?: string | null;
-  owner_details?: { email?: string | null } | null;
+  owner_name?: string | null;
+  owner_details?: { email?: string | null; name?: string | null } | null;
   account?: number | null;
   account_name?: string | null;
   account_info?: { name?: string | null } | null;
+  contact_name?: string | null;
   created_at?: string;
   updated_at?: string;
 };
@@ -58,14 +60,16 @@ function normalizeContact(item: BackendContact): ContactRecord {
   const last = item.last_name ?? "";
   return {
     id: String(item.id),
-    contactName: `${first} ${last}`.trim(),
+    contactName: item.contact_name ?? `${first} ${last}`.trim(),
     firstName: first,
     lastName: last,
     accountName: item.account_name ?? item.account_info?.name ?? "",
     contactOwner:
+      item.owner_name ??
       item.owner_email ??
       item.owner_details?.email ??
-      (item.contact_owner || item.owner ? `User #${item.contact_owner ?? item.owner}` : ""),
+      item.owner_details?.name ??
+      (item.contact_owner || item.owner ? `User #${item.contact_owner ?? item.owner}` : "Assigned to you"),
     email: item.email ?? "",
     otherPhone: item.other_phone ?? "",
     phone: item.phone ?? "",

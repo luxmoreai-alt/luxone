@@ -20,6 +20,10 @@ from .models import Account, AccountAttachment
 from .permissions import filter_queryset_for_user
 
 
+def _normalize_account_name(value: str | None) -> str:
+    return (value or "").strip()
+
+
 class TimelineService:
     @staticmethod
     def log_event(*, account: Account, action: str, description: str = "", user=None):
@@ -74,7 +78,6 @@ class AccountService:
         queryset = (
             Account.objects.filter(is_active=True)
             .select_related("account_owner", "parent_account")
-            .prefetch_related("contacts", "deals", "activities", "notes")
         )
         return filter_queryset_for_user(queryset, user)
 
@@ -89,8 +92,30 @@ class AccountService:
 
     @transaction.atomic
     def create_account(self, *, data: dict[str, Any], user) -> Account:
+        if data.get("account_name"):
+            data["account_name"] = _normalize_account_name(data["account_name"])
         if not data.get("account_owner"):
             data["account_owner"] = user
+        existing_account = Account.objects.filter(
+            account_name__iexact=data["account_name"],
+            is_active=True,
+        ).first()
+        if existing_account:
+            updated_fields = []
+            for field, value in data.items():
+                if field == "account_owner":
+                    continue
+                if value in (None, "", []) or getattr(existing_account, field) == value:
+                    continue
+                setattr(existing_account, field, value)
+                updated_fields.append(field)
+            if not existing_account.account_owner_id and data.get("account_owner"):
+                existing_account.account_owner = data["account_owner"]
+                updated_fields.append("account_owner")
+            if updated_fields:
+                existing_account.save(update_fields=[*updated_fields, "updated_at"])
+            return existing_account
+
         account = Account.objects.create(**data)
         self.log_activity(
             account=account,
@@ -174,7 +199,7 @@ class AccountService:
         return account.contacts.filter(is_active=True).select_related("contact_owner")
 
     def list_account_deals(self, *, account: Account):
-        return account.deals.select_related("owner", "contact", "lead")
+        return account.deals.select_related("deal_owner", "contact", "lead", "stage")
 
     def list_account_activities(self, *, account: Account):
         return account.activities.select_related("user")
@@ -257,8 +282,38 @@ account_service = AccountService()
 
 
 def create_account_from_lead(*, lead, owner=None):
+    account_name = _normalize_account_name(lead.company)
+    existing_account = Account.objects.filter(
+        account_name__iexact=account_name,
+        is_active=True,
+    ).first()
+    if existing_account:
+        updated_fields = []
+        if not existing_account.account_owner_id and (lead.owner or owner):
+            existing_account.account_owner = lead.owner or owner
+            updated_fields.append("account_owner")
+        for field_name, value in {
+            "website": lead.website,
+            "phone": lead.phone,
+            "industry": lead.industry,
+            "annual_revenue": lead.annual_revenue,
+            "employees": lead.employee_count,
+        }.items():
+            if value and not getattr(existing_account, field_name):
+                setattr(existing_account, field_name, value)
+                updated_fields.append(field_name)
+        billing_address = ", ".join(
+            part for part in [lead.street, lead.city, lead.state, lead.country, lead.zip_code] if part
+        ) or None
+        if billing_address and not existing_account.billing_address:
+            existing_account.billing_address = billing_address
+            updated_fields.append("billing_address")
+        if updated_fields:
+            existing_account.save(update_fields=[*updated_fields, "updated_at"])
+        return existing_account
+
     return Account.objects.create(
-        account_name=lead.company,
+        account_name=account_name,
         website=lead.website,
         phone=lead.phone,
         industry=lead.industry,

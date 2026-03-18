@@ -1,5 +1,6 @@
 from typing import Any
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth import get_user_model
 from django.db.models import Sum
 from rest_framework import serializers
@@ -49,9 +50,13 @@ class CampaignListSerializer(serializers.ModelSerializer):
         ]
 
     def get_owner_email(self, obj: Campaign) -> str | None:
-        if not obj.campaign_owner:
+        try:
+            owner = obj.campaign_owner
+        except ObjectDoesNotExist:
             return None
-        return obj.campaign_owner.email
+        if not owner:
+            return None
+        return owner.email
 
 
 class CampaignStatsSerializer(serializers.Serializer):
@@ -92,9 +97,13 @@ class CampaignDetailSerializer(serializers.ModelSerializer):
         ]
 
     def get_owner_info(self, obj: Campaign) -> dict[str, Any] | None:
-        if not obj.campaign_owner:
+        try:
+            owner = obj.campaign_owner
+        except ObjectDoesNotExist:
             return None
-        return CampaignOwnerSerializer({"id": obj.campaign_owner_id, "email": obj.campaign_owner.email}).data
+        if not owner:
+            return None
+        return CampaignOwnerSerializer({"id": obj.campaign_owner_id, "email": owner.email}).data
 
     def get_stats(self, obj: Campaign) -> dict[str, Any]:
         won_total = (

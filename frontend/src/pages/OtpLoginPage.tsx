@@ -21,6 +21,12 @@ const OtpLoginPage = () => {
   const [otpError, setOtpError] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
+  const redirectTo =
+    typeof window.history.state === "object" &&
+    window.history.state !== null &&
+    typeof (window.history.state as { usr?: { from?: unknown } }).usr?.from === "string"
+      ? ((window.history.state as { usr: { from: string } }).usr.from || "/home")
+      : "/home";
 
   const handleSendOtp = async () => {
     const trimmed = email.trim();
@@ -76,7 +82,7 @@ const OtpLoginPage = () => {
       if (tenantDb) localStorage.setItem("tenantDb", tenantDb);
       if (user) localStorage.setItem("loggedInUser", JSON.stringify(user));
 
-      navigate("/home");
+      navigate(redirectTo, { replace: true });
     } catch {
       setOtpError("Unable to connect to backend");
     } finally {

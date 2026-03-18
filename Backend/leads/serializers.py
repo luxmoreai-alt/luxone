@@ -1,10 +1,27 @@
+from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import serializers
 
+from core.user_display import get_user_display_name
 from .models import Lead
+from integrations.models import IntegrationLeadSourceEvent, SyncedEmailMessage
+
+
+class LeadOwnerSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    email = serializers.EmailField(allow_blank=True, allow_null=True)
+    name = serializers.CharField()
+
+
+class LeadLinkedRecordSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    name = serializers.CharField()
 
 
 class LeadListSerializer(serializers.ModelSerializer):
     owner_email = serializers.SerializerMethodField()
+    owner_name = serializers.SerializerMethodField()
+    owner_details = serializers.SerializerMethodField()
+    lead_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Lead
@@ -12,23 +29,63 @@ class LeadListSerializer(serializers.ModelSerializer):
             "id",
             "first_name",
             "last_name",
+            "lead_name",
             "company",
             "email",
             "phone",
             "lead_source",
             "owner",
             "owner_email",
+            "owner_name",
+            "owner_details",
             "created_at",
         ]
 
     def get_owner_email(self, obj):
-        if not obj.owner:
+        try:
+            owner = obj.owner
+        except ObjectDoesNotExist:
             return None
-        return getattr(obj.owner, "email", str(obj.owner))
+        if not owner:
+            return None
+        return getattr(owner, "email", str(owner))
+
+    def get_owner_name(self, obj):
+        try:
+            owner = obj.owner
+        except ObjectDoesNotExist:
+            return None
+        if not owner:
+            return None
+        return get_user_display_name(owner)
+
+    def get_owner_details(self, obj):
+        try:
+            owner = obj.owner
+        except ObjectDoesNotExist:
+            return None
+        if not owner:
+            return None
+        return LeadOwnerSerializer(
+            {
+                "id": obj.owner_id,
+                "email": getattr(owner, "email", "") or "",
+                "name": get_user_display_name(owner),
+            }
+        ).data
+
+    def get_lead_name(self, obj):
+        return f"{obj.first_name} {obj.last_name}".strip()
 
 
 class LeadDetailSerializer(serializers.ModelSerializer):
     owner_email = serializers.SerializerMethodField()
+    owner_name = serializers.SerializerMethodField()
+    owner_details = serializers.SerializerMethodField()
+    lead_name = serializers.SerializerMethodField()
+    converted_account_info = serializers.SerializerMethodField()
+    converted_contact_info = serializers.SerializerMethodField()
+    converted_deal_info = serializers.SerializerMethodField()
 
     class Meta:
         model = Lead
@@ -36,6 +93,7 @@ class LeadDetailSerializer(serializers.ModelSerializer):
             "id",
             "first_name",
             "last_name",
+            "lead_name",
             "company",
             "title",
             "email",
@@ -50,9 +108,14 @@ class LeadDetailSerializer(serializers.ModelSerializer):
             "rating",
             "owner",
             "owner_email",
+            "owner_name",
+            "owner_details",
             "converted_account",
+            "converted_account_info",
             "converted_contact",
+            "converted_contact_info",
             "converted_deal",
+            "converted_deal_info",
             "street",
             "city",
             "state",
@@ -66,9 +129,69 @@ class LeadDetailSerializer(serializers.ModelSerializer):
         ]
 
     def get_owner_email(self, obj):
-        if not obj.owner:
+        try:
+            owner = obj.owner
+        except ObjectDoesNotExist:
             return None
-        return getattr(obj.owner, "email", str(obj.owner))
+        if not owner:
+            return None
+        return getattr(owner, "email", str(owner))
+
+    def get_owner_name(self, obj):
+        try:
+            owner = obj.owner
+        except ObjectDoesNotExist:
+            return None
+        if not owner:
+            return None
+        return get_user_display_name(owner)
+
+    def get_owner_details(self, obj):
+        try:
+            owner = obj.owner
+        except ObjectDoesNotExist:
+            return None
+        if not owner:
+            return None
+        return LeadOwnerSerializer(
+            {
+                "id": obj.owner_id,
+                "email": getattr(owner, "email", "") or "",
+                "name": get_user_display_name(owner),
+            }
+        ).data
+
+    def get_lead_name(self, obj):
+        return f"{obj.first_name} {obj.last_name}".strip()
+
+    def get_converted_account_info(self, obj):
+        try:
+            account = obj.converted_account
+        except ObjectDoesNotExist:
+            return None
+        if not account:
+            return None
+        return LeadLinkedRecordSerializer({"id": account.id, "name": account.account_name}).data
+
+    def get_converted_contact_info(self, obj):
+        try:
+            contact = obj.converted_contact
+        except ObjectDoesNotExist:
+            return None
+        if not contact:
+            return None
+        return LeadLinkedRecordSerializer(
+            {"id": contact.id, "name": f"{contact.first_name} {contact.last_name}".strip()}
+        ).data
+
+    def get_converted_deal_info(self, obj):
+        try:
+            deal = obj.converted_deal
+        except ObjectDoesNotExist:
+            return None
+        if not deal:
+            return None
+        return LeadLinkedRecordSerializer({"id": deal.id, "name": deal.deal_name}).data
 
 
 class LeadCloneResponseSerializer(serializers.Serializer):
@@ -116,3 +239,36 @@ class LeadMeetingSerializer(serializers.Serializer):
 class LeadSendEmailSerializer(serializers.Serializer):
     subject = serializers.CharField(max_length=255)
     body = serializers.CharField()
+
+
+class LeadEmailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SyncedEmailMessage
+        fields = [
+            "id",
+            "subject",
+            "from_email",
+            "to_emails",
+            "direction",
+            "status",
+            "received_at",
+            "sent_at",
+            "is_read",
+        ]
+
+
+class LeadConnectedRecordSerializer(serializers.ModelSerializer):
+    source_label = serializers.SerializerMethodField()
+
+    class Meta:
+        model = IntegrationLeadSourceEvent
+        fields = [
+            "id",
+            "source_type",
+            "source_label",
+            "source_reference",
+            "created_at",
+        ]
+
+    def get_source_label(self, obj):
+        return obj.payload.get("source_label") or obj.source_reference

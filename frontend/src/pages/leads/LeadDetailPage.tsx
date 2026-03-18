@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import CRMModuleDetailPage from "../crm/CRMModuleDetailPage";
 import { leadModuleConfig } from "../../components/modules/leads/leadsMockData";
+import { loadLeadLinkedData } from "../../lib/api/linkedRecordsApi";
 import {
   getLeadById,
   getLeadNotes,
@@ -14,6 +15,7 @@ export default function LeadDetailPage() {
   const [lead, setLead] = useState<LeadRecord | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
+  const [linkedData, setLinkedData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,17 +26,25 @@ export default function LeadDetailPage() {
       try {
         setLoading(true);
         setError(null);
-        const [leadData, notesData, timelineData] = await Promise.all([
-          getLeadById(id),
-          getLeadNotes(id),
-          getLeadTimeline(id),
-        ]);
+        const leadData = await getLeadById(id);
+        if (!leadData) {
+          setLead(null);
+          setLinkedData(null);
+          return;
+        }
         setLead(leadData);
+        setLoading(false);
+
+        const [notesData, timelineData, related] = await Promise.all([
+          getLeadNotes(id).catch(() => []),
+          getLeadTimeline(id).catch(() => []),
+          loadLeadLinkedData(leadData).catch(() => null),
+        ]);
         setNotes(notesData);
         setTimeline(timelineData);
+        setLinkedData(related);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load lead");
-      } finally {
         setLoading(false);
       }
     };
@@ -60,20 +70,21 @@ export default function LeadDetailPage() {
       rows={[lead]}
       data={{
         notes,
-        deals: [],
-        openActivities: [],
-        closedActivities: [],
-        meetings: [],
-        products: [],
-        emails: [],
-        attachments: [],
-        connectedRecords: [],
-        cases: [],
-        quotes: [],
-        salesOrders: [],
-        purchaseOrders: [],
-        invoices: [],
-        timeline,
+        deals: linkedData?.deals || [],
+        openActivities: linkedData?.openActivities || [],
+        closedActivities: linkedData?.closedActivities || [],
+        meetings: linkedData?.meetings || [],
+        products: linkedData?.products || [],
+        emails: linkedData?.emails || [],
+        attachments: linkedData?.attachments || [],
+        connectedRecords: linkedData?.connectedRecords || [],
+        cases: linkedData?.cases || [],
+        solutions: linkedData?.solutions || [],
+        quotes: linkedData?.quotes || [],
+        salesOrders: linkedData?.salesOrders || [],
+        purchaseOrders: linkedData?.purchaseOrders || [],
+        invoices: linkedData?.invoices || [],
+        timeline: [...timeline, ...(linkedData?.timeline || [])],
       }}
     />
   );

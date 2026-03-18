@@ -1,8 +1,10 @@
 from typing import Any
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
+from core.user_display import get_user_display_name
 from activities.models import LeadActivity
 from contacts.models import Contact
 from deals.models import Deal
@@ -17,12 +19,14 @@ User = get_user_model()
 class AccountOwnerSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     email = serializers.EmailField()
+    name = serializers.CharField()
 
 
 class AccountListSerializer(serializers.ModelSerializer):
     name = serializers.CharField(source="account_name", read_only=True)
     owner = serializers.IntegerField(source="account_owner_id", read_only=True)
     owner_email = serializers.SerializerMethodField()
+    owner_name = serializers.SerializerMethodField()
     owner_details = serializers.SerializerMethodField()
 
     class Meta:
@@ -36,28 +40,51 @@ class AccountListSerializer(serializers.ModelSerializer):
             "account_owner",
             "owner",
             "owner_email",
+            "owner_name",
             "owner_details",
             "industry",
             "created_at",
         ]
 
     def get_owner_details(self, obj: Account) -> dict[str, Any] | None:
-        if not obj.account_owner:
+        try:
+            owner = obj.account_owner
+        except ObjectDoesNotExist:
+            return None
+        if not owner:
             return None
         return AccountOwnerSerializer(
-            {"id": obj.account_owner_id, "email": obj.account_owner.email}
+            {
+                "id": obj.account_owner_id,
+                "email": owner.email,
+                "name": get_user_display_name(owner),
+            }
         ).data
 
     def get_owner_email(self, obj: Account) -> str | None:
-        if not obj.account_owner:
+        try:
+            owner = obj.account_owner
+        except ObjectDoesNotExist:
             return None
-        return obj.account_owner.email
+        if not owner:
+            return None
+        return owner.email
+
+    def get_owner_name(self, obj: Account) -> str | None:
+        try:
+            owner = obj.account_owner
+        except ObjectDoesNotExist:
+            return None
+        if not owner:
+            return None
+        return get_user_display_name(owner)
 
 
 class AccountDetailSerializer(serializers.ModelSerializer):
     name = serializers.CharField(source="account_name", read_only=True)
     owner = serializers.IntegerField(source="account_owner_id", read_only=True)
     owner_email = serializers.SerializerMethodField()
+    owner_name = serializers.SerializerMethodField()
     owner_details = serializers.SerializerMethodField()
     employee_count = serializers.IntegerField(source="employees", read_only=True)
     street = serializers.SerializerMethodField()
@@ -77,6 +104,7 @@ class AccountDetailSerializer(serializers.ModelSerializer):
             "account_owner",
             "owner",
             "owner_email",
+            "owner_name",
             "owner_details",
             "name",
             "account_name",
@@ -114,16 +142,37 @@ class AccountDetailSerializer(serializers.ModelSerializer):
         ]
 
     def get_owner_details(self, obj: Account) -> dict[str, Any] | None:
-        if not obj.account_owner:
+        try:
+            owner = obj.account_owner
+        except ObjectDoesNotExist:
+            return None
+        if not owner:
             return None
         return AccountOwnerSerializer(
-            {"id": obj.account_owner_id, "email": obj.account_owner.email}
+            {
+                "id": obj.account_owner_id,
+                "email": owner.email,
+                "name": get_user_display_name(owner),
+            }
         ).data
 
     def get_owner_email(self, obj: Account) -> str | None:
-        if not obj.account_owner:
+        try:
+            owner = obj.account_owner
+        except ObjectDoesNotExist:
             return None
-        return obj.account_owner.email
+        if not owner:
+            return None
+        return owner.email
+
+    def get_owner_name(self, obj: Account) -> str | None:
+        try:
+            owner = obj.account_owner
+        except ObjectDoesNotExist:
+            return None
+        if not owner:
+            return None
+        return get_user_display_name(owner)
 
     def get_contacts_count(self, obj: Account) -> int:
         return getattr(obj, "contacts_count", None) or obj.contacts.filter(is_active=True).count()
@@ -252,12 +301,20 @@ class AccountNoteSerializer(serializers.ModelSerializer):
 
 
 class RelatedContactSerializer(serializers.ModelSerializer):
+    name = serializers.SerializerMethodField()
+
     class Meta:
         model = Contact
-        fields = ["id", "first_name", "last_name", "email", "phone", "mobile"]
+        fields = ["id", "first_name", "last_name", "name", "email", "phone", "mobile"]
+
+    def get_name(self, obj: Contact) -> str:
+        return f"{obj.first_name} {obj.last_name}".strip()
 
 
 class RelatedDealSerializer(serializers.ModelSerializer):
+    stage = serializers.CharField(source="stage.stage_name", read_only=True)
+    value = serializers.DecimalField(source="expected_revenue", max_digits=15, decimal_places=2, read_only=True)
+
     class Meta:
         model = Deal
         fields = ["id", "name", "stage", "value", "amount", "created_at"]

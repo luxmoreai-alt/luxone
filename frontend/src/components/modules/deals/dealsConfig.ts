@@ -29,7 +29,7 @@ export const dealFilterSections: FilterSection[] = [
   },
   {
     title: "Filter By Related Modules",
-    items: ["Contacts", "Accounts", "Activities", "Notes"],
+    items: ["Contacts", "Accounts", "Cases", "Solutions", "Quotes", "Sales Orders", "Invoices", "Notes"],
   },
 ];
 
@@ -65,11 +65,27 @@ const dealDetailSections: CRMDetailSection<Deal>[] = [
     title: "Deal Information",
     type: "info",
     fields: [
+      { key: "accountName", label: "Account" },
+      { key: "contactName", label: "Contact" },
       { key: "stage", label: "Stage" },
       { key: "amount", label: "Amount" },
       { key: "dealOwner", label: "Deal Owner" },
+      { key: "closingDate", label: "Closing Date" },
+      { key: "leadName", label: "Lead" },
     ],
   },
+  { id: "products-section", title: "Products / Line Items", type: "products" },
+  { id: "accounts-section", title: "Accounts", type: "accounts" },
+  { id: "contacts-section", title: "Contacts", type: "contacts" },
+  { id: "services-section", title: "Services", type: "services" },
+  { id: "connected-records-section", title: "Connected Records", type: "connected-records" },
+  { id: "cases-section", title: "Cases", type: "cases" },
+  { id: "solutions-section", title: "Solutions", type: "solutions" },
+  { id: "quotes-section", title: "Quotes", type: "quotes" },
+  { id: "sales-orders-section", title: "Sales Orders", type: "sales-orders" },
+  { id: "invoices-section", title: "Invoices", type: "invoices" },
+  { id: "emails-section", title: "Emails", type: "emails" },
+  { id: "notes-section", title: "Notes", type: "notes" },
 ];
 
 export const dealModuleConfig: CRMModuleConfig<Deal> = {
@@ -82,7 +98,7 @@ export const dealModuleConfig: CRMModuleConfig<Deal> = {
   columns: dealColumns,
   summaryFields: dealSummaryFields,
   detailSections: dealDetailSections,
-  relatedListItems: ["Contacts", "Accounts", "Activities", "Notes"],
+  relatedListItems: ["Products", "Accounts", "Contacts", "Services", "Connected Records", "Cases", "Solutions", "Quotes", "Sales Orders", "Invoices", "Emails", "Notes"],
   headerActions: ["Add Tags", "Send Email", "Create Task", "More"],
   rowActions: dealRowActions,
   filterSections: dealFilterSections,

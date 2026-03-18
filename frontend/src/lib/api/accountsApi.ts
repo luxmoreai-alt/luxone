@@ -13,7 +13,9 @@ type BackendAccount = {
   employees?: number | null;
   owner?: number | null;
   owner_email?: string | null;
+  owner_name?: string | null;
   account_owner?: number | null;
+  owner_details?: { name?: string | null; email?: string | null } | null;
   billing_address?: string | null;
   description?: string | null;
   created_at?: string;
@@ -50,8 +52,10 @@ function normalizeAccount(item: BackendAccount): AccountRecord {
     id: String(item.id),
     accountName,
     accountOwner:
+      item.owner_name ??
       item.owner_email ??
-      (item.account_owner || item.owner ? `User #${item.account_owner ?? item.owner}` : ""),
+      item.owner_details?.name ??
+      (item.account_owner || item.owner ? `User #${item.account_owner ?? item.owner}` : "Assigned to you"),
     accountSite: "",
     parentAccount: "",
     accountNumber: "",

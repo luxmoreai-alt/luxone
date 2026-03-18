@@ -15,10 +15,10 @@ import os
 from dotenv import load_dotenv
 from corsheaders.defaults import default_headers
 
-load_dotenv()
-
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+load_dotenv(BASE_DIR / ".env")
 
 
 # Quick-start development settings - unsuitable for production
@@ -30,6 +30,10 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-#02on6j-^m-dodq#tyr
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
+AUTO_MIGRATE_TENANTS = os.getenv(
+    "AUTO_MIGRATE_TENANTS",
+    "true" if DEBUG else "false",
+).lower() == "true"
 
 ALLOWED_HOSTS = os.getenv(
     'ALLOWED_HOSTS',
@@ -63,6 +67,10 @@ INSTALLED_APPS = [
     'campaigns',
     'activities',
     'notes',
+    'inventory',
+    'support',
+    'services',
+    'integrations',
     'django_filters',
     'saas_admin',
 ]
@@ -212,3 +220,5 @@ SWAGGER_SETTINGS = {
         }
     }
 }
+# Default primary key field type
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

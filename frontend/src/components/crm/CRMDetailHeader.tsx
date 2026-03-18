@@ -4,9 +4,10 @@ type CRMDetailHeaderProps = {
   avatar: string;
   actions: string[];
   onBack: () => void;
+  onActionClick?: (action: string) => void;
 };
 
-export default function CRMDetailHeader({ title, subtitle, avatar, actions, onBack }: CRMDetailHeaderProps) {
+export default function CRMDetailHeader({ title, subtitle, avatar, actions, onBack, onActionClick }: CRMDetailHeaderProps) {
   return (
     <header className="rounded-xl border border-slate-200 bg-white p-4">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -23,7 +24,7 @@ export default function CRMDetailHeader({ title, subtitle, avatar, actions, onBa
               Back
             </button>
             <h1 className="text-2xl font-semibold text-slate-900">{title}</h1>
-            <p className="text-sm text-slate-500">{subtitle}</p>
+            <p className="break-all text-sm text-slate-500">{subtitle}</p>
           </div>
         </div>
 
@@ -31,6 +32,8 @@ export default function CRMDetailHeader({ title, subtitle, avatar, actions, onBa
           {actions.map((action) => (
             <button
               key={action}
+              type="button"
+              onClick={() => onActionClick?.(action)}
               className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
               {action}

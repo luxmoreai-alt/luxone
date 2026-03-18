@@ -47,6 +47,15 @@ export default function CRMTable<T extends CRMRecord>({
   onTogglePinColumn,
   onFilterColumn,
 }: CRMTableProps<T>) {
+  const isLongTextColumn = (columnKey: string) => {
+    const normalized = columnKey.toLowerCase();
+    return (
+      normalized.includes("email") ||
+      normalized.includes("website") ||
+      normalized.includes("address")
+    );
+  };
+
   const [openHeaderMenu, setOpenHeaderMenu] = useState<string | null>(null);
   const [activeFilterColumn, setActiveFilterColumn] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -179,7 +188,9 @@ export default function CRMTable<T extends CRMRecord>({
                   <button
                     type="button"
                     onClick={() => onOpenRow(row)}
-                    className="w-full text-left text-sm text-slate-700"
+                    className={`w-full text-left text-sm text-slate-700 ${
+                      isLongTextColumn(column.key) ? "break-all whitespace-normal" : "break-words"
+                    }`}
                   >
                     {String(row[column.key] || "-")}
                   </button>

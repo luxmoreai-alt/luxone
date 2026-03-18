@@ -18,6 +18,13 @@ from .models import Contact
 from .permissions import filter_queryset_for_user
 
 
+def _normalize_email(value: str | None) -> str | None:
+    if not value:
+        return None
+    normalized = value.strip().lower()
+    return normalized or None
+
+
 class TimelineService:
     @staticmethod
     def log_event(*, contact: Contact, action: str, description: str = "", user=None):
@@ -72,7 +79,6 @@ class ContactService:
         queryset = (
             Contact.objects.filter(is_active=True)
             .select_related("contact_owner", "account", "created_from_lead")
-            .prefetch_related("notes", "activities")
         )
         return filter_queryset_for_user(queryset, user)
 
@@ -89,9 +95,45 @@ class ContactService:
 
     @transaction.atomic
     def create_contact(self, *, data: dict[str, Any], user) -> Contact:
+        if not data.get("account"):
+            raise ValueError("account: Account is required.")
+        if data.get("email"):
+            data["email"] = _normalize_email(data["email"])
         if not data.get("contact_owner"):
             data["contact_owner"] = user
-        contact = Contact.objects.create(**data)
+        existing_contact = None
+        if data.get("created_from_lead"):
+            existing_contact = (
+                Contact.objects.filter(
+                    created_from_lead=data["created_from_lead"],
+                    is_active=True,
+                )
+                .select_related("account", "contact_owner")
+                .first()
+            )
+        if not existing_contact and data.get("email"):
+            existing_contact = (
+                Contact.objects.filter(
+                    email__iexact=data["email"],
+                    account=data["account"],
+                    is_active=True,
+                )
+                .select_related("account", "contact_owner")
+                .first()
+            )
+
+        if existing_contact:
+            updated_fields = []
+            for field, value in data.items():
+                if value in (None, "", []) or getattr(existing_contact, field) == value:
+                    continue
+                setattr(existing_contact, field, value)
+                updated_fields.append(field)
+            if updated_fields:
+                existing_contact.save(update_fields=[*updated_fields, "updated_at"])
+            contact = existing_contact
+        else:
+            contact = Contact.objects.create(**data)
         self.log_activity(
             contact=contact,
             action="Contact created",
@@ -159,7 +201,7 @@ def create_contact_from_lead(*, lead, account, owner=None):
         "first_name": lead.first_name,
         "last_name": lead.last_name,
         "title": lead.title,
-        "email": lead.email,
+        "email": _normalize_email(lead.email),
         "secondary_email": getattr(lead, "secondary_email", None),
         "phone": lead.phone,
         "mobile": lead.mobile,
@@ -167,7 +209,33 @@ def create_contact_from_lead(*, lead, account, owner=None):
         "created_from_lead": lead,
         "lead_source": lead.lead_source,
     }
-    contact = Contact.objects.create(**payload)
+    existing_contact = (
+        Contact.objects.filter(created_from_lead=lead, is_active=True)
+        .select_related("account", "contact_owner")
+        .first()
+    )
+    if not existing_contact and payload["email"]:
+        existing_contact = (
+            Contact.objects.filter(
+                email__iexact=payload["email"],
+                account=account,
+                is_active=True,
+            )
+            .select_related("account", "contact_owner")
+            .first()
+        )
+    if existing_contact:
+        updated_fields = []
+        for field, value in payload.items():
+            if value in (None, "", []) or getattr(existing_contact, field) == value:
+                continue
+            setattr(existing_contact, field, value)
+            updated_fields.append(field)
+        if updated_fields:
+            existing_contact.save(update_fields=[*updated_fields, "updated_at"])
+        contact = existing_contact
+    else:
+        contact = Contact.objects.create(**payload)
     create_contact_activity(
         contact=contact,
         action="Lead converted",

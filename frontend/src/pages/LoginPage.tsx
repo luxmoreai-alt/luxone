@@ -60,6 +60,12 @@ const LoginPage = () => {
   const [passwordError, setPasswordError] = useState("");
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const redirectTo =
+    typeof window.history.state === "object" &&
+    window.history.state !== null &&
+    typeof (window.history.state as { usr?: { from?: unknown } }).usr?.from === "string"
+      ? ((window.history.state as { usr: { from: string } }).usr.from || "/home")
+      : "/home";
 
   const handleNext = async () => {
     const trimmedEmail = email.trim();
@@ -198,7 +204,7 @@ const LoginPage = () => {
       }
 
       console.log("Login success:", data);
-      navigate("/home", { replace: true });
+      navigate(redirectTo, { replace: true });
     } catch (error) {
       console.error("Login error:", error);
       setPasswordError("Unable to connect to backend");

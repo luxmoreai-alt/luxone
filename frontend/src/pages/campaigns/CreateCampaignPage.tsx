@@ -2,9 +2,9 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import { ChevronDown, Info, UserPlus } from "lucide-react";
-import { createCampaign } from "../../lib/api/campaignsApi";
+import { createCampaign, type CampaignFormData } from "../../lib/api/campaignsApi";
 
-type CampaignFormData = {
+type CampaignFormState = {
   campaignOwner: string;
   campaignName: string;
   type: string;
@@ -28,8 +28,35 @@ const selectClass =
 const labelClass =
   "pr-4 text-right text-[14px] font-normal text-[#4e6485]";
 
-const initialFormData: CampaignFormData = {
-  campaignOwner: "John Prakash",
+function getLoggedInUserLabel() {
+  const savedUser = localStorage.getItem("loggedInUser");
+  if (!savedUser) return "Current User";
+  try {
+    const parsed = JSON.parse(savedUser) as {
+      name?: string;
+      full_name?: string;
+      first_name?: string;
+      firstName?: string;
+      username?: string;
+      email?: string;
+      id?: string | number;
+    };
+    return (
+      parsed.name ||
+      parsed.full_name ||
+      parsed.first_name ||
+      parsed.firstName ||
+      parsed.username ||
+      parsed.email ||
+      "Current User"
+    );
+  } catch {
+    return "Current User";
+  }
+}
+
+const initialFormData: CampaignFormState = {
+  campaignOwner: "",
   campaignName: "",
   type: "",
   status: "",
@@ -129,13 +156,18 @@ function CurrencyField({
 export default function CreateCampaignPage() {
   const navigate = useNavigate();
   const [saving, setSaving] = useState(false);
-  const [formData, setFormData] = useState<CampaignFormData>(initialFormData);
+  const [formData, setFormData] = useState<CampaignFormState>(initialFormData);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const ownerLabel = getLoggedInUserLabel();
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
 
+    setError(null);
+    setSuccessMessage(null);
     setFormData((prev) => ({
       ...prev,
       [name]: value,
@@ -144,13 +176,22 @@ export default function CreateCampaignPage() {
 
   const resetForm = () => {
     setFormData(initialFormData);
+    setError(null);
+    setSuccessMessage(null);
   };
 
   const handleSave = async (goToNew = false) => {
+    if (!formData.campaignName.trim()) {
+      setError("Campaign Name is required.");
+      return;
+    }
+
     try {
       setSaving(true);
+      setError(null);
+      setSuccessMessage(null);
 
-      await createCampaign({
+      const payload: CampaignFormData = {
         campaignOwner: formData.campaignOwner,
         campaignName: formData.campaignName,
         type: formData.type,
@@ -163,16 +204,19 @@ export default function CreateCampaignPage() {
         expectedResponse: formData.expectedResponse,
         numbersSent: formData.numbersSent,
         description: formData.description,
-      });
+      };
+
+      await createCampaign(payload);
 
       if (goToNew) {
         resetForm();
+        setSuccessMessage("Campaign created successfully.");
         return;
       }
 
       navigate("/campaigns");
     } catch (error) {
-      console.error("Failed to create campaign:", error);
+      setError(error instanceof Error ? error.message : "Failed to create campaign.");
     } finally {
       setSaving(false);
     }
@@ -222,6 +266,16 @@ export default function CreateCampaignPage() {
         <div className="h-[calc(100%-57px)] overflow-y-auto px-3 py-3">
           <div className="bg-white">
             <div className="px-3 pt-4">
+              {error ? (
+                <div className="mb-4 rounded-[10px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+                  {error}
+                </div>
+              ) : null}
+              {successMessage ? (
+                <div className="mb-4 rounded-[10px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                  {successMessage}
+                </div>
+              ) : null}
               <div className="mb-8">
                 <div className="mb-5 text-[13px] font-semibold text-[#1f2d3d]">
                   Campaign Information
@@ -233,12 +287,13 @@ export default function CreateCampaignPage() {
                     <div className="relative flex items-center gap-0">
                       <input
                         name="campaignOwner"
-                        value={formData.campaignOwner}
-                        onChange={handleChange}
-                        className={`${inputClass} rounded-r-none`}
+                        value={ownerLabel}
+                        readOnly
+                        className={`${inputClass} rounded-r-none bg-slate-50`}
                       />
                       <button
                         type="button"
+                        disabled
                         className="flex h-[34px] w-[34px] items-center justify-center rounded-r-[4px] border border-l-0 border-[#cfd7e6] bg-white text-slate-600"
                       >
                         <UserPlus size={16} />
@@ -251,13 +306,14 @@ export default function CreateCampaignPage() {
                       value={formData.campaignName}
                       onChange={handleChange}
                     />
+                    {!formData.campaignName.trim() ? <p className="col-start-2 -mt-3 text-xs text-red-500">Campaign Name is required.</p> : null}
 
                     <label className={labelClass}>Start Date</label>
                     <TextField
                       name="startDate"
                       value={formData.startDate}
                       onChange={handleChange}
-                      placeholder="DD/MM/YYYY"
+                      type="date"
                     />
 
                     <label className={labelClass}>Expected Revenue</label>
@@ -324,7 +380,7 @@ export default function CreateCampaignPage() {
                       name="endDate"
                       value={formData.endDate}
                       onChange={handleChange}
-                      placeholder="DD/MM/YYYY"
+                      type="date"
                     />
 
                     <label className={labelClass}>Budgeted Cost</label>

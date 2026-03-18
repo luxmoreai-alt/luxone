@@ -3,7 +3,6 @@ import CRMModuleListPage from "../crm/CRMModuleListPage";
 import { contactModuleConfig } from "../../components/modules/contacts/contactsMockData";
 import { deleteContact, getContacts } from "../../lib/api/contactsApi";
 import type { ContactRecord } from "../../lib/shared/crmTypes";
-import FilterSidebar from "../../components/crm/FilterSidebar";
 
 export default function ContactsPage() {
   const [rows, setRows] = useState<ContactRecord[]>([]);
@@ -57,22 +56,12 @@ export default function ContactsPage() {
   };
 
   return (
-    <>
-      <CRMModuleListPage
-        config={contactModuleConfig}
-        rows={rows}
-        showNotes={true}
-        showActivity={false}
-        onDeleteRow={handleDeleteRow}
-      />
-
-      {/* Example usage, update filterTitle/filterSections as needed */}
-      <FilterSidebar
-        title="Contacts Filters"
-        sections={[]}
-        onApply={() => {}}
-        onClear={() => {}}
-      />
-    </>
+    <CRMModuleListPage
+      config={contactModuleConfig}
+      rows={rows}
+      showNotes={true}
+      showActivity={false}
+      onDeleteRow={handleDeleteRow}
+    />
   );
 }

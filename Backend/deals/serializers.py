@@ -1,12 +1,15 @@
 from typing import Any
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
+from core.user_display import get_user_display_name
 from activities.models import LeadActivity
+from inventory.models import Product
 from notes.models import LeadNote
 
-from .models import Deal, DealStage
+from .models import Deal, DealProduct, DealStage
 from .permissions import can_access_deal_owner
 
 User = get_user_model()
@@ -18,12 +21,27 @@ class DealStageSerializer(serializers.ModelSerializer):
         fields = ["id", "stage_name", "probability", "order", "is_closed_stage"]
 
 
+class DealOwnerSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    email = serializers.EmailField(allow_blank=True, allow_null=True)
+    name = serializers.CharField()
+
+
+class DealRelationSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    name = serializers.CharField()
+
+
 class DealListSerializer(serializers.ModelSerializer):
     name = serializers.CharField(source="deal_name", read_only=True)
     owner = serializers.IntegerField(source="deal_owner_id", read_only=True)
     owner_email = serializers.SerializerMethodField()
+    owner_name = serializers.SerializerMethodField()
+    owner_details = serializers.SerializerMethodField()
     account_name = serializers.SerializerMethodField()
+    account_info = serializers.SerializerMethodField()
     contact_name = serializers.SerializerMethodField()
+    contact_info = serializers.SerializerMethodField()
     stage = serializers.CharField(source="stage.stage_name", read_only=True)
     value = serializers.DecimalField(source="expected_revenue", max_digits=15, decimal_places=2, read_only=True)
 
@@ -40,6 +58,8 @@ class DealListSerializer(serializers.ModelSerializer):
             "deal_owner",
             "owner",
             "owner_email",
+            "owner_name",
+            "owner_details",
             "amount",
             "expected_revenue",
             "value",
@@ -47,25 +67,83 @@ class DealListSerializer(serializers.ModelSerializer):
             "probability",
             "closing_date",
             "campaign_source",
+            "account_info",
+            "contact_info",
             "is_closed",
             "is_won",
             "created_at",
         ]
 
     def get_owner_email(self, obj: Deal) -> str | None:
-        if not obj.deal_owner:
+        try:
+            owner = obj.deal_owner
+        except ObjectDoesNotExist:
             return None
-        return obj.deal_owner.email
+        if not owner:
+            return None
+        return owner.email
+
+    def get_owner_name(self, obj: Deal) -> str | None:
+        try:
+            owner = obj.deal_owner
+        except ObjectDoesNotExist:
+            return None
+        if not owner:
+            return None
+        return get_user_display_name(owner)
+
+    def get_owner_details(self, obj: Deal) -> dict[str, Any] | None:
+        try:
+            owner = obj.deal_owner
+        except ObjectDoesNotExist:
+            return None
+        if not owner:
+            return None
+        return DealOwnerSerializer(
+            {
+                "id": obj.deal_owner_id,
+                "email": getattr(owner, "email", "") or "",
+                "name": get_user_display_name(owner),
+            }
+        ).data
 
     def get_account_name(self, obj: Deal) -> str | None:
-        if not obj.account:
+        try:
+            account = obj.account
+        except ObjectDoesNotExist:
             return None
-        return obj.account.account_name
+        if not account:
+            return None
+        return account.account_name
+
+    def get_account_info(self, obj: Deal) -> dict[str, Any] | None:
+        try:
+            account = obj.account
+        except ObjectDoesNotExist:
+            return None
+        if not account:
+            return None
+        return DealRelationSerializer({"id": obj.account_id, "name": account.account_name}).data
 
     def get_contact_name(self, obj: Deal) -> str | None:
-        if not obj.contact:
+        try:
+            contact = obj.contact
+        except ObjectDoesNotExist:
             return None
-        return f"{obj.contact.first_name} {obj.contact.last_name}".strip()
+        if not contact:
+            return None
+        return f"{contact.first_name} {contact.last_name}".strip()
+
+    def get_contact_info(self, obj: Deal) -> dict[str, Any] | None:
+        try:
+            contact = obj.contact
+        except ObjectDoesNotExist:
+            return None
+        if not contact:
+            return None
+        return DealRelationSerializer(
+            {"id": obj.contact_id, "name": f"{contact.first_name} {contact.last_name}".strip()}
+        ).data
 
 
 class DealTimelineSerializer(serializers.ModelSerializer):
@@ -99,8 +177,12 @@ class DealDetailSerializer(serializers.ModelSerializer):
     name = serializers.CharField(source="deal_name", read_only=True)
     owner = serializers.IntegerField(source="deal_owner_id", read_only=True)
     owner_email = serializers.SerializerMethodField()
+    owner_name = serializers.SerializerMethodField()
+    owner_details = serializers.SerializerMethodField()
     account_name = serializers.SerializerMethodField()
+    account_info = serializers.SerializerMethodField()
     contact_name = serializers.SerializerMethodField()
+    contact_info = serializers.SerializerMethodField()
     stage = serializers.CharField(source="stage.stage_name", read_only=True)
     value = serializers.DecimalField(source="expected_revenue", max_digits=15, decimal_places=2, read_only=True)
     timeline = serializers.SerializerMethodField()
@@ -121,6 +203,8 @@ class DealDetailSerializer(serializers.ModelSerializer):
             "deal_owner",
             "owner",
             "owner_email",
+            "owner_name",
+            "owner_details",
             "amount",
             "expected_revenue",
             "value",
@@ -133,6 +217,8 @@ class DealDetailSerializer(serializers.ModelSerializer):
             "next_step",
             "forecast_category",
             "description",
+            "account_info",
+            "contact_info",
             "is_closed",
             "is_won",
             "timeline",
@@ -144,19 +230,75 @@ class DealDetailSerializer(serializers.ModelSerializer):
         ]
 
     def get_owner_email(self, obj: Deal) -> str | None:
-        if not obj.deal_owner:
+        try:
+            owner = obj.deal_owner
+        except ObjectDoesNotExist:
             return None
-        return obj.deal_owner.email
+        if not owner:
+            return None
+        return owner.email
+
+    def get_owner_name(self, obj: Deal) -> str | None:
+        try:
+            owner = obj.deal_owner
+        except ObjectDoesNotExist:
+            return None
+        if not owner:
+            return None
+        return get_user_display_name(owner)
+
+    def get_owner_details(self, obj: Deal) -> dict[str, Any] | None:
+        try:
+            owner = obj.deal_owner
+        except ObjectDoesNotExist:
+            return None
+        if not owner:
+            return None
+        return DealOwnerSerializer(
+            {
+                "id": obj.deal_owner_id,
+                "email": getattr(owner, "email", "") or "",
+                "name": get_user_display_name(owner),
+            }
+        ).data
 
     def get_account_name(self, obj: Deal) -> str | None:
-        if not obj.account:
+        try:
+            account = obj.account
+        except ObjectDoesNotExist:
             return None
-        return obj.account.account_name
+        if not account:
+            return None
+        return account.account_name
+
+    def get_account_info(self, obj: Deal) -> dict[str, Any] | None:
+        try:
+            account = obj.account
+        except ObjectDoesNotExist:
+            return None
+        if not account:
+            return None
+        return DealRelationSerializer({"id": obj.account_id, "name": account.account_name}).data
 
     def get_contact_name(self, obj: Deal) -> str | None:
-        if not obj.contact:
+        try:
+            contact = obj.contact
+        except ObjectDoesNotExist:
             return None
-        return f"{obj.contact.first_name} {obj.contact.last_name}".strip()
+        if not contact:
+            return None
+        return f"{contact.first_name} {contact.last_name}".strip()
+
+    def get_contact_info(self, obj: Deal) -> dict[str, Any] | None:
+        try:
+            contact = obj.contact
+        except ObjectDoesNotExist:
+            return None
+        if not contact:
+            return None
+        return DealRelationSerializer(
+            {"id": obj.contact_id, "name": f"{contact.first_name} {contact.last_name}".strip()}
+        ).data
 
     def get_timeline(self, obj: Deal):
         activities = getattr(obj, "_prefetched_objects_cache", {}).get("activities")
@@ -230,6 +372,18 @@ class DealWriteSerializer(serializers.ModelSerializer):
         if not deal_name:
             raise serializers.ValidationError({"deal_name": "deal_name is required."})
 
+        account = attrs.get("account", getattr(instance, "account", None))
+        if not account:
+            raise serializers.ValidationError({"account": "account is required."})
+
+        contact = attrs.get("contact", getattr(instance, "contact", None))
+        if not contact:
+            raise serializers.ValidationError({"contact": "contact is required."})
+        if contact.account_id and contact.account_id != account.id:
+            raise serializers.ValidationError(
+                {"contact": "Selected contact must belong to the selected account."}
+            )
+
         owner = attrs.get("deal_owner", getattr(instance, "deal_owner", None))
         if request and owner and not can_access_deal_owner(user=request.user, owner_id=owner.id):
             raise serializers.ValidationError({"deal_owner": "You cannot assign this owner."})
@@ -285,3 +439,46 @@ class DealPipelineCardSerializer(serializers.Serializer):
 
 class DealNoteCreateSerializer(serializers.Serializer):
     note = serializers.CharField()
+
+
+class DealProductSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source="product.product_name", read_only=True)
+    product_code = serializers.CharField(source="product.product_code", read_only=True)
+
+    class Meta:
+        model = DealProduct
+        fields = [
+            "id",
+            "product",
+            "product_name",
+            "product_code",
+            "quantity",
+            "unit_price",
+            "discount",
+            "total_price",
+            "created_at",
+        ]
+        read_only_fields = ["total_price", "created_at"]
+
+
+class DealProductCreateSerializer(serializers.ModelSerializer):
+    product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.filter(is_active=True))
+
+    class Meta:
+        model = DealProduct
+        fields = ["product", "quantity", "unit_price", "discount"]
+
+    def validate_quantity(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Quantity must be greater than 0.")
+        return value
+
+    def validate_unit_price(self, value):
+        if value < 0:
+            raise serializers.ValidationError("Unit price must be 0 or more.")
+        return value
+
+    def validate_discount(self, value):
+        if value < 0:
+            raise serializers.ValidationError("Discount must be 0 or more.")
+        return value

@@ -1,9 +1,11 @@
 import re
 from typing import Any
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
+from core.user_display import get_user_display_name
 from activities.models import LeadActivity
 from notes.models import LeadNote
 
@@ -17,6 +19,7 @@ User = get_user_model()
 class ContactOwnerSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     email = serializers.EmailField()
+    name = serializers.CharField()
 
 
 class ContactAccountSerializer(serializers.Serializer):
@@ -33,8 +36,12 @@ class ContactLeadReferenceSerializer(serializers.Serializer):
 
 class ContactListSerializer(serializers.ModelSerializer):
     owner = serializers.IntegerField(source="contact_owner_id", read_only=True)
+    owner_email = serializers.SerializerMethodField()
+    owner_name = serializers.SerializerMethodField()
     owner_details = serializers.SerializerMethodField()
+    account_name = serializers.SerializerMethodField()
     account_info = serializers.SerializerMethodField()
+    contact_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Contact
@@ -50,32 +57,76 @@ class ContactListSerializer(serializers.ModelSerializer):
             "department",
             "contact_owner",
             "owner",
+            "owner_email",
+            "owner_name",
             "owner_details",
             "account",
+            "account_name",
             "account_info",
+            "contact_name",
             "lead_source",
             "is_active",
             "created_at",
             "updated_at",
         ]
 
+    def get_owner_email(self, obj: Contact) -> str | None:
+        try:
+            return obj.contact_owner.email if obj.contact_owner else None
+        except ObjectDoesNotExist:
+            return None
+
     def get_owner_details(self, obj: Contact) -> dict[str, Any] | None:
-        if not obj.contact_owner:
+        try:
+            owner = obj.contact_owner
+        except ObjectDoesNotExist:
+            return None
+        if not owner:
             return None
         return ContactOwnerSerializer(
-            {"id": obj.contact_owner_id, "email": obj.contact_owner.email}
+            {
+                "id": obj.contact_owner_id,
+                "email": owner.email,
+                "name": get_user_display_name(owner),
+            }
         ).data
 
-    def get_account_info(self, obj: Contact) -> dict[str, Any] | None:
-        if not obj.account:
+    def get_owner_name(self, obj: Contact) -> str | None:
+        try:
+            owner = obj.contact_owner
+        except ObjectDoesNotExist:
             return None
-        return ContactAccountSerializer({"id": obj.account_id, "name": obj.account.name}).data
+        if not owner:
+            return None
+        return get_user_display_name(owner)
+
+    def get_account_name(self, obj: Contact) -> str | None:
+        try:
+            return obj.account.name if obj.account else None
+        except ObjectDoesNotExist:
+            return None
+
+    def get_account_info(self, obj: Contact) -> dict[str, Any] | None:
+        try:
+            account = obj.account
+        except ObjectDoesNotExist:
+            return None
+        if not account:
+            return None
+        return ContactAccountSerializer({"id": obj.account_id, "name": account.name}).data
+
+    def get_contact_name(self, obj: Contact) -> str:
+        return f"{obj.first_name} {obj.last_name}".strip()
 
 
 class ContactDetailSerializer(serializers.ModelSerializer):
     owner = serializers.IntegerField(source="contact_owner_id", read_only=True)
+    owner_email = serializers.SerializerMethodField()
+    owner_name = serializers.SerializerMethodField()
     owner_details = serializers.SerializerMethodField()
+    account_name = serializers.SerializerMethodField()
     account_info = serializers.SerializerMethodField()
+    contact_name = serializers.SerializerMethodField()
     lead_conversion_reference = serializers.SerializerMethodField()
     notes_count = serializers.SerializerMethodField()
     activities_count = serializers.SerializerMethodField()
@@ -90,9 +141,13 @@ class ContactDetailSerializer(serializers.ModelSerializer):
             "last_name",
             "contact_owner",
             "owner",
+            "owner_email",
+            "owner_name",
             "owner_details",
             "account",
+            "account_name",
             "account_info",
+            "contact_name",
             "email",
             "secondary_email",
             "phone",
@@ -118,21 +173,60 @@ class ContactDetailSerializer(serializers.ModelSerializer):
         read_only_fields = ["is_active", "created_at", "updated_at"]
 
     def get_owner_details(self, obj: Contact) -> dict[str, Any] | None:
-        if not obj.contact_owner:
+        try:
+            owner = obj.contact_owner
+        except ObjectDoesNotExist:
+            return None
+        if not owner:
             return None
         return ContactOwnerSerializer(
-            {"id": obj.contact_owner_id, "email": obj.contact_owner.email}
+            {
+                "id": obj.contact_owner_id,
+                "email": owner.email,
+                "name": get_user_display_name(owner),
+            }
         ).data
 
-    def get_account_info(self, obj: Contact) -> dict[str, Any] | None:
-        if not obj.account:
+    def get_owner_email(self, obj: Contact) -> str | None:
+        try:
+            return obj.contact_owner.email if obj.contact_owner else None
+        except ObjectDoesNotExist:
             return None
-        return ContactAccountSerializer({"id": obj.account_id, "name": obj.account.name}).data
+
+    def get_owner_name(self, obj: Contact) -> str | None:
+        try:
+            owner = obj.contact_owner
+        except ObjectDoesNotExist:
+            return None
+        if not owner:
+            return None
+        return get_user_display_name(owner)
+
+    def get_account_name(self, obj: Contact) -> str | None:
+        try:
+            return obj.account.name if obj.account else None
+        except ObjectDoesNotExist:
+            return None
+
+    def get_account_info(self, obj: Contact) -> dict[str, Any] | None:
+        try:
+            account = obj.account
+        except ObjectDoesNotExist:
+            return None
+        if not account:
+            return None
+        return ContactAccountSerializer({"id": obj.account_id, "name": account.name}).data
+
+    def get_contact_name(self, obj: Contact) -> str:
+        return f"{obj.first_name} {obj.last_name}".strip()
 
     def get_lead_conversion_reference(self, obj: Contact) -> dict[str, Any] | None:
-        if not obj.created_from_lead:
+        try:
+            lead = obj.created_from_lead
+        except ObjectDoesNotExist:
             return None
-        lead = obj.created_from_lead
+        if not lead:
+            return None
         return ContactLeadReferenceSerializer(
             {
                 "id": lead.id,
@@ -217,6 +311,10 @@ class ContactWriteSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "At least one contact method (email or phone) is required."
             )
+
+        account = attrs.get("account", getattr(instance, "account", None))
+        if not account:
+            raise serializers.ValidationError({"account": "Account is required."})
 
         request = self.context.get("request")
         owner = attrs.get("contact_owner", getattr(instance, "contact_owner", None))

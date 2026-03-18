@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import CRMCreatePage, { type CRMCreateSection } from "../../components/crm/CRMCreatePage";
 import { createLead, getLeadById, updateLead } from "../../lib/api/leadsApi";
+import { getLoggedInUserName } from "../../lib/auth/currentUser";
 import {
   INDUSTRY_OPTIONS,
   LEAD_SOURCE_OPTIONS,
@@ -80,7 +81,7 @@ const sections: CRMCreateSection[] = [
   {
     title: "Lead Information",
     fields: [
-      { name: "leadOwner", label: "Lead Owner", type: "owner" },
+      { name: "leadOwner", label: "Lead Owner", type: "owner", readOnly: true },
       {
         name: "salutation",
         label: "First Name",
@@ -135,12 +136,18 @@ export default function CreateLeadPage() {
   const { id } = useParams<{ id?: string }>();
   const isEditMode = Boolean(id);
   const [loading, setLoading] = useState(false);
-  const [formValues, setFormValues] = useState<LeadCreateValues>(initialValues);
+  const [formValues, setFormValues] = useState<LeadCreateValues>({
+    ...initialValues,
+    leadOwner: getLoggedInUserName(),
+  });
 
   useEffect(() => {
     const loadLead = async () => {
       if (!id) {
-        setFormValues(initialValues);
+        setFormValues({
+          ...initialValues,
+          leadOwner: getLoggedInUserName(),
+        });
         return;
       }
 

@@ -1,4 +1,4 @@
-import type { LeadRecord, Note, TimelineItem } from "../shared/crmTypes";
+import type { ConnectedRecord, EmailRecord, LeadRecord, Note, TimelineItem } from "../shared/crmTypes";
 import { buildApiUrl } from "../../api/config";
 
 const API_BASE = buildApiUrl("").replace(/\/$/, "");
@@ -7,12 +7,15 @@ type BackendLeadList = {
   id: number;
   first_name: string;
   last_name: string;
+  lead_name?: string;
   company: string;
   email: string;
   phone?: string | null;
   lead_source?: string | null;
   owner?: number | null;
   owner_email?: string | null;
+  owner_name?: string | null;
+  owner_details?: { id?: number; email?: string | null; name?: string | null } | null;
   created_at?: string;
 };
 
@@ -20,6 +23,7 @@ type BackendLeadDetail = {
   id: number;
   first_name: string;
   last_name: string;
+  lead_name?: string;
   company: string;
   title?: string | null;
   email: string;
@@ -34,6 +38,14 @@ type BackendLeadDetail = {
   rating?: string | null;
   owner?: number | null;
   owner_email?: string | null;
+  owner_name?: string | null;
+  owner_details?: { id?: number; email?: string | null; name?: string | null } | null;
+  converted_account?: number | null;
+  converted_account_info?: { id?: number; name?: string | null } | null;
+  converted_contact?: number | null;
+  converted_contact_info?: { id?: number; name?: string | null } | null;
+  converted_deal?: number | null;
+  converted_deal_info?: { id?: number; name?: string | null } | null;
   street?: string | null;
   city?: string | null;
   state?: string | null;
@@ -61,6 +73,26 @@ type BackendActivity = {
   timestamp?: string;
 };
 
+type BackendLeadEmail = {
+  id: number;
+  subject: string;
+  from_email: string;
+  to_emails: string[];
+  direction: string;
+  status: string;
+  received_at?: string;
+  sent_at?: string | null;
+  is_read?: boolean;
+};
+
+type BackendLeadConnectedRecord = {
+  id: number;
+  source_type: string;
+  source_label: string;
+  source_reference: string;
+  created_at?: string;
+};
+
 function buildHeaders(): Record<string, string> {
   const token = localStorage.getItem("accessToken");
   const tenantDb = localStorage.getItem("tenantDb");
@@ -84,9 +116,10 @@ function extractResults<T>(data: unknown): T[] {
 }
 
 function normalizeLeadList(item: BackendLeadList): LeadRecord {
+  const ownerLabel = item.owner_name ?? item.owner_details?.name ?? item.owner_email ?? "Assigned to you";
   return {
     id: String(item.id),
-    leadName: `${item.first_name} ${item.last_name}`.trim(),
+    leadName: item.lead_name ?? `${item.first_name} ${item.last_name}`.trim(),
     firstName: item.first_name,
     lastName: item.last_name,
     company: item.company,
@@ -96,7 +129,7 @@ function normalizeLeadList(item: BackendLeadList): LeadRecord {
     phone: item.phone ?? "",
     mobile: "",
     leadSource: item.lead_source ?? "",
-    leadOwner: item.owner_email ?? "",
+    leadOwner: ownerLabel,
     leadStatus: "",
     industry: "",
     annualRevenue: 0,
@@ -118,9 +151,10 @@ function normalizeLeadList(item: BackendLeadList): LeadRecord {
 }
 
 function normalizeLeadDetail(item: BackendLeadDetail): LeadRecord {
+  const ownerLabel = item.owner_name ?? item.owner_details?.name ?? item.owner_email ?? "Assigned to you";
   return {
     id: String(item.id),
-    leadName: `${item.first_name} ${item.last_name}`.trim(),
+    leadName: item.lead_name ?? `${item.first_name} ${item.last_name}`.trim(),
     firstName: item.first_name,
     lastName: item.last_name,
     company: item.company,
@@ -130,7 +164,7 @@ function normalizeLeadDetail(item: BackendLeadDetail): LeadRecord {
     phone: item.phone ?? "",
     mobile: item.mobile ?? "",
     leadSource: item.lead_source ?? "",
-    leadOwner: item.owner_email ?? "",
+    leadOwner: ownerLabel,
     leadStatus: item.lead_status ?? "",
     industry: item.industry ?? "",
     annualRevenue: Number(item.annual_revenue ?? 0),
@@ -369,6 +403,40 @@ export async function getLeadTimeline(id: string): Promise<TimelineItem[]> {
     detail: item.description ?? "",
     at: item.timestamp ?? "",
     by: item.user ?? "",
+  }));
+}
+
+export async function getLeadEmails(id: string): Promise<EmailRecord[]> {
+  const res = await fetch(`${API_BASE}/leads/${id}/emails`, {
+    headers: buildHeaders(),
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  const items: BackendLeadEmail[] = Array.isArray(data) ? data : [];
+  return items.map((item) => ({
+    id: String(item.id),
+    parentId: id,
+    subject: item.subject,
+    sentAt: item.received_at || item.sent_at || "",
+    sentBy: item.from_email,
+    status: item.status === "draft" ? "Draft" : "Sent",
+  }));
+}
+
+export async function getLeadConnectedRecords(id: string): Promise<ConnectedRecord[]> {
+  const res = await fetch(`${API_BASE}/leads/${id}/connected-records`, {
+    headers: buildHeaders(),
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  const items: BackendLeadConnectedRecord[] = Array.isArray(data) ? data : [];
+  return items.map((item) => ({
+    id: String(item.id),
+    parentId: id,
+    recordType: item.source_type,
+    name: item.source_label,
+    owner: "",
+    status: item.source_reference,
   }));
 }
 

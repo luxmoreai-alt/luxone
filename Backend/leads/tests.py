@@ -50,6 +50,25 @@ class LeadDetailActionsTests(APITestCase):
         self.assertEqual(response.data["title"], "Procurement Head")
         self.assertEqual(response.data["lead_status"], Lead.LeadStatus.NEW)
         self.assertEqual(response.data["company"], "Kwik Kopy Printing")
+        self.assertEqual(response.data["owner_name"], "owner@example.com")
+        self.assertEqual(response.data["lead_name"], "James Merced")
+
+    def test_create_lead_defaults_owner_to_authenticated_user(self):
+        response = self.client.post(
+            "/api/leads",
+            {
+                "first_name": "Boomika",
+                "last_name": "M",
+                "company": "Zora",
+                "email": "boomika@example.com",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        created_lead = Lead.objects.get(pk=response.data["id"])
+        self.assertEqual(created_lead.owner, self.user)
+        self.assertEqual(response.data["owner_name"], "owner@example.com")
 
     def test_clone_creates_new_lead_and_timeline_entry(self):
         response = self.client.post(f"/api/leads/{self.lead.pk}/clone")
@@ -94,6 +113,16 @@ class LeadDetailActionsTests(APITestCase):
         self.assertEqual(self.lead.converted_contact_id, response.data["contact_id"])
         self.assertEqual(self.lead.converted_deal_id, response.data["deal_id"])
         self.assertEqual(Deal.objects.get(pk=response.data["deal_id"]).stage, Deal.DealStage.QUALIFICATION)
+        account = Account.objects.get(pk=response.data["account_id"])
+        contact = Contact.objects.get(pk=response.data["contact_id"])
+        deal = Deal.objects.get(pk=response.data["deal_id"])
+        self.assertEqual(account.account_owner, self.user)
+        self.assertEqual(contact.contact_owner, self.user)
+        self.assertEqual(contact.account, account)
+        self.assertEqual(deal.account, account)
+        self.assertEqual(deal.contact, contact)
+        self.assertEqual(deal.deal_owner, self.user)
+        self.assertEqual(deal.deal_name, "Kwik Kopy Expansion")
 
     def test_timeline_lists_logged_activities(self):
         self.client.patch(
@@ -122,6 +151,27 @@ class LeadDetailActionsTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["account_id"], existing_account.pk)
         self.assertEqual(Account.objects.filter(name="Kwik Kopy Printing").count(), 1)
+
+    def test_convert_reuses_existing_contact_for_same_lead(self):
+        account = Account.objects.create(name="Kwik Kopy Printing", owner=self.user)
+        existing_contact = Contact.objects.create(
+            first_name="James",
+            last_name="Merced",
+            email="james@example.com",
+            account=account,
+            contact_owner=self.user,
+            created_from_lead=self.lead,
+        )
+
+        response = self.client.post(
+            f"/api/leads/{self.lead.pk}/convert",
+            {"create_deal": False},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["contact_id"], existing_contact.pk)
+        self.assertEqual(Contact.objects.filter(created_from_lead=self.lead).count(), 1)
 
     def test_convert_requires_company_name(self):
         self.lead.company = ""

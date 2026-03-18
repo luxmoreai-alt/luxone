@@ -15,6 +15,14 @@ from notes.services import create_note
 from .models import Lead
 
 
+def _normalize_company_name(company: str | None) -> str:
+    return (company or "").strip()
+
+
+def _lead_display_name(lead) -> str:
+    return f"{lead.first_name} {lead.last_name}".strip()
+
+
 def bulk_delete_leads(lead_ids):
     with transaction.atomic():
         deleted_count, _ = Lead.objects.filter(id__in=lead_ids).delete()
@@ -95,40 +103,95 @@ def convert_lead(*, lead, user=None, create_deal=False, deal_name=None, deal_val
     if lead.lead_status == Lead.LeadStatus.CONVERTED:
         raise ValidationError("Lead has already been converted.")
 
-    if not lead.company or not lead.company.strip():
+    company_name = _normalize_company_name(lead.company)
+    if not company_name:
         raise ValidationError("Account creation requires company.")
 
     with transaction.atomic():
-        account = Account.objects.filter(account_name__iexact=lead.company.strip()).first()
+        effective_owner = lead.owner or user
+
+        account = Account.objects.filter(
+            account_name__iexact=company_name,
+            is_active=True,
+        ).first()
         if not account:
             account = create_account_from_lead(
                 lead=lead,
-                owner=lead.owner or user,
+                owner=effective_owner,
             )
 
-        contact = create_contact_from_lead(
-            lead=lead,
-            account=account,
-            owner=lead.owner or user,
+        contact = (
+            lead.generated_contacts.filter(is_active=True)
+            .select_related("account", "contact_owner")
+            .first()
         )
+        if contact:
+            changed_fields = []
+            if contact.account_id != account.id:
+                contact.account = account
+                changed_fields.append("account")
+            if not contact.contact_owner_id and effective_owner:
+                contact.contact_owner = effective_owner
+                changed_fields.append("contact_owner")
+            if changed_fields:
+                contact.save(update_fields=[*changed_fields, "updated_at"])
+        else:
+            contact = create_contact_from_lead(
+                lead=lead,
+                account=account,
+                owner=effective_owner,
+            )
 
-        deal = None
-        if create_deal:
+        if create_deal and not deal_name:
+            deal_name = f"{company_name} - {_lead_display_name(lead)} Deal".strip(" -")
+
+        deal = lead.converted_deal if lead.converted_deal_id else None
+        if deal and create_deal:
+            changed_fields = []
+            if deal.account_id != account.id:
+                deal.account = account
+                changed_fields.append("account")
+            if deal.contact_id != contact.id:
+                deal.contact = contact
+                changed_fields.append("contact")
+            if not deal.deal_owner_id and effective_owner:
+                deal.deal_owner = effective_owner
+                changed_fields.append("deal_owner")
+            if deal_name and deal.deal_name != deal_name:
+                deal.deal_name = deal_name
+                changed_fields.append("deal_name")
+            if deal_value is not None:
+                deal.amount = deal_value
+                deal.expected_revenue = deal_value
+                changed_fields.extend(["amount", "expected_revenue"])
+            if changed_fields:
+                deduped_fields = []
+                for field in changed_fields:
+                    if field not in deduped_fields:
+                        deduped_fields.append(field)
+                deal.save(update_fields=[*deduped_fields, "updated_at"])
+        elif create_deal:
             deal = create_deal_from_lead(
                 lead=lead,
                 account=account,
                 contact=contact,
-                owner=lead.owner or user,
+                owner=effective_owner,
                 deal_name=deal_name,
                 deal_value=deal_value,
             )
 
+        if not lead.owner_id and effective_owner:
+            lead.owner = effective_owner
+
+        lead.company = company_name
         lead.lead_status = Lead.LeadStatus.CONVERTED
         lead.converted_account = account
         lead.converted_contact = contact
         lead.converted_deal = deal
         lead.save(
             update_fields=[
+                "owner",
+                "company",
                 "lead_status",
                 "converted_account",
                 "converted_contact",

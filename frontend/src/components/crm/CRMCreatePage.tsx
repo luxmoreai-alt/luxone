@@ -15,6 +15,7 @@ export type CRMCreateFieldType =
   | "country"
   | "state"
   | "owner"
+  | "lookup"
   | "name-composite";
 
 export type CRMCreateField = {
@@ -25,6 +26,7 @@ export type CRMCreateField = {
   secondaryName?: string;
   placeholder?: string;
   rows?: number;
+  readOnly?: boolean;
 };
 
 export type CRMCreateSection = {
@@ -255,7 +257,30 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
           onChange={handleChange}
           className={inputClass}
           placeholder={field.placeholder ?? ""}
+          readOnly={field.readOnly}
         />
+      );
+    }
+
+    if (field.type === "lookup") {
+      const listId = `${field.name}-lookup-options`;
+      return (
+        <>
+          <input
+            name={field.name}
+            value={value}
+            onChange={handleChange}
+            className={inputClass}
+            placeholder={field.placeholder ?? ""}
+            list={listId}
+            readOnly={field.readOnly}
+          />
+          <datalist id={listId}>
+            {(field.options ?? []).map((option) => (
+              <option key={option} value={option} />
+            ))}
+          </datalist>
+        </>
       );
     }
 
@@ -304,6 +329,7 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
         onChange={handleChange}
         placeholder={field.placeholder ?? ""}
         className={inputClass}
+        readOnly={field.readOnly}
       />
     );
   };

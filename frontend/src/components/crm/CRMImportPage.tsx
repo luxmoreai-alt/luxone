@@ -148,7 +148,7 @@ const buildModuleConfig = (moduleKey: string): ModuleConfig | null => {
 
   if (moduleKey === "contacts") {
     return {
-      endpoint: "/contact/import",
+      endpoint: "/contacts/import",
       fields: [
         { key: "full_name", label: "Full Name", virtual: true },
         { key: "first_name", label: "First Name", required: true },

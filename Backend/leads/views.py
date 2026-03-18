@@ -1,7 +1,6 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import EmailValidator
 from django.db import transaction
-from django.db.models import Prefetch
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
@@ -22,14 +21,17 @@ from .serializers import (
     LeadActionSerializer,
     LeadCallSerializer,
     LeadCloneResponseSerializer,
+    LeadConnectedRecordSerializer,
     LeadConvertRequestSerializer,
     LeadConvertResponseSerializer,
     LeadDetailSerializer,
+    LeadEmailSerializer,
     LeadListSerializer,
     LeadMeetingSerializer,
     LeadNoteCreateSerializer,
     LeadSendEmailSerializer,
 )
+from integrations.services import get_lead_connected_records, get_lead_emails
 from .services import (
     bulk_delete_leads,
     clone_lead,
@@ -60,20 +62,12 @@ class LeadViewSet(viewsets.ModelViewSet):
     ]
 
     def get_queryset(self):
-        return (
-            Lead.objects.select_related("owner")
-            .prefetch_related(
-                Prefetch(
-                    "activities",
-                    queryset=LeadActivity.objects.select_related("user"),
-                ),
-                Prefetch(
-                    "notes",
-                    queryset=LeadNote.objects.select_related("created_by"),
-                ),
-            )
-            .all()
-        )
+        return Lead.objects.select_related(
+            "owner",
+            "converted_account",
+            "converted_contact",
+            "converted_deal",
+        ).all()
 
     def get_serializer_class(self):
         if self.action == "list":
@@ -97,7 +91,7 @@ class LeadViewSet(viewsets.ModelViewSet):
         return LeadDetailSerializer
 
     def perform_create(self, serializer):
-        lead = serializer.save()
+        lead = serializer.save(owner=serializer.validated_data.get("owner") or self.request.user)
         create_activity_log(
             lead=lead,
             action="Lead Created",
@@ -106,7 +100,7 @@ class LeadViewSet(viewsets.ModelViewSet):
         )
 
     def perform_update(self, serializer):
-        lead = serializer.save()
+        lead = serializer.save(owner=serializer.validated_data.get("owner") or serializer.instance.owner or self.request.user)
         create_activity_log(
             lead=lead,
             action="Lead Updated",
@@ -471,3 +465,15 @@ class LeadViewSet(viewsets.ModelViewSet):
             user=request.user,
         )
         return Response({"message": "Email logged successfully"}, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["get"], url_path="emails")
+    def emails(self, request, pk=None):
+        lead = self.get_object()
+        serializer = LeadEmailSerializer(get_lead_emails(lead.pk), many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["get"], url_path="connected-records")
+    def connected_records(self, request, pk=None):
+        lead = self.get_object()
+        serializer = LeadConnectedRecordSerializer(get_lead_connected_records(lead.pk), many=True)
+        return Response(serializer.data)

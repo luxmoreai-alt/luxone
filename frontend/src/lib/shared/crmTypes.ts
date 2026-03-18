@@ -1,4 +1,18 @@
-export type CRMModule = "leads" | "contacts" | "accounts" | "deals";
+export type CRMModule =
+  | "leads"
+  | "contacts"
+  | "accounts"
+  | "deals"
+  | "cases"
+  | "solutions"
+  | "products"
+  | "price-books"
+  | "quotes"
+  | "sales-orders"
+  | "purchase-orders"
+  | "invoices"
+  | "vendors"
+  | "configurator";
 
 export type LeadRecord = {
   id: string;
@@ -96,7 +110,165 @@ export type Deal = {
   updatedAt?: string;
 };
 
-export type CRMRecord = LeadRecord | ContactRecord | AccountRecord | Deal;
+export type InventoryProductRecord = {
+  id: string;
+  productName: string;
+  productCode: string;
+  owner: string;
+  vendorName: string;
+  manufacturer: string;
+  productCategory: string;
+  unitPrice: number;
+  tax: number;
+  quantityInStock: number;
+  reorderLevel: number;
+  usageUnit: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SupportCaseRecord = {
+  id: string;
+  caseNumber: string;
+  subject: string;
+  status: string;
+  priority: string;
+  caseOrigin: string;
+  caseReason: string;
+  type: string;
+  relatedTo: string;
+  accountName: string;
+  productName: string;
+  owner: string;
+  company: string;
+  country: string;
+  email: string;
+  phone: string;
+  createdAt: string;
+  updatedAt: string;
+  lastActivityAt: string;
+};
+
+export type SupportSolutionRecord = {
+  id: string;
+  solutionNumber: string;
+  solutionTitle: string;
+  status: string;
+  question: string;
+  owner: string;
+  productName: string;
+  noOfComments: number;
+  createdAt: string;
+  updatedAt: string;
+  lastActivityAt: string;
+};
+
+export type InventoryVendorRecord = {
+  id: string;
+  vendorName: string;
+  email: string;
+  phone: string;
+  website: string;
+  vendorOwner: string;
+  category: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PriceBookRecord = {
+  id: string;
+  name: string;
+  owner: string;
+  active: string;
+  pricingModel: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type QuoteRecord = {
+  id: string;
+  subject: string;
+  owner: string;
+  quoteStage: string;
+  accountName: string;
+  contactName: string;
+  dealName: string;
+  validUntil: string;
+  grandTotal: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SalesOrderRecord = {
+  id: string;
+  subject: string;
+  owner: string;
+  status: string;
+  accountName: string;
+  contactName: string;
+  dealName: string;
+  dueDate: string;
+  grandTotal: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PurchaseOrderRecord = {
+  id: string;
+  subject: string;
+  owner: string;
+  status: string;
+  vendorName: string;
+  contactName: string;
+  poNumber: string;
+  dueDate: string;
+  grandTotal: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type InventoryInvoiceRecord = {
+  id: string;
+  subject: string;
+  owner: string;
+  status: string;
+  accountName: string;
+  contactName: string;
+  dealName: string;
+  invoiceDate: string;
+  dueDate: string;
+  grandTotal: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ConfiguratorRecord = {
+  id: string;
+  name: string;
+  targetModule: string;
+  layout: string;
+  subform: string;
+  lookupField: string;
+  active: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CRMRecord =
+  | LeadRecord
+  | ContactRecord
+  | AccountRecord
+  | Deal
+  | SupportCaseRecord
+  | SupportSolutionRecord
+  | InventoryProductRecord
+  | InventoryVendorRecord
+  | PriceBookRecord
+  | QuoteRecord
+  | SalesOrderRecord
+  | PurchaseOrderRecord
+  | InventoryInvoiceRecord
+  | ConfiguratorRecord;
 
 export type FilterSectionItem = string | { label: string; key: string };
 
@@ -135,9 +307,13 @@ export type Meeting = {
 export type Product = {
   id: string;
   parentId: string;
+  productId?: string;
   productName: string;
   quantity: number;
+  unitPrice?: number;
+  discount?: number;
   amount: number;
+  total?: number;
 };
 
 export type Case = {
@@ -147,6 +323,14 @@ export type Case = {
   subject: string;
   status: string;
   priority: string;
+};
+
+export type Solution = {
+  id: string;
+  parentId: string;
+  solutionNumber: string;
+  solutionTitle: string;
+  status: string;
 };
 
 export type Quote = {
@@ -250,7 +434,12 @@ export type CRMDetailSection<T extends CRMRecord> = {
     | "activities-closed"
     | "meetings"
     | "products"
+    | "price-books"
     | "cases"
+    | "solutions"
+    | "contacts"
+    | "leads"
+    | "accounts"
     | "quotes"
     | "sales-orders"
     | "purchase-orders"
@@ -258,6 +447,7 @@ export type CRMDetailSection<T extends CRMRecord> = {
     | "emails"
     | "notes"
     | "connected-records"
+    | "services"
     | "social"
     | "links"
     | "generic";
