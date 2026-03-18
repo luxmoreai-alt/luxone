@@ -44,6 +44,10 @@ export default function DealsPage() {
     setRows((prev) => prev.filter((row) => row.id !== id));
   };
 
+  if (error && !loading && rows.length === 0) {
+    return <div className="p-6 text-sm text-rose-600">{error}</div>;
+  }
+
   return (
     <CRMModuleListPage
       config={dealModuleConfig}

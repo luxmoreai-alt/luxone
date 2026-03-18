@@ -63,7 +63,7 @@ export default function MeetingDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
-  const [filters, setFilters] = useState<FilterMap>({});
+  const [, setFilters] = useState<FilterMap>({});
 
   useEffect(() => {
     let isMounted = true;

@@ -15,7 +15,6 @@ import {
   ArrowUpDown,
   RefreshCw,
   Grid2x2,
-  CalendarDays,
   User,
   Lock,
 } from "lucide-react";
@@ -239,7 +238,7 @@ export default function CallsPage() {
   const [calls, setCalls] = useState<CallRecord[]>([]);
 
   const [searchText, setSearchText] = useState("");
-  const [selectedTopView, setSelectedTopView] = useState("All Calls");
+  const [selectedTopView] = useState("All Calls");
   const [selectedFilterItems, setSelectedFilterItems] = useState<string[]>([]);
   const [showCreateMenu, setShowCreateMenu] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);

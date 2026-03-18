@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, Loader2, Pencil, Trash2, X } from "lucide-react";
+import { AlertCircle, Loader2, Trash2, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { apiRequest } from "../../../api/client";
 

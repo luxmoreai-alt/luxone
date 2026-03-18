@@ -43,6 +43,10 @@ export default function AccountsPage() {
     setRows((prev) => prev.filter((r) => r.id !== id));
   };
 
+  if (error && !loading && rows.length === 0) {
+    return <div className="p-6 text-sm text-rose-600">{error}</div>;
+  }
+
   return (
     <CRMModuleListPage
       config={accountModuleConfig}

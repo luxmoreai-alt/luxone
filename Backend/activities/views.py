@@ -9,6 +9,7 @@ from organizations.services import (
     can_assign_to_user,
     filter_queryset_by_access,
     get_assignable_users,
+    get_visible_user_ids,
 )
 
 from .models import LeadActivity, Task, Meeting, Call
@@ -94,18 +95,40 @@ class TaskViewSet(ModelViewSet):
 
 
 class MeetingViewSet(ModelViewSet):
-    queryset = Meeting.objects.select_related("organizer", "lead", "contact", "account", "deal").all()
     serializer_class = MeetingSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        base_qs = Meeting.objects.select_related("organizer", "lead", "contact", "account", "deal")
+        user_org = getattr(user, "organization_id", None)
+        if not user_org:
+            return base_qs.all()
+        visible_user_ids = get_visible_user_ids(user)
+        return base_qs.filter(
+            organizer_id__in=visible_user_ids,
+            organizer__organization_id=user_org,
+        )
 
     def perform_create(self, serializer):
         serializer.save(organizer=self.request.user)
 
 
 class CallViewSet(ModelViewSet):
-    queryset = Call.objects.select_related("owner", "lead", "contact", "account", "deal").all()
     serializer_class = CallSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        base_qs = Call.objects.select_related("owner", "lead", "contact", "account", "deal")
+        user_org = getattr(user, "organization_id", None)
+        if not user_org:
+            return base_qs.all()
+        visible_user_ids = get_visible_user_ids(user)
+        return base_qs.filter(
+            owner_id__in=visible_user_ids,
+            owner__organization_id=user_org,
+        )
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
