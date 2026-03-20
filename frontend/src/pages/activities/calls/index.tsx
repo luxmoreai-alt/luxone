@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronDown, Filter, Pencil, Search, X } from "lucide-react";
+import { ChevronDown, Filter, Loader2, Pencil, Search, Trash2, X } from "lucide-react";
 import FilterSidebar from "../../../components/crm/FilterSidebar";
 import DashboardLayout from "../../../components/layout/DashboardLayout";
 import { apiRequest } from "../../../api/client";
@@ -654,6 +654,8 @@ export default function CallsPage() {
   const [saving, setSaving] = useState(false);
   const [selectedCall, setSelectedCall] = useState<CallRecord | null>(null);
   const [editingCall, setEditingCall] = useState<CallRecord | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [deleting, setDeleting] = useState(false);
 
   const loadCalls = useCallback(async () => {
     try {
@@ -715,6 +717,47 @@ export default function CallsPage() {
       alert(err instanceof Error ? err.message : "Failed to update call");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (checked: boolean) => {
+    setSelectedIds(checked ? new Set(calls.map((c) => c.id)) : new Set());
+  };
+
+  const handleDeleteSingle = async (id: number) => {
+    if (!confirm("Delete this call? This cannot be undone.")) return;
+    setDeleting(true);
+    try {
+      await apiRequest(`/calls/${id}/`, { method: "DELETE" });
+      setCalls((prev) => prev.filter((c) => c.id !== id));
+      setSelectedIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
+    } catch {
+      alert("Could not delete this call. Please try again.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (!confirm(`Delete ${selectedIds.size} call${selectedIds.size !== 1 ? "s" : ""}? This cannot be undone.`)) return;
+    setDeleting(true);
+    const ids = [...selectedIds];
+    try {
+      await Promise.all(ids.map((id) => apiRequest(`/calls/${id}/`, { method: "DELETE" })));
+      setCalls((prev) => prev.filter((c) => !selectedIds.has(c.id)));
+      setSelectedIds(new Set());
+    } catch {
+      alert("Some calls could not be deleted. Please try again.");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -796,6 +839,31 @@ export default function CallsPage() {
           )}
 
           <div className="flex-1">
+            {/* Bulk selection bar */}
+            {selectedIds.size > 0 && (
+              <div className="mb-3 flex items-center gap-3 rounded-lg bg-slate-800 px-5 py-2.5">
+                <span className="text-sm font-medium text-white">
+                  {selectedIds.size} record{selectedIds.size !== 1 ? "s" : ""} selected
+                </span>
+                <span className="text-slate-500">·</span>
+                <button type="button" onClick={() => setSelectedIds(new Set())} className="text-sm text-slate-400 hover:text-white">
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleDeleteSelected()}
+                  disabled={deleting}
+                  className="ml-2 flex items-center gap-1.5 rounded border border-red-400 px-3 py-1 text-xs font-medium text-red-400 transition hover:bg-red-500 hover:text-white disabled:opacity-60"
+                >
+                  {deleting ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                  {deleting ? "Deleting…" : "Delete"}
+                </button>
+                <button type="button" onClick={() => setSelectedIds(new Set())} className="ml-auto rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-white">
+                  <X size={15} />
+                </button>
+              </div>
+            )}
+
             {loading ? (
               <div className="rounded-xl border border-slate-200 bg-white p-6 text-center">
                 <p className="text-sm text-slate-500">Loading calls...</p>
@@ -813,54 +881,79 @@ export default function CallsPage() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b bg-slate-50">
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Subject</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Call Type</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Call Start Time</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Duration</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Call For</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Related To</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Status</th>
-                      <th className="px-6 py-3 text-right text-sm font-semibold text-slate-900">Action</th>
+                      <th className="w-10 px-4 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.size === calls.length && calls.length > 0}
+                          ref={(el) => { if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < calls.length; }}
+                          onChange={(e) => toggleSelectAll(e.target.checked)}
+                          className="h-4 w-4 cursor-pointer rounded border-slate-300 accent-blue-600"
+                        />
+                      </th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900">Subject</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900">Call Type</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900">Call Start Time</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900">Duration</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900">Call For</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900">Related To</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900">Status</th>
+                      <th className="px-4 py-3 text-right text-sm font-semibold text-slate-900">Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {calls.map((call) => (
                       <tr
                         key={call.id}
-                        className="cursor-pointer border-b transition hover:bg-slate-50"
+                        className={`cursor-pointer border-b transition hover:bg-slate-50 ${selectedIds.has(call.id) ? "bg-blue-50" : ""}`}
                         onClick={() => setSelectedCall(call)}
                       >
-                        <td className="px-6 py-4 text-sm font-medium text-blue-600 underline-offset-2 hover:underline">
+                        <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(call.id)}
+                            onChange={() => toggleSelect(call.id)}
+                            className="h-4 w-4 cursor-pointer rounded border-slate-300 accent-blue-600"
+                          />
+                        </td>
+                        <td className="px-4 py-4 text-sm font-medium text-blue-600 underline-offset-2 hover:underline">
                           {call.subject}
                         </td>
-                        <td className="px-6 py-4 text-sm text-slate-600">{call.callType}</td>
-                        <td className="px-6 py-4 text-sm text-slate-600">
+                        <td className="px-4 py-4 text-sm text-slate-600">{call.callType}</td>
+                        <td className="px-4 py-4 text-sm text-slate-600">
                           {formatDisplayDate(call.startDate)} {formatDisplayTime(call.startTime)}
                         </td>
-                        <td className="px-6 py-4 text-sm text-slate-600">
+                        <td className="px-4 py-4 text-sm text-slate-600">
                           {String(call.durationMinutes).padStart(2, "0")}m {String(call.durationSeconds).padStart(2, "0")}s
                         </td>
-                        <td className="px-6 py-4 text-sm text-slate-600">{call.callFor}</td>
-                        <td className="px-6 py-4 text-sm text-slate-600">{call.relatedTo}</td>
-                        <td className="px-6 py-4 text-sm">
+                        <td className="px-4 py-4 text-sm text-slate-600">{call.callFor}</td>
+                        <td className="px-4 py-4 text-sm text-slate-600">{call.relatedTo}</td>
+                        <td className="px-4 py-4 text-sm">
                           <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
                             call.status === "Completed" ? "bg-green-100 text-green-800" : "bg-blue-100 text-blue-800"
                           }`}>
                             {call.status}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-right">
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setEditingCall(call);
-                            }}
-                            className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
-                          >
-                            <Pencil size={14} />
-                            Edit
-                          </button>
+                        <td className="px-4 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setEditingCall(call)}
+                              className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+                            >
+                              <Pencil size={14} />
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleDeleteSingle(call.id)}
+                              disabled={deleting}
+                              className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-sm text-red-600 hover:bg-red-100 disabled:opacity-60"
+                            >
+                              <Trash2 size={14} />
+                              Delete
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}

@@ -25,7 +25,7 @@ type ModuleToolbarProps = {
   isFilterOpen: boolean;
   onToggleFilter: () => void;
   onCreateClick: () => void;
-  onMassAction?: (action: "mass-delete" | "mass-update" | "mass-convert") => void;
+  onMassAction?: (action: "mass-delete" | "mass-update") => void;
 };
 
 const defaultSortFields = [
@@ -237,7 +237,7 @@ export default function ModuleToolbar({
 
             {ellipsisMenuOpen && (
               <div className="absolute right-0 top-[42px] z-50 min-w-[160px] rounded-md border border-slate-200 bg-white py-1 shadow-lg">
-                {(["Mass Delete", "Mass Update", "Mass Convert"] as const).map((item) => (
+                {(["Mass Delete", "Mass Update"] as const).map((item) => (
                   <button
                     key={item}
                     type="button"
@@ -246,7 +246,6 @@ export default function ModuleToolbar({
                       const actionMap = {
                         "Mass Delete": "mass-delete",
                         "Mass Update": "mass-update",
-                        "Mass Convert": "mass-convert",
                       } as const;
                       onMassAction?.(actionMap[item]);
                     }}

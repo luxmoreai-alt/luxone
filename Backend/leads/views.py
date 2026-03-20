@@ -93,15 +93,7 @@ class LeadViewSet(viewsets.ModelViewSet):
         else:
             role = getattr(user, "role", "employee")
 
-            if role == "admin":
-                qs = base_qs.filter(organization_id=user_org)
-            elif role == "manager":
-                team_ids = user.team_members.values_list("id", flat=True)
-                qs = base_qs.filter(organization_id=user_org).filter(
-                    django_models.Q(owner=user) | django_models.Q(owner__in=team_ids)
-                )
-            else:
-                qs = base_qs.filter(organization_id=user_org, owner=user)
+            qs = base_qs.filter(organization_id=user_org)
 
         owner_id = self.request.query_params.get("owner_id")
         if owner_id and getattr(user, "role", "employee") in ("admin", "manager"):

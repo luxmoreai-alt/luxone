@@ -30,6 +30,13 @@ export default function CreateProjectPage() {
   const [formData, setFormData] = useState<CreateProjectPayload>(emptyForm);
 
   useEffect(() => {
+    if (isEdit) return;
+    apiRequest<{ project_code: string }>("/projects/next-code/")
+      .then((data) => setFormData((prev) => ({ ...prev, project_code: data.project_code })))
+      .catch(() => {});
+  }, [isEdit]);
+
+  useEffect(() => {
     if (!isEdit) return;
     const fetchProject = async () => {
       try {
@@ -140,9 +147,14 @@ export default function CreateProjectPage() {
                   type="text"
                   name="project_code"
                   value={formData.project_code}
-                  onChange={handleChange}
-                  placeholder="PRJ-003"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
+                  onChange={isEdit ? handleChange : undefined}
+                  readOnly={!isEdit}
+                  placeholder="PRJ0001"
+                  className={`w-full rounded-lg border px-3 py-2.5 text-sm outline-none ${
+                    isEdit
+                      ? "border-slate-300 focus:border-blue-500"
+                      : "border-slate-200 bg-slate-50 text-slate-500 cursor-default"
+                  }`}
                   required
                 />
               </FormField>

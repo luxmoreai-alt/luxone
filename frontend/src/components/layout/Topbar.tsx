@@ -14,9 +14,14 @@ import {
   Mail,
   Shield,
   LogOut,
-  UserCircle2,
+  Building2,
+  UserCog,
+  Briefcase,
+  Clock,
+  Loader2,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { apiRequest } from "../../api/client";
 
 type TopbarProps = {
   sidebarOpen: boolean;
@@ -33,6 +38,23 @@ type LoggedInUser = {
   role?: string;
   id?: string | number;
   is_admin?: boolean;
+};
+
+type FullUserDetail = {
+  id: number;
+  email: string;
+  name?: string;
+  role: string;
+  role_display?: string;
+  department?: string;
+  department_display?: string;
+  status?: string;
+  status_display?: string;
+  is_active: boolean;
+  must_change_password?: boolean;
+  manager_email?: string | null;
+  organization_name?: string | null;
+  created_at?: string;
 };
 
 const getPageTitle = (pathname: string) => {
@@ -76,10 +98,11 @@ export default function Topbar({
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [user, setUser] = useState<LoggedInUser>({});
+  const [fullUser, setFullUser] = useState<FullUserDetail | null>(null);
+  const [loadingFull, setLoadingFull] = useState(false);
 
   useEffect(() => {
     const savedUser = localStorage.getItem("loggedInUser");
-
     if (savedUser) {
       try {
         const parsedUser = JSON.parse(savedUser);
@@ -89,6 +112,15 @@ export default function Topbar({
       }
     }
   }, []);
+
+  useEffect(() => {
+    if (!profileOpen || fullUser) return;
+    setLoadingFull(true);
+    apiRequest<FullUserDetail>("/auth/manage-users/me/")
+      .then((data) => setFullUser(data))
+      .catch(() => {})
+      .finally(() => setLoadingFull(false));
+  }, [profileOpen, fullUser]);
 
   const displayName =
     user.name ||
@@ -100,14 +132,13 @@ export default function Topbar({
     "User";
 
   const displayEmail = user.email || "No email";
-  const displayRole = user.is_admin ? "Administrator" : user.role || "User";
-  const displayId = user.id || "N/A";
 
   const handleLogout = () => {
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
-    localStorage.removeItem("tenantDb");
-    localStorage.removeItem("loggedInUser");
+    // Clear all auth keys and fire the logout event so RequireAuth updates
+    ["accessToken", "refreshToken", "tenantDb", "loggedInUser", "isLoggedIn"].forEach(
+      (key) => localStorage.removeItem(key)
+    );
+    window.dispatchEvent(new CustomEvent("auth:logout"));
     navigate("/login");
   };
 
@@ -198,48 +229,60 @@ export default function Topbar({
                 </button>
               </div>
 
-              <div className="flex-1 p-5">
-                <div className="mb-6 flex items-center gap-4">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100">
-                    <UserCircle2 size={34} className="text-slate-600" />
+              <div className="flex-1 overflow-y-auto p-5">
+                {/* Avatar + name */}
+                <div className="mb-5 flex items-center gap-4">
+                  <div className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-2xl font-bold uppercase ${
+                    fullUser?.status === "terminated" ? "bg-red-100 text-red-600"
+                    : fullUser?.status === "inactive" ? "bg-slate-100 text-slate-500"
+                    : "bg-blue-100 text-blue-700"
+                  }`}>
+                    {displayName[0]}
                   </div>
-
-                  <div>
-                    <h3 className="text-xl font-semibold text-slate-800">
-                      {displayName}
-                    </h3>
-                    <p className="mt-1 text-sm text-slate-500">{displayRole}</p>
-                  </div>
-                </div>
-
-                <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                      User ID
-                    </p>
-                    <p className="mt-1 text-sm text-slate-800">{displayId}</p>
-                  </div>
-
-                  <div className="flex items-start gap-3">
-                    <Mail size={16} className="mt-0.5 text-slate-500" />
-                    <div>
-                      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                        Email
-                      </p>
-                      <p className="mt-1 text-sm text-slate-800">{displayEmail}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-3">
-                    <Shield size={16} className="mt-0.5 text-slate-500" />
-                    <div>
-                      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                        Role
-                      </p>
-                      <p className="mt-1 text-sm text-slate-800">{displayRole}</p>
-                    </div>
+                  <div className="min-w-0">
+                    <h3 className="truncate text-lg font-bold text-slate-900">{displayName}</h3>
+                    <p className="truncate text-xs text-slate-400">{displayEmail}</p>
+                    {fullUser?.status && (
+                      <span className={`mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${
+                        fullUser.status === "active" ? "bg-green-100 text-green-700"
+                        : fullUser.status === "inactive" ? "bg-amber-100 text-amber-700"
+                        : "bg-red-100 text-red-700"
+                      }`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${
+                          fullUser.status === "active" ? "bg-green-500"
+                          : fullUser.status === "inactive" ? "bg-amber-500"
+                          : "bg-red-500"
+                        }`} />
+                        {fullUser.status_display || fullUser.status}
+                      </span>
+                    )}
                   </div>
                 </div>
+
+                {loadingFull ? (
+                  <div className="flex items-center justify-center py-10 text-slate-400">
+                    <Loader2 size={20} className="animate-spin mr-2" /> Loading details…
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {[
+                      { icon: <Mail size={14} />, label: "Email", value: fullUser?.email || displayEmail },
+                      { icon: <Shield size={14} />, label: "Role", value: fullUser?.role_display || fullUser?.role || user.role || "—" },
+                      { icon: <Briefcase size={14} />, label: "Department", value: fullUser?.department_display || fullUser?.department || "—" },
+                      { icon: <Building2 size={14} />, label: "Organization", value: fullUser?.organization_name || "—" },
+                      ...(fullUser?.manager_email ? [{ icon: <UserCog size={14} />, label: "Manager", value: fullUser.manager_email }] : []),
+                      { icon: <Clock size={14} />, label: "Member Since", value: fullUser?.created_at ? new Date(fullUser.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—" },
+                    ].map(({ icon, label, value }) => (
+                      <div key={label} className="flex items-start gap-3 rounded-lg border border-slate-100 bg-slate-50 px-4 py-3">
+                        <span className="mt-0.5 text-slate-400">{icon}</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+                          <p className="mt-0.5 truncate text-sm font-medium text-slate-800">{value}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="border-t border-slate-200 p-4">

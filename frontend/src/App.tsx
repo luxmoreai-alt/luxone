@@ -1,10 +1,9 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { DashboardLayoutRoute } from "./components/layout/DashboardLayout";
-import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
-import OtpLoginPage from "./pages/OtpLoginPage";
+import ChangePasswordPage from "./pages/ChangePasswordPage";
 import AccountDetailPage from "./pages/accounts/AccountDetailPage";
 import AccountsPage from "./pages/accounts/AccountsPage";
 import CallsPage from "./pages/activities/calls";
@@ -15,7 +14,11 @@ import CreateTaskPage from "./pages/activities/tasks/CreateTaskPage";
 import TaskDetailPage from "./pages/activities/tasks/TaskDetailPage";
 import TasksPage from "./pages/activities/tasks";
 import CampaignsPage from "./pages/campaigns/CampaignsPage";
+import DocumentsPage from "./pages/documents/DocumentsPage";
+import DocumentDetailPage from "./pages/documents/DocumentDetailPage";
+import CampaignDetailPage from "./pages/campaigns/CampaignDetailPage";
 import CreateCampaignPage from "./pages/campaigns/CreateCampaignPage";
+import PublicCampaignFormPage from "./pages/campaigns/PublicCampaignFormPage";
 import ContactDetailPage from "./pages/contacts/ContactDetailPage";
 import ContactsPage from "./pages/contacts/ContactsPage";
 import ImportPage from "./pages/crm/ImportPage";
@@ -29,6 +32,7 @@ import LeadDetailPage from "./pages/leads/LeadDetailPage";
 import LeadsPage from "./pages/leads/LeadsPage";
 import EmployeeProfilePage from "./pages/team/EmployeeProfilePage";
 import UserCreatePage from "./pages/team/UserCreatePage";
+import UsersListPage from "./pages/team/UsersListPage";
 import ProjectsPage from "./pages/projects/ProjectsPage";
 import CreateProjectPage from "./pages/projects/CreateProjectPage";
 import ProjectDetailPage from "./pages/projects/ProjectDetailPage";
@@ -65,7 +69,18 @@ import VisitorTrackingPage from "./pages/integrations/VisitorTrackingPage";
 
 function hasSession() {
   if (typeof window === "undefined") return false;
-  return Boolean(localStorage.getItem("accessToken") && localStorage.getItem("tenantDb"));
+  return localStorage.getItem("isLoggedIn") === "true";
+}
+
+function getMustChangePassword() {
+  try {
+    const raw = localStorage.getItem("loggedInUser");
+    if (!raw) return false;
+    const user = JSON.parse(raw) as { must_change_password?: boolean };
+    return user.must_change_password === true;
+  } catch {
+    return false;
+  }
 }
 
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -84,10 +99,55 @@ function RequireAuth({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Silently refresh allowed_modules from backend so sidebar stays in sync
+  // without requiring a re-login after role/department changes.
+  useEffect(() => {
+    if (!hasSession()) return;
+    const token = localStorage.getItem("accessToken");
+    const tenantDb = localStorage.getItem("tenantDb");
+    if (!token) return;
+
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${token}`,
+    };
+    if (tenantDb) headers["X-Tenant-DB"] = tenantDb;
+
+    fetch(`${import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api"}/auth/my-modules/`, { headers })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { allowed_modules?: string[]; department?: string } | null) => {
+        if (!data?.allowed_modules) return;
+        const raw = localStorage.getItem("loggedInUser");
+        if (!raw) return;
+        const storedUser = JSON.parse(raw) as Record<string, unknown>;
+        const prevModules = JSON.stringify(storedUser.allowed_modules);
+        const prevDept = storedUser.department;
+        storedUser.allowed_modules = data.allowed_modules;
+        if (data.department !== undefined) storedUser.department = data.department;
+        localStorage.setItem("loggedInUser", JSON.stringify(storedUser));
+        // Only trigger re-render if something changed
+        if (prevModules !== JSON.stringify(data.allowed_modules) || prevDept !== data.department) {
+          window.dispatchEvent(new Event("auth:modules-updated"));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   if (!authenticated) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
+  return <>{children}</>;
+}
+
+/**
+ * Redirects to /change-password if the logged-in user has must_change_password=true.
+ * Placed inside RequireAuth so it only runs for authenticated users.
+ */
+function MustChangePasswordGuard({ children }: { children: ReactNode }) {
+  const location = useLocation();
+  if (getMustChangePassword() && location.pathname !== "/change-password") {
+    return <Navigate to="/change-password" replace />;
+  }
   return <>{children}</>;
 }
 
@@ -96,13 +156,26 @@ export default function App() {
     <Routes>
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/otp-login" element={<OtpLoginPage />} />
-      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+
+      {/* First-login password change — auth required but no dashboard shell */}
+      <Route
+        path="/change-password"
+        element={
+          <RequireAuth>
+            <ChangePasswordPage />
+          </RequireAuth>
+        }
+      />
+
+      {/* Public campaign form — no auth required */}
+      <Route path="/public/campaigns/:campaignId/form" element={<PublicCampaignFormPage />} />
 
       <Route
         element={
           <RequireAuth>
-            <DashboardLayoutRoute />
+            <MustChangePasswordGuard>
+              <DashboardLayoutRoute />
+            </MustChangePasswordGuard>
           </RequireAuth>
         }
       >
@@ -147,14 +220,20 @@ export default function App() {
 
         <Route path="/campaigns" element={<CampaignsPage />} />
         <Route path="/campaigns/create" element={<CreateCampaignPage />} />
+        <Route path="/campaigns/:id/edit" element={<CreateCampaignPage />} />
+        <Route path="/campaigns/:id" element={<CampaignDetailPage />} />
         <Route path="/campaigns/import" element={<ImportPage />} />
         <Route path="/campaigns/import-notes" element={<ImportPage />} />
+
+        <Route path="/documents" element={<DocumentsPage />} />
+        <Route path="/documents/:id" element={<DocumentDetailPage />} />
 
         <Route path="/projects" element={<ProjectsPage />} />
         <Route path="/projects/create" element={<CreateProjectPage />} />
         <Route path="/projects/:id/edit" element={<CreateProjectPage />} />
         <Route path="/projects/:id" element={<ProjectDetailPage />} />
 
+        <Route path="/team" element={<UsersListPage />} />
         <Route path="/team/user/:id" element={<EmployeeProfilePage />} />
         <Route path="/team/users/create" element={<UserCreatePage />} />
 

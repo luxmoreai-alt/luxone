@@ -79,6 +79,13 @@ class Lead(models.Model):
         null=True,
         blank=True,
     )
+    campaign = models.ForeignKey(
+        "campaigns.Campaign",
+        on_delete=models.SET_NULL,
+        related_name="leads",
+        null=True,
+        blank=True,
+    )
     street = models.CharField(max_length=255, blank=True, null=True)
     city = models.CharField(max_length=100, blank=True, null=True)
     state = models.CharField(max_length=100, blank=True, null=True)

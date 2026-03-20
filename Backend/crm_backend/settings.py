@@ -75,6 +75,7 @@ INSTALLED_APPS = [
     'integrations',
     'django_filters',
     'saas_admin',
+    'documents',
 ]
 
 MIDDLEWARE = [
@@ -166,6 +167,10 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+# Media files (uploads)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
 # Custom User Model
 AUTH_USER_MODEL = 'authentication.User'
 
@@ -211,6 +216,7 @@ EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'false').lower() == 'true'
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER or 'noreply@crm.local')
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
 
 # Swagger Configuration
 SWAGGER_SETTINGS = {

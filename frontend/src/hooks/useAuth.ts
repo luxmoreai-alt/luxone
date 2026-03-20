@@ -1,28 +1,35 @@
-export type UserRole = "admin" | "manager" | "employee";
+import { useState, useEffect } from "react";
+import { getStoredUser } from "../lib/api/authApi";
+import type { UserRole, AuthUser } from "../lib/api/authApi";
 
-export type AuthUser = {
-  id?: number | string;
-  email?: string;
-  role?: UserRole;
-  is_admin?: boolean;
-};
+export type { UserRole, AuthUser };
 
 export function useAuth() {
-  let user: AuthUser | null = null;
-  try {
-    const raw = localStorage.getItem("loggedInUser");
-    if (raw) user = JSON.parse(raw) as AuthUser;
-  } catch {
-    user = null;
-  }
+  const [, setTick] = useState(0);
 
+  useEffect(() => {
+    const refresh = () => setTick((t) => t + 1);
+    window.addEventListener("auth:modules-updated", refresh);
+    return () => window.removeEventListener("auth:modules-updated", refresh);
+  }, []);
+
+  const user = getStoredUser();
   const role: UserRole = (user?.role as UserRole) ?? "employee";
+  const allowedModules: string[] = user?.allowed_modules ?? [];
 
   return {
     user,
     role,
-    isAdmin: role === "admin",
-    isManager: role === "manager",
-    isEmployee: role === "employee",
+    // Role convenience flags
+    isMainAdmin: role === "admin",
+    isSubAdmin: role === "sub_admin",
+    isAdmin: role === "admin" || role === "sub_admin",   // backwards-compat
+    isManager: role === "manager" || role === "team_lead",
+    isEmployee: !["admin", "sub_admin", "manager", "team_lead"].includes(role),
+    // Module access
+    allowedModules,
+    canAccess: (module: string) =>
+      role === "admin" || role === "sub_admin" || allowedModules.includes(module),
+    mustChangePassword: user?.must_change_password ?? false,
   };
 }

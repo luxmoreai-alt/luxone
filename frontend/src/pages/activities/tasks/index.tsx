@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronDown, Pencil } from "lucide-react";
 import DashboardLayout from "../../../components/layout/DashboardLayout";
 import ModuleToolbar from "../../../components/crm/ModuleToolbar";
 import FilterSidebar from "../../../components/crm/FilterSidebar";
-import TasksKanbanBoard from "./TasksKanbanBoard";
+import TasksKanbanBoard, { type TasksKanbanBoardHandle } from "./TasksKanbanBoard";
 import type { FilterSection } from "../../../lib/shared/crmTypes";
 
 type FilterMap = Record<string, string>;
@@ -39,6 +39,7 @@ export default function TasksPage() {
   const [filters, setFilters] = useState<FilterMap>({});
   const [groupBy, setGroupBy] = useState("Tasks by Status");
   const [groupByOpen, setGroupByOpen] = useState(false);
+  const boardRef = useRef<TasksKanbanBoardHandle>(null);
 
   return (
     <DashboardLayout>
@@ -52,9 +53,14 @@ export default function TasksPage() {
         <ModuleToolbar
           viewName="All Tasks"
           createButtonLabel="Create Task"
+          showImportActions={false}
           isFilterOpen={filterOpen}
           onToggleFilter={() => setFilterOpen((prev) => !prev)}
           onCreateClick={() => navigate("/tasks/create")}
+          onMassAction={(action) => {
+            if (action === "mass-delete") boardRef.current?.triggerMassDelete();
+            if (action === "mass-update") boardRef.current?.triggerMassUpdate();
+          }}
         />
 
         {/* Group-by selector row */}
@@ -108,7 +114,7 @@ export default function TasksPage() {
           )}
 
           <div className="min-w-0 flex-1 overflow-auto">
-            <TasksKanbanBoard filters={filters} />
+            <TasksKanbanBoard ref={boardRef} filters={filters} />
           </div>
         </div>
       </div>

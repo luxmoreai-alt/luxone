@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, CircleDot, CheckSquare, CalendarDays, Loader2,
   ChevronLeft, ChevronRight, User, UserCog, Check, X, Pencil,
+  UserX, UserCheck, Trash2, AlertTriangle,
 } from "lucide-react";
 import { apiRequest } from "../../api/client";
 import { useAuth } from "../../hooks/useAuth";
@@ -39,10 +40,18 @@ type Meeting = {
 type EmployeeInfo = {
   id: number;
   email: string;
+  name?: string;
   role: string;
+  role_display?: string;
+  department?: string;
+  department_display?: string;
+  status?: "active" | "inactive" | "terminated";
+  status_display?: string;
   is_active: boolean;
+  must_change_password?: boolean;
   manager_email: string | null;
   organization_name: string | null;
+  created_at?: string;
 };
 
 type ApiList<T> = T[] | { results?: T[]; data?: T[] };
@@ -155,6 +164,17 @@ export default function EmployeeProfilePage() {
   const [savingManager, setSavingManager] = useState(false);
   const [managerError, setManagerError] = useState("");
 
+  // Offboarding state
+  const [offboardAction, setOffboardAction] = useState<"deactivate" | "reactivate" | "terminate" | null>(null);
+  const [offboardSaving, setOffboardSaving] = useState(false);
+  const [offboardError, setOffboardError] = useState("");
+
+  // Permanent delete state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteInput, setDeleteInput] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
   useEffect(() => {
     if (!id) return;
     let active = true;
@@ -211,6 +231,34 @@ export default function EmployeeProfilePage() {
     }
   };
 
+  const handlePermanentDelete = async () => {
+    if (!id || !employee) return;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await apiRequest(`/auth/manage-users/${id}/permanent-delete/`, { method: "POST" });
+      navigate("/team");
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Delete failed.");
+      setDeleting(false);
+    }
+  };
+
+  const handleOffboard = async (action: "deactivate" | "reactivate" | "terminate") => {
+    if (!id) return;
+    setOffboardSaving(true);
+    setOffboardError("");
+    try {
+      const updated = await apiRequest<EmployeeInfo>(`/auth/manage-users/${id}/${action}/`, { method: "POST" });
+      setEmployee(updated);
+      setOffboardAction(null);
+    } catch (err) {
+      setOffboardError(err instanceof Error ? err.message : "Action failed.");
+    } finally {
+      setOffboardSaving(false);
+    }
+  };
+
   const leadPag = usePagination(leads);
   const taskPag = usePagination(tasks);
   const meetPag = usePagination(meetings);
@@ -238,6 +286,12 @@ export default function EmployeeProfilePage() {
     );
   }
 
+  const statusBanner = employee.status === "terminated"
+    ? { bg: "bg-red-50 border-red-200", icon: <Trash2 size={14} className="text-red-500 shrink-0" />, text: "text-red-700", label: "This account has been terminated. The user cannot log in." }
+    : employee.status === "inactive"
+    ? { bg: "bg-amber-50 border-amber-200", icon: <AlertTriangle size={14} className="text-amber-500 shrink-0" />, text: "text-amber-700", label: "This account is deactivated. The user cannot log in." }
+    : null;
+
   return (
     <div className="min-h-screen bg-slate-50 px-6 py-6">
       {/* Back + Profile header */}
@@ -250,20 +304,94 @@ export default function EmployeeProfilePage() {
         Back
       </button>
 
+      {/* Status banner */}
+      {statusBanner && (
+        <div className={`mb-4 flex items-center gap-2 rounded-lg border px-4 py-3 text-sm font-medium ${statusBanner.bg} ${statusBanner.text}`}>
+          {statusBanner.icon}
+          {statusBanner.label}
+        </div>
+      )}
+
       <div className="mb-6 flex items-start gap-4">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-xl font-bold text-emerald-700 uppercase shrink-0">
-          {employee.email[0]}
+        <div className={`flex h-14 w-14 items-center justify-center rounded-full text-xl font-bold uppercase shrink-0 ${
+          employee.status === "terminated" ? "bg-red-100 text-red-600"
+          : employee.status === "inactive" ? "bg-slate-100 text-slate-500"
+          : "bg-emerald-100 text-emerald-700"
+        }`}>
+          {(employee.name || employee.email)[0]}
         </div>
         <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-bold text-slate-900">{employee.email}</h1>
-          <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h1 className="text-xl font-bold text-slate-900">{employee.name || employee.email}</h1>
+              {employee.name && <p className="text-xs text-slate-400">{employee.email}</p>}
+            </div>
+            {/* Offboarding actions (admin only) */}
+            {isAdmin && (
+              <div className="flex flex-wrap items-center gap-2">
+                {employee.status === "active" && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => { setOffboardAction("deactivate"); setOffboardError(""); }}
+                      className="flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100 transition"
+                    >
+                      <UserX size={13} /> Deactivate
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setOffboardAction("terminate"); setOffboardError(""); }}
+                      className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 transition"
+                    >
+                      <Trash2 size={13} /> Terminate
+                    </button>
+                  </>
+                )}
+                {(employee.status === "inactive" || employee.status === "terminated") && (
+                  <button
+                    type="button"
+                    onClick={() => { setOffboardAction("reactivate"); setOffboardError(""); }}
+                    className="flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100 transition"
+                  >
+                    <UserCheck size={13} /> Reactivate
+                  </button>
+                )}
+                {employee.status === "terminated" && (
+                  <button
+                    type="button"
+                    onClick={() => { setShowDeleteConfirm(true); setDeleteInput(""); setDeleteError(""); }}
+                    className="flex items-center gap-1.5 rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 transition"
+                  >
+                    <Trash2 size={13} /> Delete User
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="mt-1.5 flex flex-wrap items-center gap-3 text-xs text-slate-500">
             <span className="capitalize rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5 font-semibold">
-              {employee.role}
+              {employee.role_display || employee.role}
             </span>
+            {employee.department && (
+              <span className="rounded-full bg-violet-100 text-violet-700 px-2 py-0.5 font-semibold">
+                {employee.department_display || employee.department}
+              </span>
+            )}
             {employee.organization_name && <span>{employee.organization_name}</span>}
-            <span className={employee.is_active ? "text-emerald-600" : "text-red-500"}>
-              {employee.is_active ? "Active" : "Inactive"}
-            </span>
+            {employee.status && (
+              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold ${
+                employee.status === "active" ? "bg-green-100 text-green-700"
+                : employee.status === "inactive" ? "bg-amber-100 text-amber-700"
+                : "bg-red-100 text-red-700"
+              }`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${
+                  employee.status === "active" ? "bg-green-500"
+                  : employee.status === "inactive" ? "bg-amber-500"
+                  : "bg-red-500"
+                }`} />
+                {employee.status_display || employee.status}
+              </span>
+            )}
           </div>
 
           {/* Manager info + reassign (admin only) */}
@@ -332,6 +460,49 @@ export default function EmployeeProfilePage() {
               <span>Manager: <span className="font-medium text-slate-700">{employee.manager_email}</span></span>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* User details card */}
+      <div className="mb-6 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="border-b border-slate-100 px-5 py-3">
+          <h2 className="text-sm font-semibold text-slate-800">User Details</h2>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-0 divide-y sm:divide-y-0 sm:divide-x divide-slate-100">
+          {[
+            { label: "Full Name", value: employee.name || "—" },
+            { label: "Email", value: employee.email },
+            { label: "Role", value: employee.role_display || employee.role || "—" },
+            { label: "Department", value: employee.department_display || employee.department || "—" },
+            { label: "Organization", value: employee.organization_name || "—" },
+            { label: "Manager", value: employee.manager_email || "Unassigned" },
+            {
+              label: "Status",
+              value: employee.status_display || employee.status || "—",
+              badge: employee.status === "active"
+                ? "bg-green-100 text-green-700"
+                : employee.status === "inactive"
+                ? "bg-amber-100 text-amber-700"
+                : employee.status === "terminated"
+                ? "bg-red-100 text-red-700"
+                : undefined,
+            },
+            {
+              label: "Account Active",
+              value: employee.is_active ? "Yes" : "No",
+              badge: employee.is_active ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700",
+            },
+            { label: "Member Since", value: formatDate(employee.created_at) },
+          ].map(({ label, value, badge }) => (
+            <div key={label} className="px-5 py-4">
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+              {badge ? (
+                <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${badge}`}>{value}</span>
+              ) : (
+                <p className="text-sm font-medium text-slate-800 break-words">{value}</p>
+              )}
+            </div>
+          ))}
         </div>
       </div>
 
@@ -478,6 +649,133 @@ export default function EmployeeProfilePage() {
           )}
         </div>
       </div>
+
+      {/* Permanent delete confirmation modal */}
+      {showDeleteConfirm && employee && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl p-6">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100">
+                <Trash2 size={18} className="text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Permanently Delete User</h3>
+                <p className="text-xs text-slate-500">{employee.email}</p>
+              </div>
+            </div>
+
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+              <AlertTriangle size={12} className="inline mr-1" />
+              This will <strong>permanently delete</strong> the account and all associated data. This action <strong>cannot be undone</strong>.
+            </div>
+
+            <p className="mb-3 text-sm text-slate-700">
+              Type <span className="font-semibold text-slate-900">{employee.email}</span> to confirm:
+            </p>
+            <input
+              type="text"
+              value={deleteInput}
+              onChange={(e) => setDeleteInput(e.target.value)}
+              placeholder={employee.email}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+            />
+
+            {deleteError && (
+              <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{deleteError}</p>
+            )}
+
+            <div className="mt-4 flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => { setShowDeleteConfirm(false); setDeleteInput(""); setDeleteError(""); }}
+                disabled={deleting}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteInput !== employee.email || deleting}
+                onClick={() => void handlePermanentDelete()}
+                className="flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition disabled:opacity-60"
+              >
+                {deleting ? <><Loader2 size={14} className="animate-spin" /> Deleting…</> : <><Trash2 size={14} /> Delete Permanently</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Offboarding confirmation modal */}
+      {offboardAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl p-6">
+            <div className="mb-4 flex items-center gap-3">
+              {offboardAction === "terminate" ? (
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100">
+                  <Trash2 size={18} className="text-red-600" />
+                </div>
+              ) : offboardAction === "deactivate" ? (
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
+                  <UserX size={18} className="text-amber-600" />
+                </div>
+              ) : (
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100">
+                  <UserCheck size={18} className="text-green-600" />
+                </div>
+              )}
+              <div>
+                <h3 className="text-base font-bold text-slate-900 capitalize">{offboardAction} User</h3>
+                <p className="text-xs text-slate-500">{employee.email}</p>
+              </div>
+            </div>
+
+            <p className="mb-4 text-sm text-slate-700">
+              {offboardAction === "deactivate" &&
+                "This will block the user's login immediately. Their data and records are preserved. You can reactivate them later."}
+              {offboardAction === "terminate" &&
+                "This permanently disables the account. The user cannot log in. All CRM records are preserved. You can still reactivate if needed."}
+              {offboardAction === "reactivate" &&
+                "This will restore the user's login access and set their status back to Active."}
+            </p>
+
+            {offboardError && (
+              <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{offboardError}</p>
+            )}
+
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => { setOffboardAction(null); setOffboardError(""); }}
+                disabled={offboardSaving}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={offboardSaving}
+                onClick={() => void handleOffboard(offboardAction)}
+                className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-white transition disabled:opacity-60 ${
+                  offboardAction === "reactivate" ? "bg-green-600 hover:bg-green-700"
+                  : offboardAction === "deactivate" ? "bg-amber-600 hover:bg-amber-700"
+                  : "bg-red-600 hover:bg-red-700"
+                }`}
+              >
+                {offboardSaving ? (
+                  <><Loader2 size={14} className="animate-spin" /> Processing...</>
+                ) : offboardAction === "deactivate" ? (
+                  <><UserX size={14} /> Deactivate</>
+                ) : offboardAction === "reactivate" ? (
+                  <><UserCheck size={14} /> Reactivate</>
+                ) : (
+                  <><Trash2 size={14} /> Terminate</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

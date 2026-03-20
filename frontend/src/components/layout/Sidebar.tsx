@@ -48,7 +48,9 @@ type NavItem = {
   icon: React.ElementType;
   path?: string;
   expandable?: boolean;
-  children?: { label: string; icon: React.ElementType; path: string }[];
+  /** module slug — used for access control. Undefined means always visible. */
+  module?: string;
+  children?: { label: string; icon: React.ElementType; path: string; excludeDepartments?: string[] }[];
 };
 
 const primaryItems: NavItem[] = [
@@ -62,13 +64,13 @@ const workspaceItems: NavItem[] = [
   {
     label: "Sales",
     icon: ShoppingBag,
+    module: "sales",
     expandable: true,
     children: [
       { label: "Leads", icon: CircleDot, path: "/leads" },
       { label: "Contacts", icon: Users, path: "/contacts" },
       { label: "Accounts", icon: Building2, path: "/accounts" },
       { label: "Deals", icon: BadgeDollarSign, path: "/deals" },
-      { label: "Forecasts", icon: TrendingUp, path: "/forecasts" },
       { label: "Documents", icon: FileText, path: "/documents" },
       { label: "Campaigns", icon: Megaphone, path: "/campaigns" },
     ],
@@ -76,6 +78,7 @@ const workspaceItems: NavItem[] = [
   {
     label: "Activities",
     icon: Search,
+    module: "activities",
     expandable: true,
     children: [
       { label: "Tasks", icon: CircleDot, path: "/tasks" },
@@ -86,6 +89,7 @@ const workspaceItems: NavItem[] = [
   {
     label: "Inventory",
     icon: Package,
+    module: "inventory",
     expandable: true,
     children: [
       { label: "Products", icon: CircleDot, path: "/products" },
@@ -100,6 +104,7 @@ const workspaceItems: NavItem[] = [
   {
     label: "Support",
     icon: HandHelping,
+    module: "support",
     expandable: true,
     children: [
       { label: "Cases", icon: CircleDot, path: "/support/cases" },
@@ -109,16 +114,18 @@ const workspaceItems: NavItem[] = [
   {
     label: "Integrations",
     icon: Settings2,
+    module: "integrations",
     expandable: true,
     children: [
       { label: "Email", icon: Inbox, path: "/integrations/email" },
-      { label: "Social", icon: Share2, path: "/integrations/social" },
-      { label: "Visitor Tracking", icon: MapPinned, path: "/integrations/visitors" },
+      { label: "Social", icon: Share2, path: "/integrations/social", excludeDepartments: ["software_development"] },
+      { label: "Visitor Tracking", icon: MapPinned, path: "/integrations/visitors", excludeDepartments: ["software_development"] },
     ],
   },
   {
     label: "Services",
     icon: Wrench,
+    module: "services",
     expandable: true,
     children: [
       { label: "Promo", icon: CircleDot, path: "/services/promo" },
@@ -131,12 +138,12 @@ const workspaceItems: NavItem[] = [
       { label: "Holidays", icon: CalendarDays, path: "/services/settings/holidays" },
     ],
   },
-  { label: "Projects", icon: Folder, path: "/projects" },
+  { label: "Projects", icon: Folder, module: "projects", path: "/projects" },
   { label: "Voice of the Customer", icon: SquareKanban },
 ];
 
-const getParentMenuByPath = (pathname: string) => {
-  for (const item of workspaceItems) {
+const getParentMenuByPath = (pathname: string, items: NavItem[]) => {
+  for (const item of items) {
     if (!item.children) continue;
     const hasMatch = item.children.some(
       (child) => pathname === child.path || pathname.startsWith(`${child.path}/`)
@@ -146,7 +153,7 @@ const getParentMenuByPath = (pathname: string) => {
   return null;
 };
 
-const initialOpenMenus = {
+const initialOpenMenus: Record<string, boolean> = {
   Sales: true,
   Activities: false,
   Inventory: false,
@@ -158,11 +165,17 @@ const initialOpenMenus = {
 export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAdmin, isManager } = useAuth();
+  const { user, isAdmin, isManager, canAccess } = useAuth();
+  const userDepartment = user?.department ?? "";
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>(initialOpenMenus);
 
+  // Filter workspace items by module access
+  const visibleWorkspaceItems = workspaceItems.filter(
+    (item) => !item.module || canAccess(item.module)
+  );
+
   useEffect(() => {
-    const parentMenu = getParentMenuByPath(location.pathname);
+    const parentMenu = getParentMenuByPath(location.pathname, visibleWorkspaceItems);
     setOpenMenus((prev) => {
       const nextState: Record<string, boolean> = {};
       Object.keys(prev).forEach((key) => {
@@ -170,6 +183,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
       });
       return nextState;
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
 
   const handleNavigate = (path?: string) => {
@@ -272,12 +286,12 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
                 {(isAdmin || isManager) && (
                   <button
                     type="button"
-                    onClick={() => handleNavigate("/home")}
+                    onClick={() => handleNavigate("/team")}
                     title={!sidebarOpen ? "My Team" : undefined}
                     className={[
                       "flex w-full items-center rounded-lg text-left text-[14px] transition",
                       sidebarOpen ? "gap-2 px-2.5 py-2" : "justify-center px-2 py-2.5",
-                      location.pathname === "/home" ? "bg-white/12 font-semibold" : "text-white hover:bg-white/8",
+                      location.pathname.startsWith("/team") ? "bg-white/12 font-semibold" : "text-white hover:bg-white/8",
                     ].join(" ")}
                   >
                     <Users size={17} />
@@ -298,7 +312,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
                 </div>
 
                 <div className="flex flex-col gap-0.5">
-                  {workspaceItems.map((item) => {
+                  {visibleWorkspaceItems.map((item) => {
                     const Icon = item.icon;
                     const isOpen = !!openMenus[item.label];
 
@@ -347,7 +361,9 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
 
                         {item.expandable && isOpen && item.children && (
                           <div className="ml-6 mt-1 flex flex-col gap-0.5">
-                            {item.children.map((child) => {
+                            {item.children.filter((child) =>
+                              !child.excludeDepartments?.includes(userDepartment)
+                            ).map((child) => {
                               const ChildIcon = child.icon;
                               return (
                                 <button
@@ -375,7 +391,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
             ) : (
               <div className="px-1.5">
                 <div className="flex flex-col gap-0.5">
-                  {workspaceItems.map((item) => {
+                  {visibleWorkspaceItems.map((item) => {
                     const Icon = item.icon;
                     const fallbackPath = item.path ?? item.children?.[0]?.path;
                     return (
