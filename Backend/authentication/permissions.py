@@ -7,7 +7,7 @@ from rest_framework.permissions import BasePermission
 
 class IsOrgAdmin(BasePermission):
     """Allow access only to users with role = 'admin'."""
-    message = "Only organization admins can perform this action."
+    message = "Only admins can perform this action."
 
     def has_permission(self, request, view):
         return bool(

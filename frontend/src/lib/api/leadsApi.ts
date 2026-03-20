@@ -101,12 +101,10 @@ type PaginatedResponse<T> = {
 
 function buildHeaders(): Record<string, string> {
   const token = localStorage.getItem("accessToken");
-  const tenantDb = localStorage.getItem("tenantDb");
 
   return {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...(tenantDb ? { "X-Tenant-DB": tenantDb } : {}),
   };
 }
 

@@ -91,7 +91,7 @@ export default function CreateDealPage() {
   );
 
   const handleSubmit = async (values: DealCreateValues) => {
-    await createDeal({
+    const created = await createDeal({
       dealOwner: values.dealOwner,
       dealName: values.dealName,
       accountName: values.accountName,
@@ -105,6 +105,10 @@ export default function CreateDealPage() {
       nextStep: values.nextStep,
       description: values.description,
     });
+    return {
+      redirectTo: `/deals/${created.id}`,
+      state: { record: created },
+    };
   };
 
   return (

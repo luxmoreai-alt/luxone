@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { submitCampaignForm, type PublicFormPayload } from "../../lib/api/campaignsApi";
 import { CheckCircle, Loader2 } from "lucide-react";
 
@@ -28,8 +28,6 @@ const initial: FormState = {
 
 export default function PublicCampaignFormPage() {
   const { campaignId } = useParams<{ campaignId: string }>();
-  const [searchParams] = useSearchParams();
-  const tenantDb = searchParams.get("db") ?? "";
 
   const [form, setForm] = useState<FormState>(initial);
   const [submitting, setSubmitting] = useState(false);
@@ -67,10 +65,6 @@ export default function PublicCampaignFormPage() {
       setError("Invalid campaign link.");
       return;
     }
-    if (!tenantDb) {
-      setError("Invalid form link — missing tenant. Please ask the sender for the correct link.");
-      return;
-    }
 
     try {
       setSubmitting(true);
@@ -83,7 +77,7 @@ export default function PublicCampaignFormPage() {
         company: form.company.trim(),
         notes: form.notes.trim(),
       };
-      await submitCampaignForm(campaignId, payload, tenantDb);
+      await submitCampaignForm(campaignId, payload);
       setSubmitted(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Submission failed. Please try again.");
@@ -111,7 +105,6 @@ export default function PublicCampaignFormPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#f5f7fb] p-4">
       <div className="w-full max-w-lg rounded-[14px] border border-[#d9e1ef] bg-white p-8 shadow-sm">
-        {/* Brand header */}
         <div className="mb-6 text-center">
           <h1 className="text-[22px] font-semibold text-[#1f2d3d]">Get in Touch</h1>
           <p className="mt-1 text-sm text-slate-500">

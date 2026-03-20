@@ -8,6 +8,34 @@ from django.db import models
 from core.base_models import BaseModel
 
 
+class ProductType(models.TextChoices):
+    SOFTWARE = "software", "Software"
+    SERVICE = "service", "Service"
+    ADDON = "addon", "Add-on"
+    BUNDLE = "bundle", "Bundle"
+
+
+class DeploymentModel(models.TextChoices):
+    CLOUD = "cloud", "Cloud"
+    ON_PREM = "on_prem", "On-premise"
+    HYBRID = "hybrid", "Hybrid"
+
+
+class BillingCycle(models.TextChoices):
+    ONE_TIME = "one_time", "One-time"
+    MONTHLY = "monthly", "Monthly"
+    QUARTERLY = "quarterly", "Quarterly"
+    YEARLY = "yearly", "Yearly"
+    CUSTOM = "custom", "Custom"
+
+
+class LicenseType(models.TextChoices):
+    NAMED = "named", "Named User"
+    CONCURRENT = "concurrent", "Concurrent"
+    UNLIMITED = "unlimited", "Unlimited"
+    TRIAL = "trial", "Trial"
+
+
 class InventoryAddressMixin(models.Model):
     billing_street = models.CharField(max_length=255, blank=True, null=True)
     billing_city = models.CharField(max_length=100, blank=True, null=True)
@@ -98,6 +126,28 @@ class Product(InventoryOwnedModel):
     )
     manufacturer = models.CharField(max_length=255, blank=True, null=True)
     product_category = models.CharField(max_length=100, blank=True, null=True, db_index=True)
+    product_type = models.CharField(
+        max_length=20,
+        choices=ProductType.choices,
+        default=ProductType.SOFTWARE,
+        db_index=True,
+    )
+    deployment_model = models.CharField(
+        max_length=20,
+        choices=DeploymentModel.choices,
+        default=DeploymentModel.CLOUD,
+    )
+    billing_cycle = models.CharField(
+        max_length=20,
+        choices=BillingCycle.choices,
+        default=BillingCycle.CUSTOM,
+        db_index=True,
+    )
+    license_type = models.CharField(
+        max_length=20,
+        choices=LicenseType.choices,
+        default=LicenseType.NAMED,
+    )
     unit_price = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal("0.00"))
     commission_rate = models.DecimalField(max_digits=7, decimal_places=2, default=Decimal("0.00"))
     tax = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal("0.00"))
@@ -105,6 +155,10 @@ class Product(InventoryOwnedModel):
     quantity_in_demand = models.PositiveIntegerField(default=0)
     reorder_level = models.PositiveIntegerField(default=0)
     usage_unit = models.CharField(max_length=100, blank=True, null=True)
+    default_user_seats = models.PositiveIntegerField(default=1)
+    subscription_term_months = models.PositiveIntegerField(default=12)
+    renewal_required = models.BooleanField(default=True)
+    implementation_required = models.BooleanField(default=False)
     support_start_date = models.DateField(blank=True, null=True)
     support_expiry_date = models.DateField(blank=True, null=True)
     description = models.TextField(blank=True, null=True)
@@ -115,6 +169,8 @@ class Product(InventoryOwnedModel):
             models.Index(fields=["product_name"]),
             models.Index(fields=["product_code"]),
             models.Index(fields=["product_category"]),
+            models.Index(fields=["product_type"]),
+            models.Index(fields=["billing_cycle"]),
             models.Index(fields=["vendor"]),
             models.Index(fields=["owner"]),
             models.Index(fields=["is_active"]),
@@ -229,6 +285,21 @@ class Quote(InventoryDocumentBase):
         null=True,
         blank=True,
     )
+    billing_cycle = models.CharField(
+        max_length=20,
+        choices=BillingCycle.choices,
+        default=BillingCycle.CUSTOM,
+    )
+    license_type = models.CharField(
+        max_length=20,
+        choices=LicenseType.choices,
+        default=LicenseType.NAMED,
+    )
+    licensed_users = models.PositiveIntegerField(default=1)
+    implementation_required = models.BooleanField(default=False)
+    subscription_start_date = models.DateField(blank=True, null=True)
+    subscription_end_date = models.DateField(blank=True, null=True)
+    renewal_due_date = models.DateField(blank=True, null=True)
 
     class Meta:
         ordering = ["-created_at"]
@@ -281,6 +352,21 @@ class SalesOrder(InventoryDocumentBase):
         null=True,
         blank=True,
     )
+    billing_cycle = models.CharField(
+        max_length=20,
+        choices=BillingCycle.choices,
+        default=BillingCycle.CUSTOM,
+    )
+    license_type = models.CharField(
+        max_length=20,
+        choices=LicenseType.choices,
+        default=LicenseType.NAMED,
+    )
+    licensed_users = models.PositiveIntegerField(default=1)
+    implementation_required = models.BooleanField(default=False)
+    subscription_start_date = models.DateField(blank=True, null=True)
+    subscription_end_date = models.DateField(blank=True, null=True)
+    renewal_due_date = models.DateField(blank=True, null=True)
     excise_duty = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal("0.00"))
     status = models.CharField(max_length=100, blank=True, null=True, db_index=True)
 
@@ -381,6 +467,21 @@ class Invoice(InventoryDocumentBase):
         null=True,
         blank=True,
     )
+    billing_cycle = models.CharField(
+        max_length=20,
+        choices=BillingCycle.choices,
+        default=BillingCycle.CUSTOM,
+    )
+    license_type = models.CharField(
+        max_length=20,
+        choices=LicenseType.choices,
+        default=LicenseType.NAMED,
+    )
+    licensed_users = models.PositiveIntegerField(default=1)
+    implementation_required = models.BooleanField(default=False)
+    subscription_start_date = models.DateField(blank=True, null=True)
+    subscription_end_date = models.DateField(blank=True, null=True)
+    renewal_due_date = models.DateField(blank=True, null=True)
     excise_duty = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal("0.00"))
     status = models.CharField(max_length=100, blank=True, null=True, db_index=True)
 

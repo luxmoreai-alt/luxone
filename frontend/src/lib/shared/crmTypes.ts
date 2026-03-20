@@ -136,6 +136,10 @@ export type InventoryProductRecord = {
   vendorName: string;
   manufacturer: string;
   productCategory: string;
+  productType?: string;
+  deploymentModel?: string;
+  billingCycle?: string;
+  licenseType?: string;
   unitPrice: number;
   tax: number;
   quantityInStock: number;
@@ -208,6 +212,8 @@ export type QuoteRecord = {
   subject: string;
   owner: string;
   quoteStage: string;
+  billingCycle?: string;
+  renewalStatus?: string;
   accountName: string;
   contactName: string;
   dealName: string;
@@ -222,6 +228,8 @@ export type SalesOrderRecord = {
   subject: string;
   owner: string;
   status: string;
+  billingCycle?: string;
+  renewalStatus?: string;
   accountName: string;
   contactName: string;
   dealName: string;
@@ -250,6 +258,8 @@ export type InventoryInvoiceRecord = {
   subject: string;
   owner: string;
   status: string;
+  billingCycle?: string;
+  renewalStatus?: string;
   accountName: string;
   contactName: string;
   dealName: string;

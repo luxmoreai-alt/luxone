@@ -80,17 +80,19 @@ export const inventoryModules = {
     title: "Products",
     singular: "Product",
     baseRoute: "/products",
-    emptyTitle: "Start your product catalog",
-    emptyDescription: "Create stockable products that connect to quotes, orders, invoices, price books, and related CRM records.",
+    emptyTitle: "Start your software catalog",
+    emptyDescription: "Create software plans, add-ons, and service packages that connect to quotes, subscriptions, invoices, renewals, and CRM records.",
     createLabel: "Create Product",
     importLabel: "Import Products",
     columns: [
       { key: "productName", label: "Product Name" },
       { key: "productCode", label: "SKU" },
+      { key: "productType", label: "Type" },
+      { key: "billingCycle", label: "Billing Cycle" },
       { key: "vendorName", label: "Vendor" },
       { key: "productCategory", label: "Category" },
       { key: "unitPrice", label: "Unit Price" },
-      { key: "quantityInStock", label: "Stock" },
+      { key: "deploymentModel", label: "Deployment" },
     ],
     filterSections: [
       {
@@ -154,7 +156,7 @@ export const inventoryModules = {
     singular: "Quote",
     baseRoute: "/quotes",
     emptyTitle: "Create your first quote",
-    emptyDescription: "Prepare product-driven quotes with account, contact, deal, and CPQ support in the same flow.",
+    emptyDescription: "Prepare software proposals with plans, seats, billing cycles, renewals, and CRM deal context in the same flow.",
     createLabel: "Create Quote",
     extraHeaderAction: { label: "Try CPQ Now", route: "/configurator" },
     columns: [
@@ -192,7 +194,7 @@ export const inventoryModules = {
     singular: "Sales Order",
     baseRoute: "/sales-orders",
     emptyTitle: "Start your order pipeline",
-    emptyDescription: "Capture approved quotes as sales orders and hand off billing to invoices without leaving the CRM.",
+    emptyDescription: "Capture approved software subscriptions as sales orders and hand off billing and renewal tracking to invoices.",
     createLabel: "Create Sales Order",
     columns: [
       { key: "subject", label: "Subject" },
@@ -261,8 +263,8 @@ export const inventoryModules = {
     title: "Invoices",
     singular: "Invoice",
     baseRoute: "/invoices",
-    emptyTitle: "Generate invoices from your CRM",
-    emptyDescription: "Keep invoicing tied to sales orders, purchase orders, deals, contacts, and accounts with backend-calculated totals.",
+    emptyTitle: "Generate software invoices from your CRM",
+    emptyDescription: "Keep software invoicing tied to subscriptions, sales orders, deals, contacts, accounts, and future renewals.",
     createLabel: "Create Invoice",
     columns: [
       { key: "subject", label: "Subject" },

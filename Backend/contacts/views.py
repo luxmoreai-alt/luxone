@@ -534,6 +534,7 @@ class ContactViewSet(viewsets.ModelViewSet):
             subject=subject,
             body=serializer.validated_data["body"],
             to_emails=[recipient_email],
+            send_live=True,
             owner=request.user,
             contact=contact,
             account=contact.account,

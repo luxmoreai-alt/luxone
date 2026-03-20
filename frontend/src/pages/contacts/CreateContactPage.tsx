@@ -174,7 +174,7 @@ export default function CreateContactPage() {
   );
 
   const handleSubmit = async (values: ContactCreateValues) => {
-    await createContact({
+    const created = await createContact({
       contactOwner: values.contactOwner,
       salutation: values.salutation,
       firstName: values.firstName,
@@ -196,6 +196,10 @@ export default function CreateContactPage() {
       zipCode: values.zipCode,
       description: values.description,
     });
+    return {
+      redirectTo: `/contacts/${created.id}`,
+      state: { record: created },
+    };
   };
 
   return (

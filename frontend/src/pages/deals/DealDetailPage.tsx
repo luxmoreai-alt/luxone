@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import CRMModalBase from "../../components/crm/CRMModalBase";
 import { dealModuleConfig } from "../../components/modules/deals/dealsConfig";
 import InventoryLookupField from "../../inventory/components/InventoryLookupField";
@@ -51,9 +51,10 @@ const emptyProductForm: ProductFormState = {
 
 export default function DealDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const [deal, setDeal] = useState<CRMDeal | null>(null);
+  const location = useLocation();
+  const [deal, setDeal] = useState<CRMDeal | null>((location.state as { record?: CRMDeal } | null)?.record ?? null);
   const [linkedData, setLinkedData] = useState<any | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!((location.state as { record?: CRMDeal } | null)?.record));
   const [error, setError] = useState<string | null>(null);
   const [productModalOpen, setProductModalOpen] = useState(false);
   const [productForm, setProductForm] = useState<ProductFormState>(emptyProductForm);
@@ -71,6 +72,7 @@ export default function DealDetailPage() {
         const data = await getDealById(id);
         if (!data) {
           setError("Deal not found.");
+          setLoading(false);
           return;
         }
         const normalized = normalizeDeal(data);

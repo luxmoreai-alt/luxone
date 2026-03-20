@@ -1,5 +1,5 @@
 import { getResolvedApiBaseUrl } from "./config";
-import { getAccessToken, getTenantDb, refreshAccessToken, clearAuthSession } from "../lib/api/authApi";
+import { getAccessToken, refreshAccessToken, clearAuthSession } from "../lib/api/authApi";
 
 type RequestOptions = RequestInit & {
   query?: Record<string, string | number | boolean | undefined | null>;
@@ -58,16 +58,11 @@ function redirectToLogin() {
 }
 
 async function executeRequest(path: string, options: RequestOptions) {
-  const tenantDb = getTenantDb();
   const accessToken = getAccessToken();
   const headers = new Headers(options.headers || {});
 
   if (!headers.has("Content-Type") && options.body && !(options.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
-  }
-
-  if (tenantDb) {
-    headers.set("X-Tenant-DB", tenantDb);
   }
 
   if (accessToken) {

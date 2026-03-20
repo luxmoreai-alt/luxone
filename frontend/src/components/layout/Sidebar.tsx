@@ -30,7 +30,6 @@ import {
   ShoppingBag,
   ShoppingCart,
   SquareKanban,
-  TrendingUp,
   Truck,
   Users,
   Wrench,

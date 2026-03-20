@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from rest_framework import serializers
 
 from accounts.models import Account
@@ -39,6 +40,43 @@ User = get_user_model()
 
 def _active_queryset(model):
     return model.objects.filter(is_active=True)
+
+
+def _validate_positive_whole_number(attrs, field_name: str, *, minimum: int = 0) -> None:
+    value = attrs.get(field_name)
+    if value is not None and value < minimum:
+        raise serializers.ValidationError(
+            {field_name: [f"Ensure this value is greater than or equal to {minimum}."]}
+        )
+
+
+def _validate_subscription_dates(attrs) -> None:
+    start = attrs.get("subscription_start_date")
+    end = attrs.get("subscription_end_date")
+    renewal = attrs.get("renewal_due_date")
+    if start and end and end < start:
+        raise serializers.ValidationError(
+            {"subscription_end_date": ["Subscription end date must be on or after the start date."]}
+        )
+    if start and renewal and renewal < start:
+        raise serializers.ValidationError(
+            {"renewal_due_date": ["Renewal due date must be on or after the subscription start date."]}
+        )
+
+
+def _get_renewal_status(obj) -> str | None:
+    renewal_due_date = getattr(obj, "renewal_due_date", None)
+    billing_cycle = getattr(obj, "billing_cycle", "")
+    if not renewal_due_date or billing_cycle == "one_time":
+        return None
+    today = timezone.localdate()
+    if renewal_due_date < today:
+        return "Overdue"
+    if renewal_due_date == today:
+        return "Due Today"
+    if (renewal_due_date - today).days <= 30:
+        return "Upcoming"
+    return "Active"
 
 
 class InventoryNoteSerializer(serializers.ModelSerializer):
@@ -286,6 +324,10 @@ class ProductListSerializer(serializers.ModelSerializer):
             "vendor_name",
             "manufacturer",
             "product_category",
+            "product_type",
+            "deployment_model",
+            "billing_cycle",
+            "license_type",
             "unit_price",
             "commission_rate",
             "tax",
@@ -293,6 +335,10 @@ class ProductListSerializer(serializers.ModelSerializer):
             "quantity_in_demand",
             "reorder_level",
             "usage_unit",
+            "default_user_seats",
+            "subscription_term_months",
+            "renewal_required",
+            "implementation_required",
             "created_at",
             "updated_at",
         ]
@@ -326,6 +372,10 @@ class ProductWriteSerializer(serializers.ModelSerializer):
             "vendor",
             "manufacturer",
             "product_category",
+            "product_type",
+            "deployment_model",
+            "billing_cycle",
+            "license_type",
             "unit_price",
             "commission_rate",
             "tax",
@@ -333,6 +383,10 @@ class ProductWriteSerializer(serializers.ModelSerializer):
             "quantity_in_demand",
             "reorder_level",
             "usage_unit",
+            "default_user_seats",
+            "subscription_term_months",
+            "renewal_required",
+            "implementation_required",
             "support_start_date",
             "support_expiry_date",
             "description",
@@ -351,6 +405,8 @@ class ProductWriteSerializer(serializers.ModelSerializer):
             value = attrs.get(field)
             if value is not None and value < 0:
                 raise serializers.ValidationError({field: ["Ensure this value is greater than or equal to 0."]})
+        _validate_positive_whole_number(attrs, "default_user_seats", minimum=1)
+        _validate_positive_whole_number(attrs, "subscription_term_months", minimum=1)
         start = attrs.get("support_start_date")
         end = attrs.get("support_expiry_date")
         if start and end and start > end:
@@ -551,6 +607,7 @@ class QuoteListSerializer(serializers.ModelSerializer):
     account_name = serializers.SerializerMethodField()
     contact_name = serializers.SerializerMethodField()
     deal_name = serializers.SerializerMethodField()
+    renewal_status = serializers.SerializerMethodField()
 
     class Meta:
         model = Quote
@@ -571,6 +628,14 @@ class QuoteListSerializer(serializers.ModelSerializer):
             "contact_name",
             "account",
             "account_name",
+            "billing_cycle",
+            "license_type",
+            "licensed_users",
+            "implementation_required",
+            "subscription_start_date",
+            "subscription_end_date",
+            "renewal_due_date",
+            "renewal_status",
             "subtotal",
             "discount",
             "tax",
@@ -594,6 +659,9 @@ class QuoteListSerializer(serializers.ModelSerializer):
 
     def get_deal_name(self, obj):
         return obj.deal.deal_name if obj.deal else None
+
+    def get_renewal_status(self, obj):
+        return _get_renewal_status(obj)
 
 
 class QuoteWriteSerializer(serializers.ModelSerializer):
@@ -637,6 +705,13 @@ class QuoteWriteSerializer(serializers.ModelSerializer):
             "valid_until",
             "contact",
             "account",
+            "billing_cycle",
+            "license_type",
+            "licensed_users",
+            "implementation_required",
+            "subscription_start_date",
+            "subscription_end_date",
+            "renewal_due_date",
             "billing_street",
             "billing_city",
             "billing_state",
@@ -670,6 +745,8 @@ class QuoteWriteSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"contact": ["Select a contact."]})
         if not deal:
             raise serializers.ValidationError({"deal": ["Select a deal."]})
+        _validate_positive_whole_number(attrs, "licensed_users", minimum=1)
+        _validate_subscription_dates(attrs)
         items = attrs.get("items")
         if items is not None and not items:
             raise serializers.ValidationError({"items": ["At least one line item is required."]})
@@ -714,6 +791,7 @@ class SalesOrderListSerializer(serializers.ModelSerializer):
     account_name = serializers.SerializerMethodField()
     contact_name = serializers.SerializerMethodField()
     deal_name = serializers.SerializerMethodField()
+    renewal_status = serializers.SerializerMethodField()
 
     class Meta:
         model = SalesOrder
@@ -734,6 +812,14 @@ class SalesOrderListSerializer(serializers.ModelSerializer):
             "due_date",
             "contact",
             "contact_name",
+            "billing_cycle",
+            "license_type",
+            "licensed_users",
+            "implementation_required",
+            "subscription_start_date",
+            "subscription_end_date",
+            "renewal_due_date",
+            "renewal_status",
             "excise_duty",
             "status",
             "subtotal",
@@ -756,6 +842,9 @@ class SalesOrderListSerializer(serializers.ModelSerializer):
 
     def get_deal_name(self, obj):
         return obj.deal.deal_name if obj.deal else None
+
+    def get_renewal_status(self, obj):
+        return _get_renewal_status(obj)
 
 
 class SalesOrderWriteSerializer(serializers.ModelSerializer):
@@ -800,6 +889,13 @@ class SalesOrderWriteSerializer(serializers.ModelSerializer):
             "deal",
             "due_date",
             "contact",
+            "billing_cycle",
+            "license_type",
+            "licensed_users",
+            "implementation_required",
+            "subscription_start_date",
+            "subscription_end_date",
+            "renewal_due_date",
             "excise_duty",
             "status",
             "billing_street",
@@ -834,6 +930,8 @@ class SalesOrderWriteSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"non_field_errors": ["Select a quote or provide account, contact, and deal."]}
             )
+        _validate_positive_whole_number(attrs, "licensed_users", minimum=1)
+        _validate_subscription_dates(attrs)
         items = attrs.get("items")
         if items is not None and not items:
             raise serializers.ValidationError({"items": ["At least one line item is required."]})
@@ -1022,6 +1120,7 @@ class InvoiceListSerializer(serializers.ModelSerializer):
     account_name = serializers.SerializerMethodField()
     contact_name = serializers.SerializerMethodField()
     deal_name = serializers.SerializerMethodField()
+    renewal_status = serializers.SerializerMethodField()
 
     class Meta:
         model = Invoice
@@ -1041,6 +1140,14 @@ class InvoiceListSerializer(serializers.ModelSerializer):
             "deal_name",
             "sales_order",
             "purchase_order",
+            "billing_cycle",
+            "license_type",
+            "licensed_users",
+            "implementation_required",
+            "subscription_start_date",
+            "subscription_end_date",
+            "renewal_due_date",
+            "renewal_status",
             "excise_duty",
             "status",
             "subtotal",
@@ -1063,6 +1170,9 @@ class InvoiceListSerializer(serializers.ModelSerializer):
 
     def get_deal_name(self, obj):
         return obj.deal.deal_name if obj.deal else None
+
+    def get_renewal_status(self, obj):
+        return _get_renewal_status(obj)
 
 
 class InvoiceWriteSerializer(serializers.ModelSerializer):
@@ -1111,6 +1221,13 @@ class InvoiceWriteSerializer(serializers.ModelSerializer):
             "deal",
             "sales_order",
             "purchase_order",
+            "billing_cycle",
+            "license_type",
+            "licensed_users",
+            "implementation_required",
+            "subscription_start_date",
+            "subscription_end_date",
+            "renewal_due_date",
             "excise_duty",
             "status",
             "billing_street",
@@ -1151,6 +1268,8 @@ class InvoiceWriteSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"account": ["Select an account."]})
         if not contact and not purchase_order and not sales_order:
             raise serializers.ValidationError({"contact": ["Select a contact."]})
+        _validate_positive_whole_number(attrs, "licensed_users", minimum=1)
+        _validate_subscription_dates(attrs)
         items = attrs.get("items")
         if (items is None or not items) and not sales_order and not purchase_order:
             raise serializers.ValidationError({"items": ["At least one line item is required."]})

@@ -1,11 +1,10 @@
 import traceback
+
 from django.conf import settings
 from django.http import JsonResponse
 
 
 class TenantMiddleware:
-    """Simple middleware — single database, no tenant routing."""
-
     def __init__(self, get_response):
         self.get_response = get_response
 

@@ -14,6 +14,8 @@ from rest_framework.response import Response
 from activities.models import Call, LeadActivity
 from activities.serializers import LeadActivitySerializer
 from integrations.services import (
+    AUTO_SYNC_STALE_SECONDS,
+    auto_sync_visible_email_providers,
     create_outgoing_crm_email,
     get_lead_connected_records,
     get_lead_emails,
@@ -71,6 +73,7 @@ class LeadViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        auto_sync_visible_email_providers(user, max_age_seconds=AUTO_SYNC_STALE_SECONDS)
 
         base_qs = (
             Lead.objects.select_related(
@@ -538,6 +541,7 @@ class LeadViewSet(viewsets.ModelViewSet):
             subject=serializer.validated_data["subject"],
             body=serializer.validated_data["body"],
             to_emails=[recipient_email],
+            send_live=True,
             owner=request.user,
             lead=lead,
             contact=lead.converted_contact,

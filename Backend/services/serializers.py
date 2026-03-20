@@ -110,7 +110,7 @@ class ServicesModuleSettingsSerializer(serializers.ModelSerializer):
 class ServiceUserLookupSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     email = serializers.EmailField()
-    team = serializers.CharField()
+    team = serializers.SerializerMethodField()
     team_label = serializers.SerializerMethodField()
     label = serializers.SerializerMethodField()
 
@@ -119,10 +119,19 @@ class ServiceUserLookupSerializer(serializers.Serializer):
             return obj.email
         return obj.get("email")
 
+    def get_team(self, obj):
+        if hasattr(obj, "department"):
+            return obj.department or "general"
+        if hasattr(obj, "team"):
+            return obj.team
+        return obj.get("team", "general")
+
     def get_team_label(self, obj):
+        if hasattr(obj, "get_department_display"):
+            return obj.get_department_display() if obj.department else "General"
         if hasattr(obj, "get_team_display"):
             return obj.get_team_display()
-        return obj.get("team")
+        return obj.get("team_label") or obj.get("team") or "General"
 
 
 class BusinessHoursSerializer(serializers.ModelSerializer):
@@ -600,7 +609,11 @@ class AppointmentSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {"assigned_member": "Assigned member must be a member of the selected service."}
                 )
-            if not active_assignments.exists() and assigned_member.team != service.delivery_team:
+            assigned_team = getattr(assigned_member, "department", None)
+            if assigned_team is None:
+                assigned_team = getattr(assigned_member, "team", None)
+            assigned_team = assigned_team or "general"
+            if not active_assignments.exists() and assigned_team != service.delivery_team:
                 raise serializers.ValidationError(
                     {"assigned_member": "Assigned member must belong to the selected service delivery team."}
                 )

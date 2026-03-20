@@ -30,10 +30,6 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-#02on6j-^m-dodq#tyr
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
-AUTO_MIGRATE_TENANTS = os.getenv(
-    "AUTO_MIGRATE_TENANTS",
-    "true" if DEBUG else "false",
-).lower() == "true"
 
 ALLOWED_HOSTS = os.getenv(
     'ALLOWED_HOSTS',
@@ -109,8 +105,8 @@ WSGI_APPLICATION = 'crm_backend.wsgi.application'
 
 
 # Database
-# Dynamic Multi-Tenant PostgreSQL configuration
-DB_NAME = os.getenv('DB_NAME', 'crms2_master')
+# Single PostgreSQL database configuration
+DB_NAME = os.getenv('DB_NAME', 'tenant_lavanya')
 DB_USER = os.getenv('DB_USER', 'postgres')
 DB_PASSWORD = os.getenv('DB_PASSWORD', 'zora')
 DB_HOST = os.getenv('DB_HOST', 'localhost')
@@ -172,9 +168,7 @@ AUTH_USER_MODEL = 'authentication.User'
 
 # CORS
 CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOW_HEADERS = list(default_headers) + [
-    'x-tenant-db',
-]
+CORS_ALLOW_HEADERS = list(default_headers)
 
 # Django REST Framework
 REST_FRAMEWORK = {

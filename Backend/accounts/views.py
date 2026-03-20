@@ -520,6 +520,7 @@ class AccountViewSet(viewsets.ModelViewSet):
             subject=serializer.validated_data["subject"],
             body=serializer.validated_data["body"],
             to_emails=[recipient_email],
+            send_live=True,
             owner=request.user,
             account=account,
             thread_id=f"account-{account.pk}",

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Building2, ExternalLink, User } from "lucide-react";
 import { contactModuleConfig } from "../../components/modules/contacts/contactsMockData";
 import { getContactById, getContactDeals, getContactNotes } from "../../lib/api/contactsApi";
@@ -9,12 +9,13 @@ import CRMModuleDetailPage from "../crm/CRMModuleDetailPage";
 
 export default function ContactDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const location = useLocation();
   const navigate = useNavigate();
-  const [contact, setContact] = useState<ContactRecord | null>(null);
+  const [contact, setContact] = useState<ContactRecord | null>((location.state as { record?: ContactRecord } | null)?.record ?? null);
   const [notes, setNotes] = useState<Note[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [linkedData, setLinkedData] = useState<any | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!((location.state as { record?: ContactRecord } | null)?.record));
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -25,19 +26,23 @@ export default function ContactDetailPage() {
         setLoading(true);
         setError(null);
 
-        const [contactData, notesData, dealsData] = await Promise.all([
-          getContactById(id),
-          getContactNotes(id).catch(() => []),
-          getContactDeals(id).catch(() => []),
-        ]);
+        const contactData = await getContactById(id);
 
         if (!contactData) {
           setContact(null);
           setLinkedData(null);
+          setLoading(false);
           return;
         }
 
         setContact(contactData);
+        setLoading(false);
+
+        const [notesData, dealsData] = await Promise.all([
+          getContactNotes(id).catch(() => []),
+          getContactDeals(id).catch(() => []),
+        ]);
+
         setNotes(notesData);
         setDeals(dealsData);
 

@@ -1,70 +1,74 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { Suspense, lazy, useEffect, useState, type ReactNode } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { DashboardLayoutRoute } from "./components/layout/DashboardLayout";
-import HomePage from "./pages/HomePage";
-import LoginPage from "./pages/LoginPage";
-import ChangePasswordPage from "./pages/ChangePasswordPage";
-import AccountDetailPage from "./pages/accounts/AccountDetailPage";
-import AccountsPage from "./pages/accounts/AccountsPage";
-import CallsPage from "./pages/activities/calls";
-import CreateMeetingPage from "./pages/activities/meetings/CreateMeetingPage";
-import MeetingDetailPage from "./pages/activities/meetings/MeetingDetailPage";
-import MeetingsPage from "./pages/activities/meetings";
-import CreateTaskPage from "./pages/activities/tasks/CreateTaskPage";
-import TaskDetailPage from "./pages/activities/tasks/TaskDetailPage";
-import TasksPage from "./pages/activities/tasks";
-import CampaignsPage from "./pages/campaigns/CampaignsPage";
-import DocumentsPage from "./pages/documents/DocumentsPage";
-import DocumentDetailPage from "./pages/documents/DocumentDetailPage";
-import CampaignDetailPage from "./pages/campaigns/CampaignDetailPage";
-import CreateCampaignPage from "./pages/campaigns/CreateCampaignPage";
-import PublicCampaignFormPage from "./pages/campaigns/PublicCampaignFormPage";
-import ContactDetailPage from "./pages/contacts/ContactDetailPage";
-import ContactsPage from "./pages/contacts/ContactsPage";
-import ImportPage from "./pages/crm/ImportPage";
-import DealDetailPage from "./pages/deals/DealDetailPage";
-import DealsPage from "./pages/deals/DealsPage";
-import CreateAccountPage from "./pages/accounts/CreateAccountPage";
-import CreateContactPage from "./pages/contacts/CreateContactPage";
-import CreateDealPage from "./pages/deals/CreateDealPage";
-import CreateLeadPage from "./pages/leads/CreateLeadPage";
-import LeadDetailPage from "./pages/leads/LeadDetailPage";
-import LeadsPage from "./pages/leads/LeadsPage";
-import EmployeeProfilePage from "./pages/team/EmployeeProfilePage";
-import UserCreatePage from "./pages/team/UserCreatePage";
-import UsersListPage from "./pages/team/UsersListPage";
-import ProjectsPage from "./pages/projects/ProjectsPage";
-import CreateProjectPage from "./pages/projects/CreateProjectPage";
-import ProjectDetailPage from "./pages/projects/ProjectDetailPage";
-import InventoryListRoute from "./pages/inventory/InventoryListRoute";
-import InventoryFormRoute from "./pages/inventory/InventoryFormRoute";
-import InventoryDetailRoute from "./pages/inventory/InventoryDetailRoute";
-import PriceBookImportPage from "./pages/inventory/PriceBookImportPage";
-import CasesPage from "./pages/support/CasesPage";
-import CaseFormRoute from "./pages/support/CaseFormRoute";
-import CaseDetailRoute from "./pages/support/CaseDetailRoute";
-import CaseImportRoute from "./pages/support/CaseImportRoute";
-import SolutionsPage from "./pages/support/SolutionsPage";
-import SolutionFormRoute from "./pages/support/SolutionFormRoute";
-import SolutionDetailRoute from "./pages/support/SolutionDetailRoute";
-import SolutionImportRoute from "./pages/support/SolutionImportRoute";
-import BusinessHoursRoute from "./pages/servicesModule/BusinessHoursRoute";
-import ServicesCatalogPage from "./pages/servicesModule/ServicesCatalogPage";
-import ServiceFormRoute from "./pages/servicesModule/ServiceFormRoute";
-import ServiceDetailRoute from "./pages/servicesModule/ServiceDetailRoute";
-import AppointmentsPage from "./pages/servicesModule/AppointmentsPage";
-import AppointmentFormRoute from "./pages/servicesModule/AppointmentFormRoute";
-import AppointmentDetailRoute from "./pages/servicesModule/AppointmentDetailRoute";
-import JobSheetFormRoute from "./pages/servicesModule/JobSheetFormRoute";
-import JobSheetDetailRoute from "./pages/servicesModule/JobSheetDetailRoute";
-import CompanyDetailsRoute from "./pages/servicesModule/CompanyDetailsRoute";
-import DomainMappingRoute from "./pages/servicesModule/DomainMappingRoute";
-import FiscalYearRoute from "./pages/servicesModule/FiscalYearRoute";
-import HolidaysRoute from "./pages/servicesModule/HolidaysRoute";
-import IntegrationsPage from "./pages/integrations/IntegrationsPage";
-import EmailIntegrationsPage from "./pages/integrations/EmailIntegrationsPage";
-import SocialIntegrationsPage from "./pages/integrations/SocialIntegrationsPage";
-import VisitorTrackingPage from "./pages/integrations/VisitorTrackingPage";
+const HomePage = lazy(() => import("./pages/HomePage"));
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const ChangePasswordPage = lazy(() => import("./pages/ChangePasswordPage"));
+const AccountDetailPage = lazy(() => import("./pages/accounts/AccountDetailPage"));
+const AccountsPage = lazy(() => import("./pages/accounts/AccountsPage"));
+const CallsPage = lazy(() => import("./pages/activities/calls"));
+const CreateMeetingPage = lazy(() => import("./pages/activities/meetings/CreateMeetingPage"));
+const MeetingDetailPage = lazy(() => import("./pages/activities/meetings/MeetingDetailPage"));
+const MeetingsPage = lazy(() => import("./pages/activities/meetings"));
+const CreateTaskPage = lazy(() => import("./pages/activities/tasks/CreateTaskPage"));
+const TaskDetailPage = lazy(() => import("./pages/activities/tasks/TaskDetailPage"));
+const TasksPage = lazy(() => import("./pages/activities/tasks"));
+const CampaignsPage = lazy(() => import("./pages/campaigns/CampaignsPage"));
+const DocumentsPage = lazy(() => import("./pages/documents/DocumentsPage"));
+const DocumentDetailPage = lazy(() => import("./pages/documents/DocumentDetailPage"));
+const CampaignDetailPage = lazy(() => import("./pages/campaigns/CampaignDetailPage"));
+const CreateCampaignPage = lazy(() => import("./pages/campaigns/CreateCampaignPage"));
+const PublicCampaignFormPage = lazy(() => import("./pages/campaigns/PublicCampaignFormPage"));
+const ContactDetailPage = lazy(() => import("./pages/contacts/ContactDetailPage"));
+const ContactsPage = lazy(() => import("./pages/contacts/ContactsPage"));
+const ImportPage = lazy(() => import("./pages/crm/ImportPage"));
+const DealDetailPage = lazy(() => import("./pages/deals/DealDetailPage"));
+const DealsPage = lazy(() => import("./pages/deals/DealsPage"));
+const CreateAccountPage = lazy(() => import("./pages/accounts/CreateAccountPage"));
+const CreateContactPage = lazy(() => import("./pages/contacts/CreateContactPage"));
+const CreateDealPage = lazy(() => import("./pages/deals/CreateDealPage"));
+const CreateLeadPage = lazy(() => import("./pages/leads/CreateLeadPage"));
+const LeadDetailPage = lazy(() => import("./pages/leads/LeadDetailPage"));
+const LeadsPage = lazy(() => import("./pages/leads/LeadsPage"));
+const EmployeeProfilePage = lazy(() => import("./pages/team/EmployeeProfilePage"));
+const UserCreatePage = lazy(() => import("./pages/team/UserCreatePage"));
+const UsersListPage = lazy(() => import("./pages/team/UsersListPage"));
+const ProjectsPage = lazy(() => import("./pages/projects/ProjectsPage"));
+const CreateProjectPage = lazy(() => import("./pages/projects/CreateProjectPage"));
+const ProjectDetailPage = lazy(() => import("./pages/projects/ProjectDetailPage"));
+const InventoryListRoute = lazy(() => import("./pages/inventory/InventoryListRoute"));
+const InventoryFormRoute = lazy(() => import("./pages/inventory/InventoryFormRoute"));
+const InventoryDetailRoute = lazy(() => import("./pages/inventory/InventoryDetailRoute"));
+const PriceBookImportPage = lazy(() => import("./pages/inventory/PriceBookImportPage"));
+const CasesPage = lazy(() => import("./pages/support/CasesPage"));
+const CaseFormRoute = lazy(() => import("./pages/support/CaseFormRoute"));
+const CaseDetailRoute = lazy(() => import("./pages/support/CaseDetailRoute"));
+const CaseImportRoute = lazy(() => import("./pages/support/CaseImportRoute"));
+const SolutionsPage = lazy(() => import("./pages/support/SolutionsPage"));
+const SolutionFormRoute = lazy(() => import("./pages/support/SolutionFormRoute"));
+const SolutionDetailRoute = lazy(() => import("./pages/support/SolutionDetailRoute"));
+const SolutionImportRoute = lazy(() => import("./pages/support/SolutionImportRoute"));
+const BusinessHoursRoute = lazy(() => import("./pages/servicesModule/BusinessHoursRoute"));
+const ServicesCatalogPage = lazy(() => import("./pages/servicesModule/ServicesCatalogPage"));
+const ServiceFormRoute = lazy(() => import("./pages/servicesModule/ServiceFormRoute"));
+const ServiceDetailRoute = lazy(() => import("./pages/servicesModule/ServiceDetailRoute"));
+const AppointmentsPage = lazy(() => import("./pages/servicesModule/AppointmentsPage"));
+const AppointmentFormRoute = lazy(() => import("./pages/servicesModule/AppointmentFormRoute"));
+const AppointmentDetailRoute = lazy(() => import("./pages/servicesModule/AppointmentDetailRoute"));
+const JobSheetFormRoute = lazy(() => import("./pages/servicesModule/JobSheetFormRoute"));
+const JobSheetDetailRoute = lazy(() => import("./pages/servicesModule/JobSheetDetailRoute"));
+const CompanyDetailsRoute = lazy(() => import("./pages/servicesModule/CompanyDetailsRoute"));
+const DomainMappingRoute = lazy(() => import("./pages/servicesModule/DomainMappingRoute"));
+const FiscalYearRoute = lazy(() => import("./pages/servicesModule/FiscalYearRoute"));
+const HolidaysRoute = lazy(() => import("./pages/servicesModule/HolidaysRoute"));
+const IntegrationsPage = lazy(() => import("./pages/integrations/IntegrationsPage"));
+const EmailIntegrationsPage = lazy(() => import("./pages/integrations/EmailIntegrationsPage"));
+const SocialIntegrationsPage = lazy(() => import("./pages/integrations/SocialIntegrationsPage"));
+const VisitorTrackingPage = lazy(() => import("./pages/integrations/VisitorTrackingPage"));
+
+function RouteFallback() {
+  return <div className="p-6 text-sm text-slate-600">Loading...</div>;
+}
 
 function hasSession() {
   if (typeof window === "undefined") return false;
@@ -103,13 +107,11 @@ function RequireAuth({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!hasSession()) return;
     const token = localStorage.getItem("accessToken");
-    const tenantDb = localStorage.getItem("tenantDb");
     if (!token) return;
 
     const headers: Record<string, string> = {
       Authorization: `Bearer ${token}`,
     };
-    if (tenantDb) headers["X-Tenant-DB"] = tenantDb;
 
     fetch(`${import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api"}/auth/my-modules/`, { headers })
       .then((res) => (res.ok ? res.json() : null))
@@ -152,32 +154,33 @@ function MustChangePasswordGuard({ children }: { children: ReactNode }) {
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/" element={<Navigate to="/login" replace />} />
-      <Route path="/login" element={<LoginPage />} />
+    <Suspense fallback={<RouteFallback />}>
+      <Routes>
+        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/login" element={<LoginPage />} />
 
       {/* First-login password change — auth required but no dashboard shell */}
-      <Route
-        path="/change-password"
-        element={
-          <RequireAuth>
-            <ChangePasswordPage />
-          </RequireAuth>
-        }
-      />
+        <Route
+          path="/change-password"
+          element={
+            <RequireAuth>
+              <ChangePasswordPage />
+            </RequireAuth>
+          }
+        />
 
       {/* Public campaign form — no auth required */}
-      <Route path="/public/campaigns/:campaignId/form" element={<PublicCampaignFormPage />} />
+        <Route path="/public/campaigns/:campaignId/form" element={<PublicCampaignFormPage />} />
 
-      <Route
-        element={
-          <RequireAuth>
-            <MustChangePasswordGuard>
-              <DashboardLayoutRoute />
-            </MustChangePasswordGuard>
-          </RequireAuth>
-        }
-      >
+        <Route
+          element={
+            <RequireAuth>
+              <MustChangePasswordGuard>
+                <DashboardLayoutRoute />
+              </MustChangePasswordGuard>
+            </RequireAuth>
+          }
+        >
         <Route path="/home" element={<HomePage />} />
 
         <Route path="/leads" element={<LeadsPage />} />
@@ -305,7 +308,8 @@ export default function App() {
         <Route path="/configurator/:id" element={<InventoryDetailRoute moduleKey="configurator" />} />
 
         <Route path="*" element={<Navigate to="/home" replace />} />
-      </Route>
-    </Routes>
+        </Route>
+      </Routes>
+    </Suspense>
   );
 }

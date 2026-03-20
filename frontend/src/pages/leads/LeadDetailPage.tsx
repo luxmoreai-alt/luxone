@@ -1,6 +1,6 @@
 import { useEffect, useState, type KeyboardEvent, type ReactNode } from "react";
 import { X } from "lucide-react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { apiRequest } from "../../api/client";
 import { leadModuleConfig } from "../../components/modules/leads/leadsMockData";
 import { loadLeadLinkedData } from "../../lib/api/linkedRecordsApi";
@@ -293,12 +293,13 @@ type ActiveModal = "send-email" | "convert" | "add-tags" | "delete" | null;
 
 export default function LeadDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const location = useLocation();
   const navigate = useNavigate();
-  const [lead, setLead] = useState<LeadRecord | null>(null);
+  const [lead, setLead] = useState<LeadRecord | null>((location.state as { record?: LeadRecord } | null)?.record ?? null);
   const [notes, setNotes] = useState<Note[]>([]);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [linkedData, setLinkedData] = useState<any | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!((location.state as { record?: LeadRecord } | null)?.record));
   const [error, setError] = useState<string | null>(null);
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
   const [convertedLinks, setConvertedLinks] = useState<{ account_id: number; contact_id: number; deal_id?: number | null } | null>(null);
@@ -313,9 +314,11 @@ export default function LeadDetailPage() {
         if (!leadData) {
           setLead(null);
           setLinkedData(null);
+          setLoading(false);
           return;
         }
         setLead(leadData);
+        setLoading(false);
 
         const [notesData, timelineData, related] = await Promise.all([
           getLeadNotes(id).catch(() => []),

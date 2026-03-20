@@ -5,6 +5,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('authentication', '0005_user_status'),
+        ('authentication', '0005_user_team'),
     ]
 
     operations = [

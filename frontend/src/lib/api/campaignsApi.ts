@@ -260,14 +260,12 @@ export type PublicFormPayload = {
 export async function submitCampaignForm(
   campaignId: string,
   payload: PublicFormPayload,
-  tenantDb: string
 ): Promise<{ message: string; id: number }> {
   const url = buildApiUrl(`/public/campaigns/${campaignId}/submit-form/`);
   const res = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Tenant-DB": tenantDb,
     },
     body: JSON.stringify({
       first_name: payload.firstName,

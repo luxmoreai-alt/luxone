@@ -124,9 +124,6 @@ from .services import (
     visible_queryset,
 )
 from .utils import build_tracking_code
-from crm_backend.middleware import get_current_db_name, set_current_db_name
-from saas_admin.models import Company
-from saas_admin.services import configure_tenant_database_in_settings
 from leads.models import Lead
 from accounts.models import Account
 from contacts.models import Contact
@@ -245,14 +242,7 @@ def _social_redirect_with_status(base_url: str, status_value: str, message: str 
 
 
 def _activate_tenant_db(tenant_db: str | None) -> None:
-    if not tenant_db or tenant_db == "default":
-        set_current_db_name("default")
-        return
-    if Company.objects.filter(status="Active", db_name=tenant_db).exists():
-        configure_tenant_database_in_settings(tenant_db)
-        set_current_db_name(tenant_db)
-        return
-    set_current_db_name("default")
+    return None
 
 
 def _auto_sync_email_providers_if_stale(request, *, max_age_seconds: int = 600) -> None:
@@ -429,7 +419,6 @@ class FacebookSocialOAuthStartAPIView(APIView):
         state = signing.dumps(
             {
                 "account_id": account.id,
-                "tenant_db": get_current_db_name(),
                 "next": frontend_url,
             },
             salt=FACEBOOK_OAUTH_STATE_SALT,
@@ -461,9 +450,7 @@ class FacebookSocialOAuthCallbackAPIView(APIView):
 
         try:
             state = signing.loads(state_token or "", salt=FACEBOOK_OAUTH_STATE_SALT, max_age=900)
-            tenant_db = state.get("tenant_db")
             next_url = state.get("next") or next_url
-            _activate_tenant_db(tenant_db)
         except Exception:
             return _social_redirect_with_status(
                 next_url,
@@ -546,9 +533,6 @@ class FacebookSocialOAuthCallbackAPIView(APIView):
             )
         except Exception as exc:
             return _social_redirect_with_status(next_url, "facebook_error", str(exc))
-        finally:
-            set_current_db_name("default")
-
         return _social_redirect_with_status(next_url, "facebook_success", "Facebook page connected successfully.")
 
 

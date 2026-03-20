@@ -79,7 +79,7 @@ export default function CreateAccountPage() {
   );
 
   const handleSubmit = async (values: AccountCreateValues) => {
-    await createAccount({
+    const created = await createAccount({
       accountOwner: values.accountOwner,
       accountName: values.accountName,
       accountType: values.accountType,
@@ -95,6 +95,10 @@ export default function CreateAccountPage() {
       zipCode: values.zipCode,
       description: values.description,
     });
+    return {
+      redirectTo: `/accounts/${created.id}`,
+      state: { record: created },
+    };
   };
 
   return (

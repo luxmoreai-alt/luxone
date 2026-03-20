@@ -79,11 +79,9 @@ const OtpLoginPage = () => {
 
       const accessToken = data?.data?.access_token || data?.access_token || null;
       const refreshToken = data?.data?.refresh_token || data?.refresh_token || null;
-      const tenantDb = data?.data?.tenant_db || data?.tenant_db || null;
       const user = data?.data?.user || data?.user || null;
       if (accessToken) localStorage.setItem("accessToken", accessToken);
       if (refreshToken) localStorage.setItem("refreshToken", refreshToken);
-      if (tenantDb) localStorage.setItem("tenantDb", tenantDb);
       const userWithRole = user ? { ...user, role } : { email: email.trim(), role };
       localStorage.setItem("loggedInUser", JSON.stringify(userWithRole));
 

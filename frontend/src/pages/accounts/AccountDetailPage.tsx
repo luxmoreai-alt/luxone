@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { accountModuleConfig } from "../../components/modules/accounts/accountsMockData";
 import {
   getAccountById,
@@ -13,11 +13,12 @@ import CRMModuleDetailPage from "../crm/CRMModuleDetailPage";
 
 export default function AccountDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const location = useLocation();
   const navigate = useNavigate();
-  const [account, setAccount] = useState<AccountRecord | null>(null);
+  const [account, setAccount] = useState<AccountRecord | null>((location.state as { record?: AccountRecord } | null)?.record ?? null);
   const [notes, setNotes] = useState<Note[]>([]);
   const [linkedData, setLinkedData] = useState<any | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!((location.state as { record?: AccountRecord } | null)?.record));
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -28,20 +29,23 @@ export default function AccountDetailPage() {
         setLoading(true);
         setError(null);
 
-        const [accountData, notesData, contactsData, dealsData] = await Promise.all([
-          getAccountById(id),
-          getAccountNotes(id).catch(() => []),
-          getAccountContacts(id).catch(() => []),
-          getAccountDeals(id).catch(() => []),
-        ]);
+        const accountData = await getAccountById(id);
 
         if (!accountData) {
           setAccount(null);
           setLinkedData(null);
+          setLoading(false);
           return;
         }
 
         setAccount(accountData);
+        setLoading(false);
+
+        const [notesData, contactsData, dealsData] = await Promise.all([
+          getAccountNotes(id).catch(() => []),
+          getAccountContacts(id).catch(() => []),
+          getAccountDeals(id).catch(() => []),
+        ]);
         setNotes(notesData);
 
         const related = await loadAccountLinkedData(accountData).catch(() => null);

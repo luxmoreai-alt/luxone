@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { KeyRound, Loader2, ShieldCheck } from "lucide-react";
-import { changePassword, getAccessToken, getStoredUser, storeAuthSession } from "../lib/api/authApi";
+import { changePassword, getAccessToken, getStoredUser } from "../lib/api/authApi";
 
 export default function ChangePasswordPage() {
   const navigate = useNavigate();

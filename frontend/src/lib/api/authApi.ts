@@ -43,7 +43,6 @@ export const AUTH_KEYS = {
   loggedInUser: "loggedInUser",
   accessToken: "accessToken",
   refreshToken: "refreshToken",
-  tenantDb: "tenantDb",
 } as const;
 
 export function storeAuthSession(data: LoginResponse["data"]) {
@@ -78,14 +77,8 @@ export function getRefreshToken(): string | null {
   return localStorage.getItem(AUTH_KEYS.refreshToken);
 }
 
-export function getTenantDb(): string | null {
-  return localStorage.getItem(AUTH_KEYS.tenantDb);
-}
-
 async function apiPost<T>(path: string, body: unknown, token?: string): Promise<T> {
-  const tenantDb = getTenantDb();
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (tenantDb) headers["X-Tenant-DB"] = tenantDb;
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
   const res = await fetch(`${getResolvedApiBaseUrl()}${path}`, {
@@ -134,9 +127,7 @@ export async function refreshAccessToken(): Promise<string | null> {
   if (!refreshToken) return null;
 
   try {
-    const tenantDb = getTenantDb();
     const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (tenantDb) headers["X-Tenant-DB"] = tenantDb;
 
     const res = await fetch(`${getResolvedApiBaseUrl()}/auth/token/refresh/`, {
       method: "POST",

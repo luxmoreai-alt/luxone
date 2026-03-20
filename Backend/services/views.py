@@ -2,12 +2,11 @@ from __future__ import annotations
 
 from django_filters.rest_framework import DjangoFilterBackend
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 from rest_framework import filters, generics, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-
-from organizations.services import get_assignable_users
 
 from .models import BusinessHours, ServiceDomainMapping, ServiceHoliday
 from .serializers import (
@@ -54,6 +53,33 @@ from .services import (
 User = get_user_model()
 
 
+TEAM_TO_DEPARTMENT_MAP = {
+    "sales": "sales",
+    "support": "support",
+    "general": "",
+}
+
+
+def get_assignable_users(user):
+    queryset = User.objects.filter(is_active=True)
+    role = getattr(user, "role", "")
+    if role in ("admin", "sub_admin"):
+        return queryset
+    if role in ("manager", "team_lead"):
+        return queryset.filter(Q(pk=user.pk) | Q(manager=user))
+    return queryset.filter(pk=user.pk)
+
+
+def _filter_users_by_delivery_team(queryset, team):
+    if not team:
+        return queryset
+    if hasattr(User, "department"):
+        return queryset.filter(department=TEAM_TO_DEPARTMENT_MAP.get(team, team))
+    if hasattr(User, "team"):
+        return queryset.filter(team=team)
+    return queryset.none()
+
+
 class ServicesAuthenticatedMixin:
     permission_classes = [IsAuthenticated]
 
@@ -68,7 +94,7 @@ class ServiceTeamMembersAPIView(ServicesAuthenticatedMixin, APIView):
             service = get_service(service_id)
             team = service.delivery_team
         if team:
-            queryset = queryset.filter(team=team)
+            queryset = _filter_users_by_delivery_team(queryset, team)
         if query:
             queryset = queryset.filter(email__icontains=query)
         queryset = queryset[:50]
@@ -207,7 +233,7 @@ class ServiceMembersAPIView(ServicesAuthenticatedMixin, APIView):
             return Response({"member_ids": ["Member ids must be provided as a list."]}, status=status.HTTP_400_BAD_REQUEST)
         valid_users = User.objects.filter(id__in=member_ids, is_active=True)
         if service.delivery_team:
-            valid_users = valid_users.filter(team=service.delivery_team)
+            valid_users = _filter_users_by_delivery_team(valid_users, service.delivery_team)
         valid_member_ids = set(valid_users.values_list("id", flat=True))
         missing_ids = [member_id for member_id in member_ids if member_id not in valid_member_ids]
         if missing_ids:

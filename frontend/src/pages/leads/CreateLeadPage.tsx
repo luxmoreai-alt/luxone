@@ -234,7 +234,11 @@ export default function CreateLeadPage() {
       return;
     }
 
-    await createLead(payload);
+    const created = await createLead(payload);
+    return {
+      redirectTo: `/leads/${created.id}`,
+      state: { record: created },
+    };
   };
 
   const pageTitle = useMemo(() => (isEditMode ? "Edit Lead" : "Create Lead"), [isEditMode]);

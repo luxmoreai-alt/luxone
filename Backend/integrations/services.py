@@ -29,11 +29,8 @@ from django.utils import timezone
 
 from accounts.models import Account
 from contacts.models import Contact
-from crm_backend.middleware import get_current_db_name, set_current_db_name
 from deals.models import Deal
 from leads.models import Lead
-from saas_admin.models import Company
-from saas_admin.services import configure_tenant_database_in_settings
 from support.models import SupportCase
 
 from .models import (
@@ -68,6 +65,8 @@ from .utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+AUTO_SYNC_STALE_SECONDS = 60
 HIGH_INTENT_PATH_KEYWORDS = ("pricing", "quote", "demo", "trial", "contact", "checkout", "purchase")
 COMPLAINT_KEYWORDS = ("complaint", "issue", "problem", "bug", "error", "angry", "not working", "failed")
 SUPPORT_INTENT_KEYWORDS = (
@@ -796,6 +795,33 @@ def visible_queryset(queryset, user, owner_field: str | None = "created_by"):
     return queryset.filter(**{owner_field: user})
 
 
+def auto_sync_visible_email_providers(user, *, max_age_seconds: int = AUTO_SYNC_STALE_SECONDS) -> None:
+    if not user or not getattr(user, "is_authenticated", False):
+        return
+    threshold = timezone.now() - timedelta(seconds=max_age_seconds)
+    providers = visible_queryset(
+        EmailProviderIntegration.objects.filter(
+            is_active=True,
+            sync_enabled=True,
+            crm_sync_enabled=True,
+        ),
+        user,
+    )
+    for provider in providers:
+        if not provider_supports_real_mail_sync(provider):
+            continue
+        if provider.last_synced_at and provider.last_synced_at >= threshold:
+            continue
+        try:
+            run_provider_sync(
+                provider_integration=provider,
+                sync_type="incremental_sync",
+                triggered_by=user,
+            )
+        except Exception:
+            continue
+
+
 def get_or_create_placeholder_lead(*, email: str | None, name: str | None, company: str | None, owner=None) -> Lead:
     normalized_email = normalize_email(email) or make_placeholder_email("lead")
     existing = Lead.objects.filter(email__iexact=normalized_email).first()
@@ -909,6 +935,17 @@ def is_notification_sender(email: str | None) -> bool:
         "jobs2web",
         "mailer-daemon",
         "postmaster",
+        "jobalert",
+        "jobalert",
+        "linkedin",
+        "naukri",
+        "indeed",
+        "workday",
+        "adobe",
+        "nvidia",
+        "nobroker",
+        "techgig",
+        "dare2compete",
     )
     haystack = f"{local_part} {domain}".lower()
     return any(marker in haystack for marker in markers)
@@ -1308,6 +1345,11 @@ def _match_synced_email_records(payload: dict[str, Any]) -> MatchedCRMRecord:
             deal=base_match.deal,
         ))
 
+    # Keep ambiguous inbound mail on the sales-side records unless the
+    # message clearly indicates support intent or has an existing case thread/reference.
+    if base_match.lead or base_match.contact or base_match.account or base_match.deal:
+        return _strip_support_case(base_match)
+
     return base_match
 
 
@@ -1397,6 +1439,18 @@ def create_synced_email_message(
     owner=None,
 ) -> SyncedEmailMessage:
     match = _expand_related_crm_records(_match_synced_email_records(payload))
+    if (
+        (payload.get("direction") or SyncedEmailMessage.Direction.INCOMING) == SyncedEmailMessage.Direction.INCOMING
+        and not _has_crm_match(match)
+        and not is_notification_sender(payload.get("from_email"))
+    ):
+        placeholder_lead = get_or_create_placeholder_lead(
+            email=payload.get("from_email"),
+            name=payload.get("from_name") or payload.get("subject"),
+            company=payload.get("company") or "Email Inbox",
+            owner=owner or getattr(provider_integration, "user", None),
+        )
+        match = MatchedCRMRecord(lead=placeholder_lead)
     existing_message = SyncedEmailMessage.objects.filter(
         provider_integration=provider_integration,
         external_message_id=payload["external_message_id"],
@@ -1453,80 +1507,86 @@ def create_synced_email_message(
 @transaction.atomic
 def reconcile_synced_email_links(*, queryset=None) -> dict[str, int]:
     email_queryset = queryset or SyncedEmailMessage.objects.all()
-    db_alias = getattr(email_queryset, "db", None) or "default"
     updated = 0
     cleared = 0
-    previous_db = get_current_db_name()
-    set_current_db_name(db_alias)
-
-    try:
-        for message in email_queryset.select_related(
-            "provider_integration",
-            "lead",
-            "contact",
-            "account",
-            "deal",
-            "support_case",
+    for message in email_queryset.select_related(
+        "provider_integration",
+        "lead",
+        "contact",
+        "account",
+        "deal",
+        "support_case",
+    ):
+        payload = {
+            "external_message_id": message.external_message_id,
+            "thread_id": message.thread_id,
+            "subject": message.subject,
+            "from_email": message.from_email,
+            "to_emails": message.to_emails or [],
+            "cc_emails": message.cc_emails or [],
+            "bcc_emails": message.bcc_emails or [],
+            "body_text": message.body_text,
+            "body_html": message.body_html,
+            "direction": message.direction,
+            "status": message.status,
+            "received_at": message.received_at,
+            "sent_at": message.sent_at,
+            "is_read": message.is_read,
+            "has_attachments": message.has_attachments,
+        }
+        match = _match_synced_email_records(payload)
+        match = _expand_related_crm_records(match)
+        if (
+            message.direction == SyncedEmailMessage.Direction.INCOMING
+            and not _has_crm_match(match)
+            and not is_notification_sender(message.from_email)
         ):
-            payload = {
-                "external_message_id": message.external_message_id,
-                "thread_id": message.thread_id,
-                "subject": message.subject,
-                "from_email": message.from_email,
-                "to_emails": message.to_emails or [],
-                "cc_emails": message.cc_emails or [],
-                "bcc_emails": message.bcc_emails or [],
-                "body_text": message.body_text,
-                "body_html": message.body_html,
-                "direction": message.direction,
-                "status": message.status,
-                "received_at": message.received_at,
-                "sent_at": message.sent_at,
-                "is_read": message.is_read,
-                "has_attachments": message.has_attachments,
-            }
-            match = _match_synced_email_records(payload)
-            match = _expand_related_crm_records(match)
-            new_values = {
-                "lead": match.lead,
-                "contact": match.contact,
-                "account": match.account,
-                "deal": match.deal,
-                "support_case": match.support_case,
-            }
-            old_values = {
-                "lead": message.lead,
-                "contact": message.contact,
-                "account": message.account,
-                "deal": message.deal,
-                "support_case": message.support_case,
-            }
-            if old_values == new_values:
-                continue
-
-            message.lead = match.lead
-            message.contact = match.contact
-            message.account = match.account
-            message.deal = match.deal
-            message.support_case = match.support_case
-            message.save(using=db_alias, update_fields=["lead", "contact", "account", "deal", "support_case", "updated_at"])
-            upsert_email_record_link(message)
-            IntegrationLeadSourceEvent.objects.using(db_alias).filter(
-                source_type=IntegrationLeadSourceEvent.SourceType.EMAIL,
-                source_reference=message.external_message_id,
-            ).update(
-                lead=match.lead,
-                contact=match.contact,
-                account=match.account,
-                deal=match.deal,
-                support_case=match.support_case,
-                updated_at=timezone.now(),
+            match = MatchedCRMRecord(
+                lead=get_or_create_placeholder_lead(
+                    email=message.from_email,
+                    name=message.subject,
+                    company="Email Inbox",
+                    owner=getattr(message.provider_integration, "user", None),
+                )
             )
-            updated += 1
-            if not any(new_values.values()):
-                cleared += 1
-    finally:
-        set_current_db_name(previous_db)
+        new_values = {
+            "lead": match.lead,
+            "contact": match.contact,
+            "account": match.account,
+            "deal": match.deal,
+            "support_case": match.support_case,
+        }
+        old_values = {
+            "lead": message.lead,
+            "contact": message.contact,
+            "account": message.account,
+            "deal": message.deal,
+            "support_case": message.support_case,
+        }
+        if old_values == new_values:
+            continue
+
+        message.lead = match.lead
+        message.contact = match.contact
+        message.account = match.account
+        message.deal = match.deal
+        message.support_case = match.support_case
+        message.save(update_fields=["lead", "contact", "account", "deal", "support_case", "updated_at"])
+        upsert_email_record_link(message)
+        IntegrationLeadSourceEvent.objects.filter(
+            source_type=IntegrationLeadSourceEvent.SourceType.EMAIL,
+            source_reference=message.external_message_id,
+        ).update(
+            lead=match.lead,
+            contact=match.contact,
+            account=match.account,
+            deal=match.deal,
+            support_case=match.support_case,
+            updated_at=timezone.now(),
+        )
+        updated += 1
+        if not any(new_values.values()):
+            cleared += 1
 
     return {"updated": updated, "cleared": cleared}
 
@@ -1720,16 +1780,7 @@ def sync_current_tenant_email_providers(*, sync_type: str = "incremental_sync") 
 
 
 def sync_all_active_tenant_email_providers(*, sync_type: str = "incremental_sync") -> dict[str, list[int]]:
-    synced_by_tenant: dict[str, list[int]] = {}
-    previous_db = get_current_db_name()
-    try:
-        for tenant_db in Company.objects.filter(status="Active").values_list("db_name", flat=True):
-            configure_tenant_database_in_settings(tenant_db)
-            set_current_db_name(tenant_db)
-            synced_by_tenant[tenant_db] = sync_current_tenant_email_providers(sync_type=sync_type)
-    finally:
-        set_current_db_name(previous_db)
-    return synced_by_tenant
+    return {"default": sync_current_tenant_email_providers(sync_type=sync_type)}
 
 
 @transaction.atomic

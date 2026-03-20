@@ -122,6 +122,36 @@ def _copy_inventory_address(source, target) -> None:
             setattr(target, field, value)
 
 
+def _copy_software_contract_fields(source, target) -> None:
+    for field in (
+        "billing_cycle",
+        "license_type",
+        "licensed_users",
+        "implementation_required",
+        "subscription_start_date",
+        "subscription_end_date",
+        "renewal_due_date",
+    ):
+        value = getattr(source, field, None)
+        if isinstance(target, dict):
+            target.setdefault(field, value)
+        else:
+            setattr(target, field, value)
+
+
+def _hydrate_software_defaults_from_items(data: dict[str, Any]) -> None:
+    items = data.get("items") or []
+    products = [item.get("product") for item in items if item.get("product")]
+    first_product = products[0] if products else None
+    if first_product:
+        data.setdefault("billing_cycle", getattr(first_product, "billing_cycle", None))
+        data.setdefault("license_type", getattr(first_product, "license_type", None))
+        data.setdefault("implementation_required", getattr(first_product, "implementation_required", False))
+        data.setdefault("licensed_users", sum(max(int(as_money(item.get("quantity"))), 0) for item in items) or getattr(first_product, "default_user_seats", 1))
+    if data.get("subscription_end_date") and not data.get("renewal_due_date"):
+        data["renewal_due_date"] = data["subscription_end_date"]
+
+
 def _build_item_link_metadata(*, item, parent, extra: dict[str, Any] | None = None) -> dict[str, Any]:
     metadata = {
         "inventory_autolink": True,
@@ -354,6 +384,7 @@ class QuoteService:
         if deal:
             data.setdefault("account", getattr(deal, "account", None))
             data.setdefault("contact", getattr(deal, "contact", None))
+        _hydrate_software_defaults_from_items(data)
 
     def _resolve_price_book_price(self, *, price_book: PriceBook | None, product: Product, quantity: Any) -> tuple[Decimal, Decimal]:
         list_price = product.unit_price
@@ -419,6 +450,13 @@ class QuoteService:
             shipping_state=quote.shipping_state,
             shipping_country=quote.shipping_country,
             shipping_zip_code=quote.shipping_zip_code,
+            billing_cycle=quote.billing_cycle,
+            license_type=quote.license_type,
+            licensed_users=quote.licensed_users,
+            implementation_required=quote.implementation_required,
+            subscription_start_date=quote.subscription_start_date,
+            subscription_end_date=quote.subscription_end_date,
+            renewal_due_date=quote.renewal_due_date,
             terms_and_conditions=quote.terms_and_conditions,
             description=quote.description,
             subtotal=quote.subtotal,
@@ -534,12 +572,14 @@ class SalesOrderService:
     def _hydrate_sales_order_relationships(self, data: dict[str, Any]) -> None:
         quote = data.get("quote")
         if not quote:
+            _hydrate_software_defaults_from_items(data)
             return
         data.setdefault("account", quote.account)
         data.setdefault("contact", quote.contact)
         data.setdefault("deal", quote.deal)
         for field in ("subject", "terms_and_conditions", "description", "adjustment"):
             data.setdefault(field, getattr(quote, field, None))
+        _copy_software_contract_fields(quote, data)
         if not data.get("items"):
             data["items"] = [
                 {
@@ -553,6 +593,7 @@ class SalesOrderService:
                 for item in quote.items.filter(is_active=True)
             ]
         _copy_inventory_address(quote, data)
+        _hydrate_software_defaults_from_items(data)
 
     def _prepare_items(self, *, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         prepared = []
@@ -585,6 +626,13 @@ class SalesOrderService:
             shipping_state=sales_order.shipping_state,
             shipping_country=sales_order.shipping_country,
             shipping_zip_code=sales_order.shipping_zip_code,
+            billing_cycle=sales_order.billing_cycle,
+            license_type=sales_order.license_type,
+            licensed_users=sales_order.licensed_users,
+            implementation_required=sales_order.implementation_required,
+            subscription_start_date=sales_order.subscription_start_date,
+            subscription_end_date=sales_order.subscription_end_date,
+            renewal_due_date=sales_order.renewal_due_date,
             terms_and_conditions=sales_order.terms_and_conditions,
             description=sales_order.description,
             subtotal=sales_order.subtotal,
@@ -814,6 +862,7 @@ class InvoiceService:
         if source:
             for field in ("subject", "terms_and_conditions", "description", "adjustment"):
                 data.setdefault(field, getattr(source, field, None))
+            _copy_software_contract_fields(source, data)
             if not data.get("items"):
                 data["items"] = [
                     {
@@ -827,6 +876,7 @@ class InvoiceService:
                     for item in source.items.filter(is_active=True)
                 ]
             _copy_inventory_address(source, data)
+        _hydrate_software_defaults_from_items(data)
 
     def _prepare_items(self, *, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         prepared = []

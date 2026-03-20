@@ -8,7 +8,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('campaigns', '0002_campaignsubmission'),
-        ('leads', '0008_lead_organization'),
+        ('leads', '0009_alter_lead_id'),
     ]
 
     operations = [

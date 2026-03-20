@@ -43,13 +43,13 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 function getInitialValues(moduleKey: InventoryModuleKey): InventoryFormValues {
   const currentUserId = String(getLoggedInUser()?.id || "");
-  if (moduleKey === "products") return { owner: currentUserId, productName: "", productCode: "", vendor: "", vendorLabel: "", manufacturer: "", productCategory: "", unitPrice: 0, commissionRate: 0, tax: 0, quantityInStock: 0, quantityInDemand: 0, reorderLevel: 0, usageUnit: "", supportStartDate: "", supportExpiryDate: "", description: "" } as ProductFormValues;
+  if (moduleKey === "products") return { owner: currentUserId, productName: "", productCode: "", vendor: "", vendorLabel: "", manufacturer: "", productCategory: "", productType: "software", deploymentModel: "cloud", billingCycle: "yearly", licenseType: "named", unitPrice: 0, commissionRate: 0, tax: 0, quantityInStock: 0, quantityInDemand: 0, reorderLevel: 0, usageUnit: "users", defaultUserSeats: 1, subscriptionTermMonths: 12, renewalRequired: true, implementationRequired: false, supportStartDate: "", supportExpiryDate: "", description: "" } as ProductFormValues;
   if (moduleKey === "vendors") return { vendorOwner: currentUserId, vendorName: "", email: "", phone: "", website: "", category: "", description: "", billingStreet: "", billingCity: "", billingState: "", billingCountry: "", billingZipCode: "", shippingStreet: "", shippingCity: "", shippingState: "", shippingCountry: "", shippingZipCode: "" } as VendorFormValues;
   if (moduleKey === "price-books") return { owner: currentUserId, name: "", active: true, pricingModel: "fixed", description: "", ranges: [{ fromRange: 1, toRange: 10, discountPercentage: 0 }], productLinks: [] } as PriceBookFormValues;
-  if (moduleKey === "quotes") return { owner: currentUserId, subject: "", quoteStage: "", team: "", carrier: "", priceBook: "", priceBookLabel: "", deal: "", dealLabel: "", validUntil: "", contact: "", contactLabel: "", account: "", accountLabel: "", subtotal: 0, discount: 0, tax: 0, adjustment: 0, grandTotal: 0, termsAndConditions: "", description: "", billingStreet: "", billingCity: "", billingState: "", billingCountry: "", billingZipCode: "", shippingStreet: "", shippingCity: "", shippingState: "", shippingCountry: "", shippingZipCode: "", items: [emptyLineItem()] } as QuoteFormValues;
-  if (moduleKey === "sales-orders") return { owner: currentUserId, subject: "", customerNo: "", quote: "", quoteLabel: "", pending: false, carrier: "", salesCommission: 0, account: "", accountLabel: "", deal: "", dealLabel: "", dueDate: "", contact: "", contactLabel: "", exciseDuty: 0, status: "", subtotal: 0, discount: 0, tax: 0, adjustment: 0, grandTotal: 0, termsAndConditions: "", description: "", billingStreet: "", billingCity: "", billingState: "", billingCountry: "", billingZipCode: "", shippingStreet: "", shippingCity: "", shippingState: "", shippingCountry: "", shippingZipCode: "", items: [emptyLineItem()] } as SalesOrderFormValues;
+  if (moduleKey === "quotes") return { owner: currentUserId, subject: "", quoteStage: "", team: "", carrier: "", priceBook: "", priceBookLabel: "", deal: "", dealLabel: "", validUntil: "", contact: "", contactLabel: "", account: "", accountLabel: "", billingCycle: "yearly", licenseType: "named", licensedUsers: 1, implementationRequired: false, subscriptionStartDate: "", subscriptionEndDate: "", renewalDueDate: "", subtotal: 0, discount: 0, tax: 0, adjustment: 0, grandTotal: 0, termsAndConditions: "", description: "", billingStreet: "", billingCity: "", billingState: "", billingCountry: "", billingZipCode: "", shippingStreet: "", shippingCity: "", shippingState: "", shippingCountry: "", shippingZipCode: "", items: [emptyLineItem()] } as QuoteFormValues;
+  if (moduleKey === "sales-orders") return { owner: currentUserId, subject: "", customerNo: "", quote: "", quoteLabel: "", pending: false, carrier: "", salesCommission: 0, account: "", accountLabel: "", deal: "", dealLabel: "", dueDate: "", contact: "", contactLabel: "", billingCycle: "yearly", licenseType: "named", licensedUsers: 1, implementationRequired: false, subscriptionStartDate: "", subscriptionEndDate: "", renewalDueDate: "", exciseDuty: 0, status: "", subtotal: 0, discount: 0, tax: 0, adjustment: 0, grandTotal: 0, termsAndConditions: "", description: "", billingStreet: "", billingCity: "", billingState: "", billingCountry: "", billingZipCode: "", shippingStreet: "", shippingCity: "", shippingState: "", shippingCountry: "", shippingZipCode: "", items: [emptyLineItem()] } as SalesOrderFormValues;
   if (moduleKey === "purchase-orders") return { owner: currentUserId, subject: "", requisitionNumber: "", contact: "", contactLabel: "", dueDate: "", exciseDuty: 0, status: "", poNumber: "", vendor: "", vendorLabel: "", trackingNumber: "", poDate: "", carrier: "", salesCommission: 0, subtotal: 0, discount: 0, tax: 0, adjustment: 0, grandTotal: 0, termsAndConditions: "", description: "", billingStreet: "", billingCity: "", billingState: "", billingCountry: "", billingZipCode: "", shippingStreet: "", shippingCity: "", shippingState: "", shippingCountry: "", shippingZipCode: "", items: [emptyLineItem()] } as PurchaseOrderFormValues;
-  if (moduleKey === "invoices") return { owner: currentUserId, subject: "", invoiceDate: "", dueDate: "", salesCommission: 0, account: "", accountLabel: "", contact: "", contactLabel: "", deal: "", dealLabel: "", salesOrder: "", salesOrderLabel: "", purchaseOrder: "", purchaseOrderLabel: "", exciseDuty: 0, status: "", subtotal: 0, discount: 0, tax: 0, adjustment: 0, grandTotal: 0, termsAndConditions: "", description: "", billingStreet: "", billingCity: "", billingState: "", billingCountry: "", billingZipCode: "", shippingStreet: "", shippingCity: "", shippingState: "", shippingCountry: "", shippingZipCode: "", items: [emptyLineItem()] } as InvoiceFormValues;
+  if (moduleKey === "invoices") return { owner: currentUserId, subject: "", invoiceDate: "", dueDate: "", salesCommission: 0, account: "", accountLabel: "", contact: "", contactLabel: "", deal: "", dealLabel: "", salesOrder: "", salesOrderLabel: "", purchaseOrder: "", purchaseOrderLabel: "", billingCycle: "yearly", licenseType: "named", licensedUsers: 1, implementationRequired: false, subscriptionStartDate: "", subscriptionEndDate: "", renewalDueDate: "", exciseDuty: 0, status: "", subtotal: 0, discount: 0, tax: 0, adjustment: 0, grandTotal: 0, termsAndConditions: "", description: "", billingStreet: "", billingCity: "", billingState: "", billingCountry: "", billingZipCode: "", shippingStreet: "", shippingCity: "", shippingState: "", shippingCountry: "", shippingZipCode: "", items: [emptyLineItem()] } as InvoiceFormValues;
   return { name: "", targetModule: "quotes", layout: "", subform: "", lookupField: "", description: "", active: true, rules: [{ criteria: "{\"all\":[]}", actionType: "mandatory_product", targetProduct: "", targetProductLabel: "", fieldName: "", fieldValue: "", metadata: "{}" } as ConfiguratorRuleForm] } as ConfiguratorFormValues;
 }
 
@@ -170,6 +170,13 @@ export default function InventoryFormPage({ moduleKey }: Props) {
             contactLabel: quote.contact_name || draft.contactLabel || "",
             deal: String(quote.deal || draft.deal || ""),
             dealLabel: quote.deal_name || draft.dealLabel || "",
+            billingCycle: draft.billingCycle || quote.billing_cycle || "custom",
+            licenseType: draft.licenseType || quote.license_type || "named",
+            licensedUsers: Number(draft.licensedUsers || quote.licensed_users || 1),
+            implementationRequired: draft.implementationRequired ?? Boolean(quote.implementation_required),
+            subscriptionStartDate: draft.subscriptionStartDate || quote.subscription_start_date || "",
+            subscriptionEndDate: draft.subscriptionEndDate || quote.subscription_end_date || "",
+            renewalDueDate: draft.renewalDueDate || quote.renewal_due_date || "",
             subject: draft.subject || quote.subject || "",
             termsAndConditions: draft.termsAndConditions || quote.terms_and_conditions || "",
             description: draft.description || quote.description || "",
@@ -260,6 +267,13 @@ export default function InventoryFormPage({ moduleKey }: Props) {
             contactLabel: source.contact_name || draft.contactLabel || "",
             deal: String(source.deal || draft.deal || ""),
             dealLabel: source.deal_name || draft.dealLabel || "",
+            billingCycle: draft.billingCycle || source.billing_cycle || "custom",
+            licenseType: draft.licenseType || source.license_type || "named",
+            licensedUsers: Number(draft.licensedUsers || source.licensed_users || 1),
+            implementationRequired: draft.implementationRequired ?? Boolean(source.implementation_required),
+            subscriptionStartDate: draft.subscriptionStartDate || source.subscription_start_date || "",
+            subscriptionEndDate: draft.subscriptionEndDate || source.subscription_end_date || "",
+            renewalDueDate: draft.renewalDueDate || source.renewal_due_date || "",
             subject: draft.subject || source.subject || "",
             termsAndConditions: draft.termsAndConditions || source.terms_and_conditions || "",
             description: draft.description || source.description || "",
@@ -375,6 +389,15 @@ export default function InventoryFormPage({ moduleKey }: Props) {
       return;
     }
 
+    if (
+      anyForm.subscriptionStartDate &&
+      anyForm.subscriptionEndDate &&
+      String(anyForm.subscriptionEndDate) < String(anyForm.subscriptionStartDate)
+    ) {
+      setError("Subscription end date must be on or after the subscription start date.");
+      return;
+    }
+
     if (moduleKey === "invoices" && Array.isArray(anyForm.items)) {
       try {
         const reviewed = await reviewInvoiceChanges(anyForm.items, Number(anyForm.adjustment || 0));
@@ -420,6 +443,10 @@ export default function InventoryFormPage({ moduleKey }: Props) {
                   <Field label="Vendor"><InventoryLookupField lookup="vendors" value={anyForm.vendor || ""} displayValue={anyForm.vendorLabel || ""} onChange={(option) => setForm({ ...anyForm, vendor: option?.id || "", vendorLabel: option?.label || "" })} /></Field>
                   <Field label="Manufacturer"><input className={inputClass} value={anyForm.manufacturer || ""} onChange={(e) => setForm({ ...anyForm, manufacturer: e.target.value })} /></Field>
                   <Field label="Product Category"><input className={inputClass} value={anyForm.productCategory || ""} onChange={(e) => setForm({ ...anyForm, productCategory: e.target.value })} /></Field>
+                  <Field label="Product Type"><select className={inputClass} value={anyForm.productType || "software"} onChange={(e) => setForm({ ...anyForm, productType: e.target.value })}><option value="software">Software</option><option value="service">Service</option><option value="addon">Add-on</option><option value="bundle">Bundle</option></select></Field>
+                  <Field label="Deployment Model"><select className={inputClass} value={anyForm.deploymentModel || "cloud"} onChange={(e) => setForm({ ...anyForm, deploymentModel: e.target.value })}><option value="cloud">Cloud</option><option value="on_prem">On-premise</option><option value="hybrid">Hybrid</option></select></Field>
+                  <Field label="Billing Cycle"><select className={inputClass} value={anyForm.billingCycle || "yearly"} onChange={(e) => setForm({ ...anyForm, billingCycle: e.target.value })}><option value="one_time">One-time</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="yearly">Yearly</option><option value="custom">Custom</option></select></Field>
+                  <Field label="License Type"><select className={inputClass} value={anyForm.licenseType || "named"} onChange={(e) => setForm({ ...anyForm, licenseType: e.target.value })}><option value="named">Named User</option><option value="concurrent">Concurrent</option><option value="unlimited">Unlimited</option><option value="trial">Trial</option></select></Field>
                   <Field label="Unit Price"><input type="number" className={inputClass} value={anyForm.unitPrice} onChange={(e) => setForm({ ...anyForm, unitPrice: Number(e.target.value) })} /></Field>
                   <Field label="Commission Rate"><input type="number" className={inputClass} value={anyForm.commissionRate} onChange={(e) => setForm({ ...anyForm, commissionRate: Number(e.target.value) })} /></Field>
                   <Field label="Tax"><input type="number" className={inputClass} value={anyForm.tax} onChange={(e) => setForm({ ...anyForm, tax: Number(e.target.value) })} /></Field>
@@ -427,6 +454,10 @@ export default function InventoryFormPage({ moduleKey }: Props) {
                   <Field label="Quantity In Demand"><input type="number" className={inputClass} value={anyForm.quantityInDemand} onChange={(e) => setForm({ ...anyForm, quantityInDemand: Number(e.target.value) })} /></Field>
                   <Field label="Reorder Level"><input type="number" className={inputClass} value={anyForm.reorderLevel} onChange={(e) => setForm({ ...anyForm, reorderLevel: Number(e.target.value) })} /></Field>
                   <Field label="Usage Unit"><input className={inputClass} value={anyForm.usageUnit || ""} onChange={(e) => setForm({ ...anyForm, usageUnit: e.target.value })} /></Field>
+                  <Field label="Default User Seats"><input type="number" min={1} className={inputClass} value={anyForm.defaultUserSeats ?? 1} onChange={(e) => setForm({ ...anyForm, defaultUserSeats: Number(e.target.value) })} /></Field>
+                  <Field label="Subscription Term (Months)"><input type="number" min={1} className={inputClass} value={anyForm.subscriptionTermMonths ?? 12} onChange={(e) => setForm({ ...anyForm, subscriptionTermMonths: Number(e.target.value) })} /></Field>
+                  <Field label="Renewal Required"><label className="flex h-[38px] items-center gap-2 rounded-md border border-slate-300 px-3"><input type="checkbox" checked={Boolean(anyForm.renewalRequired ?? true)} onChange={(e) => setForm({ ...anyForm, renewalRequired: e.target.checked })} />Renewal Required</label></Field>
+                  <Field label="Implementation Required"><label className="flex h-[38px] items-center gap-2 rounded-md border border-slate-300 px-3"><input type="checkbox" checked={Boolean(anyForm.implementationRequired)} onChange={(e) => setForm({ ...anyForm, implementationRequired: e.target.checked })} />Implementation Needed</label></Field>
                   <Field label="Support Start Date"><input type="date" className={inputClass} value={anyForm.supportStartDate || ""} onChange={(e) => setForm({ ...anyForm, supportStartDate: e.target.value })} /></Field>
                   <Field label="Support Expiry Date"><input type="date" className={inputClass} value={anyForm.supportExpiryDate || ""} onChange={(e) => setForm({ ...anyForm, supportExpiryDate: e.target.value })} /></Field>
                   <div className="md:col-span-2"><Field label="Description"><textarea className={textareaClass} value={anyForm.description || ""} onChange={(e) => setForm({ ...anyForm, description: e.target.value })} /></Field></div>
@@ -504,6 +535,21 @@ export default function InventoryFormPage({ moduleKey }: Props) {
                 {moduleKey === "invoices" && <Field label="Purchase Order"><InventoryLookupField lookup="purchase-orders" value={anyForm.purchaseOrder || ""} displayValue={anyForm.purchaseOrderLabel || ""} onChange={(option) => setForm({ ...anyForm, purchaseOrder: option?.id || "", purchaseOrderLabel: option?.label || "" })} /></Field>}
               </div>
             </div>
+
+            {moduleKey !== "purchase-orders" && (
+              <div className="rounded-xl border border-slate-200 bg-white p-5">
+                <div className="mb-4 text-sm font-semibold text-slate-800">Software Subscription Information</div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field label="Billing Cycle"><select className={inputClass} value={anyForm.billingCycle || "yearly"} onChange={(e) => setForm({ ...anyForm, billingCycle: e.target.value })}><option value="one_time">One-time</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="yearly">Yearly</option><option value="custom">Custom</option></select></Field>
+                  <Field label="License Type"><select className={inputClass} value={anyForm.licenseType || "named"} onChange={(e) => setForm({ ...anyForm, licenseType: e.target.value })}><option value="named">Named User</option><option value="concurrent">Concurrent</option><option value="unlimited">Unlimited</option><option value="trial">Trial</option></select></Field>
+                  <Field label="Licensed Users"><input type="number" min={1} className={inputClass} value={anyForm.licensedUsers ?? 1} onChange={(e) => setForm({ ...anyForm, licensedUsers: Number(e.target.value) })} /></Field>
+                  <Field label="Implementation Required"><label className="flex h-[38px] items-center gap-2 rounded-md border border-slate-300 px-3"><input type="checkbox" checked={Boolean(anyForm.implementationRequired)} onChange={(e) => setForm({ ...anyForm, implementationRequired: e.target.checked })} />Implementation Needed</label></Field>
+                  <Field label="Subscription Start Date"><input type="date" className={inputClass} value={anyForm.subscriptionStartDate || ""} onChange={(e) => setForm({ ...anyForm, subscriptionStartDate: e.target.value })} /></Field>
+                  <Field label="Subscription End Date"><input type="date" className={inputClass} value={anyForm.subscriptionEndDate || ""} onChange={(e) => setForm({ ...anyForm, subscriptionEndDate: e.target.value })} /></Field>
+                  <Field label="Renewal Due Date"><input type="date" className={inputClass} value={anyForm.renewalDueDate || ""} onChange={(e) => setForm({ ...anyForm, renewalDueDate: e.target.value })} /></Field>
+                </div>
+              </div>
+            )}
 
             <div className="rounded-xl border border-slate-200 bg-white p-5">
               <div className="mb-4 flex items-center justify-between"><div className="text-sm font-semibold text-slate-800">Address Information</div>{moduleKey === "invoices" && <button type="button" className="text-sm font-medium text-blue-600" onClick={() => setForm({ ...anyForm, shippingStreet: anyForm.billingStreet, shippingCity: anyForm.billingCity, shippingState: anyForm.billingState, shippingCountry: anyForm.billingCountry, shippingZipCode: anyForm.billingZipCode })}>Copy Address</button>}</div>

@@ -42,7 +42,7 @@ type CRMCreatePageProps<T extends Record<string, unknown>> = {
   initialValues: T;
   sections: CRMCreateSection[];
   backPath: string;
-  onSubmit: (values: T) => Promise<void>;
+  onSubmit: (values: T) => Promise<void | { redirectTo?: string; state?: unknown }>;
 };
 
 const inputClass =
@@ -142,10 +142,15 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
     try {
       setSaving(true);
       setErrorMsg(null);
-      await onSubmit(formData);
+      const result = await onSubmit(formData);
 
       if (goToNew) {
         resetForm();
+        return;
+      }
+
+      if (result && typeof result === "object" && "redirectTo" in result && result.redirectTo) {
+        navigate(result.redirectTo, { state: result.state });
         return;
       }
 

@@ -109,8 +109,7 @@ export default function CampaignDetailPage() {
   const [copied, setCopied] = useState(false);
 
   // Public form URL — includes tenant so anyone with the link can submit
-  const tenantDb = localStorage.getItem("tenantDb") ?? "";
-  const publicFormUrl = `${window.location.origin}/public/campaigns/${id}/form?db=${tenantDb}`;
+  const publicFormUrl = `${window.location.origin}/public/campaigns/${id}/form`;
 
   const showToast = (type: "success" | "error", msg: string) => {
     setToast({ type, msg });

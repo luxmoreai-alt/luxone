@@ -134,7 +134,7 @@ export default function Topbar({
 
   const handleLogout = () => {
     // Clear all auth keys and fire the logout event so RequireAuth updates
-    ["accessToken", "refreshToken", "tenantDb", "loggedInUser", "isLoggedIn"].forEach(
+    ["accessToken", "refreshToken", "loggedInUser", "isLoggedIn"].forEach(
       (key) => localStorage.removeItem(key)
     );
     window.dispatchEvent(new CustomEvent("auth:logout"));
