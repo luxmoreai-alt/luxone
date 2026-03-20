@@ -318,7 +318,6 @@ def _convert_submission(submission: CampaignSubmission, user):
             lead_source="Campaign",
             lead_status="New",
             owner=user,
-            organization=getattr(user, "organization", None),
             campaign=submission.campaign,
             description=submission.notes or "",
         )

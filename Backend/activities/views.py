@@ -106,16 +106,7 @@ class CallViewSet(ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        user = self.request.user
-        base_qs = Call.objects.select_related("owner", "lead", "contact", "account", "deal")
-        user_org = getattr(user, "organization_id", None)
-        if not user_org:
-            return base_qs.all()
-        visible_user_ids = get_visible_user_ids(user)
-        return base_qs.filter(
-            owner_id__in=visible_user_ids,
-            owner__organization_id=user_org,
-        )
+        return Call.objects.select_related("owner", "lead", "contact", "account", "deal")
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
