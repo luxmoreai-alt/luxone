@@ -106,7 +106,7 @@ WSGI_APPLICATION = 'crm_backend.wsgi.application'
 
 # Database
 # Single PostgreSQL database configuration
-DB_NAME = os.getenv('DB_NAME', 'tenant_lavanya')
+DB_NAME = os.getenv('DB_NAME', 'tenant_zora')
 DB_USER = os.getenv('DB_USER', 'postgres')
 DB_PASSWORD = os.getenv('DB_PASSWORD', 'zora')
 DB_HOST = os.getenv('DB_HOST', 'localhost')
