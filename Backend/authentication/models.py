@@ -54,7 +54,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     email = models.EmailField(unique=True)
     name = models.CharField(max_length=150, blank=True, default="")
-    organization_name = models.CharField(max_length=255, blank=True, default="")
+    organization_name = models.CharField(max_length=255, blank=True, default="Zora AI Global Technologies")
     is_admin = models.BooleanField(default=False)
     is_staff = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
