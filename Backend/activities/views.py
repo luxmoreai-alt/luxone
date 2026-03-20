@@ -5,12 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet
 
-from organizations.services import (
-    can_assign_to_user,
-    filter_queryset_by_access,
-    get_assignable_users,
-    get_visible_user_ids,
-)
+from django.contrib.auth import get_user_model
 
 from .models import LeadActivity, Task, Meeting, Call
 from .serializers import LeadActivitySerializer, TaskSerializer, MeetingSerializer, CallSerializer
@@ -28,15 +23,7 @@ class TaskViewSet(ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        base_qs = Task.objects.select_related(
-            "owner", "assigned_to", "assigned_by", "contact", "account", "organization"
-        )
-        qs = filter_queryset_by_access(
-            base_qs, user,
-            owner_field="owner",
-            assigned_field="assigned_to",
-        )
-        # Admin/manager can filter tasks by specific user
+        qs = Task.objects.select_related("owner", "assigned_to", "assigned_by", "contact", "account")
         user_id = self.request.query_params.get("user_id")
         if user_id and getattr(user, "role", "employee") in ("admin", "manager"):
             from django.db import models as dm
@@ -44,12 +31,19 @@ class TaskViewSet(ModelViewSet):
         return qs
 
     def _validate_assignment(self, assigner, assigned_to):
-        """Raises PermissionDenied if assigner cannot assign to assigned_to."""
         if assigned_to is None:
             return
-        allowed, reason = can_assign_to_user(assigner, assigned_to)
-        if not allowed:
-            raise PermissionDenied(detail=reason)
+        role = getattr(assigner, "role", "employee")
+        if role in ("admin", "sub_admin"):
+            return
+        if role in ("manager", "team_lead"):
+            User = get_user_model()
+            team_ids = list(User.objects.filter(manager=assigner, is_active=True).values_list("id", flat=True))
+            if assigned_to.pk != assigner.pk and assigned_to.pk not in team_ids:
+                raise PermissionDenied(detail="Managers can only assign to their direct reports.")
+            return
+        if assigned_to.pk != assigner.pk:
+            raise PermissionDenied(detail="Employees can only assign tasks to themselves.")
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -58,15 +52,8 @@ class TaskViewSet(ModelViewSet):
         self._validate_assignment(user, assigned_to)
 
         save_kwargs = {"owner": user}
-
-        # Set assigned_by only when someone else is being assigned
         if assigned_to and assigned_to.pk != user.pk:
             save_kwargs["assigned_by"] = user
-
-        # Auto-fill organization from the creating user
-        if not serializer.validated_data.get("organization") and getattr(user, "organization_id", None):
-            save_kwargs["organization_id"] = user.organization_id
-
         serializer.save(**save_kwargs)
 
     def perform_update(self, serializer):
@@ -90,7 +77,16 @@ class TaskViewSet(ModelViewSet):
         Returns the list of users the current user may assign tasks to.
         Frontend can use this to populate the 'Assign To' dropdown.
         """
-        users = get_assignable_users(request.user).values("id", "email")
+        User = get_user_model()
+        role = getattr(request.user, "role", "employee")
+        if role in ("admin", "sub_admin"):
+            users = User.objects.filter(is_active=True).values("id", "email")
+        elif role in ("manager", "team_lead"):
+            team_ids = list(User.objects.filter(manager=request.user, is_active=True).values_list("id", flat=True))
+            team_ids.append(request.user.pk)
+            users = User.objects.filter(pk__in=team_ids, is_active=True).values("id", "email")
+        else:
+            users = User.objects.filter(pk=request.user.pk).values("id", "email")
         return Response(list(users), status=status.HTTP_200_OK)
 
 
@@ -99,16 +95,7 @@ class MeetingViewSet(ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        user = self.request.user
-        base_qs = Meeting.objects.select_related("organizer", "lead", "contact", "account", "deal")
-        user_org = getattr(user, "organization_id", None)
-        if not user_org:
-            return base_qs.all()
-        visible_user_ids = get_visible_user_ids(user)
-        return base_qs.filter(
-            organizer_id__in=visible_user_ids,
-            organizer__organization_id=user_org,
-        )
+        return Meeting.objects.select_related("organizer", "lead", "contact", "account", "deal")
 
     def perform_create(self, serializer):
         serializer.save(organizer=self.request.user)
@@ -119,16 +106,7 @@ class CallViewSet(ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        user = self.request.user
-        base_qs = Call.objects.select_related("owner", "lead", "contact", "account", "deal")
-        user_org = getattr(user, "organization_id", None)
-        if not user_org:
-            return base_qs.all()
-        visible_user_ids = get_visible_user_ids(user)
-        return base_qs.filter(
-            owner_id__in=visible_user_ids,
-            owner__organization_id=user_org,
-        )
+        return Call.objects.select_related("owner", "lead", "contact", "account", "deal")
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)

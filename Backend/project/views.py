@@ -1,3 +1,4 @@
+import re
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -28,6 +29,17 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return services.get_project_queryset()
+
+    @action(detail=False, methods=["get"], url_path="next-code")
+    def next_code(self, request):
+        codes = Project.objects.values_list("project_code", flat=True)
+        max_num = 0
+        for code in codes:
+            m = re.match(r"PRJ-?(\d+)$", code, re.IGNORECASE)
+            if m:
+                max_num = max(max_num, int(m.group(1)))
+        next_num = max_num + 1
+        return Response({"project_code": f"PRJ{next_num:04d}"})
 
     def get_serializer_class(self):
         if self.action in ('create', 'update', 'partial_update'):

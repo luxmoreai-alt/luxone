@@ -27,15 +27,7 @@ def _team_member_ids(user) -> list[int]:
 def filter_queryset_for_user(queryset: QuerySet, user) -> QuerySet:
     if not user.is_authenticated:
         return queryset.none()
-
-    role = _resolve_role(user)
-    if role == "admin":
-        return queryset
-    if role == "manager":
-        reportee_ids = _team_member_ids(user)
-        if reportee_ids:
-            return queryset.filter(Q(account_owner=user) | Q(account_owner_id__in=reportee_ids))
-    return queryset.filter(account_owner=user)
+    return queryset
 
 
 def can_access_account_owner(*, user, owner_id: int | None) -> bool:

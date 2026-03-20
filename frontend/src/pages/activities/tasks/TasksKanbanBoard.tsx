@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, Loader2, Trash2, X } from "lucide-react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { AlertCircle, Loader2, Pencil, Trash2, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { apiRequest } from "../../../api/client";
 
@@ -317,10 +317,12 @@ function DeferredColumn({
 function SelectionBar({
   count,
   onDelete,
+  onUpdate,
   onClear,
 }: {
   count: number;
   onDelete: () => void;
+  onUpdate: () => void;
   onClear: () => void;
 }) {
   return (
@@ -335,6 +337,14 @@ function SelectionBar({
       <div className="ml-2 flex items-center gap-2">
         <button
           type="button"
+          onClick={onUpdate}
+          className="flex items-center gap-1.5 rounded border border-blue-400 bg-transparent px-3 py-1 text-xs font-medium text-blue-400 transition hover:bg-blue-500 hover:text-white"
+        >
+          <Pencil size={12} />
+          Update
+        </button>
+        <button
+          type="button"
           onClick={onDelete}
           className="flex items-center gap-1.5 rounded border border-red-400 bg-transparent px-3 py-1 text-xs font-medium text-red-400 transition hover:bg-red-500 hover:text-white"
         >
@@ -345,6 +355,87 @@ function SelectionBar({
       <button type="button" onClick={onClear} className="ml-auto rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-white">
         <X size={15} />
       </button>
+    </div>
+  );
+}
+
+// ── Mass Update Modal ─────────────────────────────────────────────────────────
+
+const TASK_STATUSES = ["Not Started", "In Progress", "Completed", "Waiting for input", "Deferred"];
+const TASK_PRIORITIES = ["High", "Normal", "Low"];
+
+function MassUpdateModal({
+  count,
+  onSubmit,
+  onClose,
+  saving,
+}: {
+  count: number;
+  onSubmit: (fields: { status?: string; priority?: string }) => void;
+  onClose: () => void;
+  saving: boolean;
+}) {
+  const [status, setStatus] = useState("");
+  const [priority, setPriority] = useState("");
+
+  const canSubmit = (status || priority) && !saving;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-base font-bold text-slate-900">Update {count} Task{count !== 1 ? "s" : ""}</h3>
+          <button type="button" onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100">
+            <X size={16} />
+          </button>
+        </div>
+        <p className="mb-4 text-xs text-slate-500">Leave a field blank to keep it unchanged.</p>
+
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Status</label>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+            >
+              <option value="">— Keep current —</option>
+              {TASK_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Priority</label>
+            <select
+              value={priority}
+              onChange={(e) => setPriority(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+            >
+              <option value="">— Keep current —</option>
+              {TASK_PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition disabled:opacity-60"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={!canSubmit}
+            onClick={() => onSubmit({ status: status || undefined, priority: priority || undefined })}
+            className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700 transition disabled:opacity-60"
+          >
+            {saving ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : "Apply"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -369,19 +460,23 @@ function matchesTaskFilter(task: TaskRecord, f: NormalizedFilter) {
 
 // ── Board ─────────────────────────────────────────────────────────────────────
 
-export default function TasksKanbanBoard({
-  filters = {},
-  onSelectionChange,
-}: {
-  filters?: Record<string, string>;
-  onSelectionChange?: (ids: (string | number)[]) => void;
-}) {
+export type TasksKanbanBoardHandle = {
+  triggerMassDelete: () => void;
+  triggerMassUpdate: () => void;
+};
+
+const TasksKanbanBoard = forwardRef<
+  TasksKanbanBoardHandle,
+  { filters?: Record<string, string>; onSelectionChange?: (ids: (string | number)[]) => void }
+>(function TasksKanbanBoard({ filters = {}, onSelectionChange }, ref) {
   const [tasks, setTasks] = useState<TaskRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [draggingId, setDraggingId] = useState<string | number | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
   const [deleting, setDeleting] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [deferredOver, setDeferredOver] = useState(false);
   const dragState = useRef<DragState | null>(null);
   const navigate = useNavigate();
@@ -445,6 +540,7 @@ export default function TasksKanbanBoard({
   };
 
   const handleDelete = async () => {
+    if (selectedIds.size === 0) { alert("Please select at least one task first."); return; }
     if (!confirm(`Delete ${selectedIds.size} task${selectedIds.size !== 1 ? "s" : ""}? This cannot be undone.`)) return;
     setDeleting(true);
     const ids = [...selectedIds];
@@ -458,6 +554,30 @@ export default function TasksKanbanBoard({
       setDeleting(false);
     }
   };
+
+  const handleMassUpdate = async (fields: { status?: string; priority?: string }) => {
+    if (selectedIds.size === 0) return;
+    setUpdating(true);
+    const ids = [...selectedIds];
+    try {
+      await Promise.all(ids.map((id) => apiRequest(`/tasks/${id}/`, { method: "PATCH", body: JSON.stringify(fields) })));
+      setTasks((prev) => prev.map((t) => selectedIds.has(t.id) ? { ...t, ...fields } : t));
+      setShowUpdateModal(false);
+      clearSelection();
+    } catch {
+      alert("Some tasks could not be updated. Please try again.");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  useImperativeHandle(ref, () => ({
+    triggerMassDelete: () => void handleDelete(),
+    triggerMassUpdate: () => {
+      if (selectedIds.size === 0) { alert("Please select at least one task first."); return; }
+      setShowUpdateModal(true);
+    },
+  }));
 
   // ── Drag ────────────────────────────────────────────────────────────────────
 
@@ -522,13 +642,18 @@ export default function TasksKanbanBoard({
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
       {/* Selection bar */}
       {selectedIds.size > 0 && (
-        <SelectionBar count={selectedIds.size} onDelete={() => void handleDelete()} onClear={clearSelection} />
+        <SelectionBar
+          count={selectedIds.size}
+          onUpdate={() => setShowUpdateModal(true)}
+          onDelete={() => void handleDelete()}
+          onClear={clearSelection}
+        />
       )}
 
-      {deleting && (
+      {(deleting || updating) && (
         <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-6 py-2 text-xs text-slate-500">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          Deleting selected tasks…
+          {deleting ? "Deleting selected tasks…" : "Updating selected tasks…"}
         </div>
       )}
 
@@ -563,6 +688,18 @@ export default function TasksKanbanBoard({
           />
         </div>
       </div>
+
+      {/* Mass Update Modal */}
+      {showUpdateModal && (
+        <MassUpdateModal
+          count={selectedIds.size}
+          saving={updating}
+          onSubmit={(fields) => void handleMassUpdate(fields)}
+          onClose={() => setShowUpdateModal(false)}
+        />
+      )}
     </div>
   );
-}
+});
+
+export default TasksKanbanBoard;

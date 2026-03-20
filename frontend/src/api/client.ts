@@ -1,13 +1,8 @@
 import { getResolvedApiBaseUrl } from "./config";
+import { getAccessToken, getTenantDb, refreshAccessToken, clearAuthSession } from "../lib/api/authApi";
 
 type RequestOptions = RequestInit & {
   query?: Record<string, string | number | boolean | undefined | null>;
-};
-
-type StoredAuth = {
-  accessToken: string | null;
-  refreshToken: string | null;
-  tenantDb: string | null;
 };
 
 function flattenErrorPayload(value: unknown): string[] {
@@ -23,14 +18,10 @@ function flattenErrorPayload(value: unknown): string[] {
   if (value && typeof value === "object") {
     return Object.entries(value).flatMap(([key, nestedValue]) => {
       const nestedMessages = flattenErrorPayload(nestedValue);
-      if (!nestedMessages.length) {
-        return [];
-      }
-
+      if (!nestedMessages.length) return [];
       if (key === "non_field_errors" || key === "detail" || key === "message" || key === "error") {
         return nestedMessages;
       }
-
       return nestedMessages.map((message) => `${key}: ${message}`);
     });
   }
@@ -55,89 +46,32 @@ function buildUrl(path: string, query?: RequestOptions["query"]) {
   return url.toString();
 }
 
-function clearStoredAuth() {
-  localStorage.removeItem("accessToken");
-  localStorage.removeItem("refreshToken");
-  localStorage.removeItem("tenantDb");
-  localStorage.removeItem("loggedInUser");
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(new CustomEvent("auth:logout"));
-  }
-}
-
-function getStoredAuth(): StoredAuth {
-  return {
-    accessToken: localStorage.getItem("accessToken"),
-    refreshToken: localStorage.getItem("refreshToken"),
-    tenantDb: localStorage.getItem("tenantDb"),
-  };
+export function clearStoredAuth() {
+  clearAuthSession();
 }
 
 function redirectToLogin() {
   if (typeof window === "undefined") return;
-  const publicPaths = new Set(["/login", "/otp-login", "/forgot-password"]);
-  if (!publicPaths.has(window.location.pathname)) {
+  if (window.location.pathname !== "/login") {
     window.location.assign("/login");
   }
 }
 
-async function refreshAccessToken(refreshToken: string): Promise<string | null> {
-  const response = await fetch(buildUrl("/auth/token/refresh"), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ refresh: refreshToken }),
-  });
-
-  const rawText = await response.text();
-  let data: unknown = null;
-
-  try {
-    data = rawText ? JSON.parse(rawText) : null;
-  } catch {
-    data = rawText;
-  }
-
-  if (!response.ok || !data || typeof data !== "object") {
-    return null;
-  }
-
-  const payload = data as {
-    access?: string;
-    access_token?: string;
-    refresh?: string;
-    refresh_token?: string;
-  };
-  const nextAccess = payload.access || payload.access_token || null;
-  const nextRefresh = payload.refresh || payload.refresh_token || null;
-
-  if (nextAccess) {
-    localStorage.setItem("accessToken", nextAccess);
-  }
-
-  if (nextRefresh) {
-    localStorage.setItem("refreshToken", nextRefresh);
-  }
-
-  return nextAccess;
-}
-
-async function executeRequest(path: string, options: RequestOptions, accessTokenOverride?: string) {
-  const { accessToken, tenantDb } = getStoredAuth();
+async function executeRequest(path: string, options: RequestOptions) {
+  const tenantDb = getTenantDb();
+  const accessToken = getAccessToken();
   const headers = new Headers(options.headers || {});
-  const effectiveAccessToken = accessTokenOverride ?? accessToken;
 
   if (!headers.has("Content-Type") && options.body && !(options.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
   }
 
-  if (effectiveAccessToken) {
-    headers.set("Authorization", `Bearer ${effectiveAccessToken}`);
-  }
-
   if (tenantDb) {
     headers.set("X-Tenant-DB", tenantDb);
+  }
+
+  if (accessToken) {
+    headers.set("Authorization", `Bearer ${accessToken}`);
   }
 
   return fetch(buildUrl(path, options.query), {
@@ -159,6 +93,24 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     throw new Error(message);
   }
 
+  // On 401: try to refresh the access token once, then retry
+  if (response.status === 401) {
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      try {
+        response = await executeRequest(path, options);
+      } catch {
+        clearStoredAuth();
+        redirectToLogin();
+        throw new Error("Session expired. Please log in again.");
+      }
+    } else {
+      clearStoredAuth();
+      redirectToLogin();
+      throw new Error("Session expired. Please log in again.");
+    }
+  }
+
   const rawText = await response.text();
   let data: unknown = null;
 
@@ -168,32 +120,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     data = rawText;
   }
 
-  if (!response.ok && response.status === 401) {
-    const { refreshToken } = getStoredAuth();
-    if (refreshToken) {
-      try {
-        const nextAccessToken = await refreshAccessToken(refreshToken);
-        if (nextAccessToken) {
-          response = await executeRequest(path, options, nextAccessToken);
-          const retryText = await response.text();
-          try {
-            data = retryText ? JSON.parse(retryText) : null;
-          } catch {
-            data = retryText;
-          }
-        }
-      } catch {
-        // fall through to logout handling below
-      }
-    }
-  }
-
   if (!response.ok) {
-    if (response.status === 401) {
-      clearStoredAuth();
-      redirectToLogin();
-    }
-
     const errorPayload =
       typeof data === "object" && data !== null
         ? (data as { detail?: string; message?: string; error?: string })

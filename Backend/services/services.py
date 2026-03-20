@@ -19,7 +19,6 @@ from contacts.models import Contact
 from deals.models import Deal
 from inventory.models import Invoice, Product, SalesOrder
 from leads.models import Lead
-from saas_admin.models import Company
 from support.models import SupportCase
 from support.services import add_activity as add_support_activity
 
@@ -523,16 +522,7 @@ def create_or_update_job_sheet(serializer, user):
 
 
 def get_company_details():
-    details, created = ServiceCompanyDetails.objects.get_or_create(pk=1)
-    if created:
-        company = Company.objects.order_by("-created_at").first()
-        if company:
-            details.company_name = company.company_name
-            details.company_email = company.company_email
-            details.contact_person = company.contact_person
-            details.phone = company.phone
-            details.address = company.address
-            details.save()
+    details, _ = ServiceCompanyDetails.objects.get_or_create(pk=1)
     return details
 
 

@@ -125,3 +125,37 @@ class CampaignAttachment(BaseModel):
             models.Index(fields=["campaign", "created_at"]),
         ]
 
+
+class CampaignSubmission(models.Model):
+    campaign = models.ForeignKey(
+        Campaign,
+        on_delete=models.CASCADE,
+        related_name="submissions",
+    )
+    first_name = models.CharField(max_length=150)
+    last_name = models.CharField(max_length=150)
+    email = models.EmailField()
+    phone = models.CharField(max_length=20, blank=True, null=True)
+    company = models.CharField(max_length=255, blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    source = models.CharField(max_length=100, blank=True, null=True)
+    is_converted = models.BooleanField(default=False, db_index=True)
+    converted_lead = models.ForeignKey(
+        "leads.Lead",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="campaign_submissions",
+    )
+    submitted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-submitted_at"]
+        indexes = [
+            models.Index(fields=["campaign", "submitted_at"]),
+            models.Index(fields=["email"]),
+        ]
+
+    def __str__(self):
+        return f"{self.first_name} {self.last_name} ({self.email})"
+

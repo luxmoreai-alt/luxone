@@ -1,7 +1,15 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../../components/layout/DashboardLayout";
-import { getCampaigns, type CampaignRecord } from "../../lib/api/campaignsApi";
+import { deleteCampaign, getCampaigns, type CampaignRecord } from "../../lib/api/campaignsApi";
+import { Pencil, Trash2 } from "lucide-react";
+
+const STATUS_COLORS: Record<string, string> = {
+  Active: "bg-emerald-100 text-emerald-700",
+  Planning: "bg-blue-100 text-blue-700",
+  Inactive: "bg-slate-100 text-slate-600",
+  Complete: "bg-purple-100 text-purple-700",
+};
 
 export default function CampaignsPage() {
   const navigate = useNavigate();
@@ -9,22 +17,35 @@ export default function CampaignsPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const data = await getCampaigns({ search });
-        setRows(data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load campaigns");
-      } finally {
-        setLoading(false);
-      }
-    };
-    void load();
-  }, [search]);
+  const load = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      setRows(await getCampaigns({ search }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load campaigns");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { void load(); }, [search]);
+
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (!confirm("Delete this campaign?")) return;
+    try {
+      setDeletingId(id);
+      await deleteCampaign(id);
+      setRows((prev) => prev.filter((r) => r.id !== id));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to delete campaign.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -39,7 +60,7 @@ export default function CampaignsPage() {
               <input
                 type="search"
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search campaigns"
                 className="h-[38px] w-[240px] rounded-[6px] border border-[#cfd7e6] bg-white px-3 text-sm text-slate-700 outline-none focus:border-[#6d8dff]"
               />
@@ -74,24 +95,60 @@ export default function CampaignsPage() {
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3">Start Date</th>
                     <th className="px-4 py-3">End Date</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.length === 0 ? (
                     <tr>
-                      <td className="px-4 py-6 text-slate-500" colSpan={6}>
+                      <td className="px-4 py-6 text-slate-500" colSpan={7}>
                         No campaigns found.
                       </td>
                     </tr>
                   ) : (
                     rows.map((row) => (
-                      <tr key={row.id} className="border-t border-slate-100">
-                        <td className="px-4 py-3">{row.campaignName}</td>
-                        <td className="px-4 py-3">{row.campaignOwnerEmail || "-"}</td>
-                        <td className="px-4 py-3">{row.type || "-"}</td>
-                        <td className="px-4 py-3">{row.status || "-"}</td>
-                        <td className="px-4 py-3">{row.startDate || "-"}</td>
-                        <td className="px-4 py-3">{row.endDate || "-"}</td>
+                      <tr
+                        key={row.id}
+                        className="cursor-pointer border-t border-slate-100 hover:bg-slate-50"
+                        onClick={() => navigate(`/campaigns/${row.id}`)}
+                      >
+                        <td className="px-4 py-3 font-medium text-[#2563eb]">{row.campaignName}</td>
+                        <td className="px-4 py-3 text-slate-600">{row.campaignOwnerEmail || "-"}</td>
+                        <td className="px-4 py-3 text-slate-600">{row.type || "-"}</td>
+                        <td className="px-4 py-3">
+                          {row.status ? (
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[row.status] ?? "bg-slate-100 text-slate-600"}`}
+                            >
+                              {row.status}
+                            </span>
+                          ) : (
+                            "-"
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-slate-600">{row.startDate || "-"}</td>
+                        <td className="px-4 py-3 text-slate-600">{row.endDate || "-"}</td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); navigate(`/campaigns/${row.id}/edit`); }}
+                              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                              title="Edit"
+                            >
+                              <Pencil size={15} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => void handleDelete(e, row.id)}
+                              disabled={deletingId === row.id}
+                              className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                              title="Delete"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))
                   )}
@@ -104,4 +161,3 @@ export default function CampaignsPage() {
     </DashboardLayout>
   );
 }
-

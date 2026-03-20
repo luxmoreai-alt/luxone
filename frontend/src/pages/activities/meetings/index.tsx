@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Filter } from "lucide-react";
+import { Filter, Loader2, Trash2, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import FilterSidebar from "../../../components/crm/FilterSidebar";
 import DashboardLayout from "../../../components/layout/DashboardLayout";
@@ -46,6 +46,8 @@ export default function MeetingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const [, setFilters] = useState<FilterMap>({});
+  const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
+  const [deleting, setDeleting] = useState(false);
 
   const loadMeetings = useCallback(async () => {
     try {
@@ -70,6 +72,33 @@ export default function MeetingsPage() {
   useEffect(() => {
     void loadMeetings();
   }, [loadMeetings]);
+
+  const toggleSelect = (id: string | number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (checked: boolean) => {
+    setSelectedIds(checked ? new Set(meetings.map((m) => m.id)) : new Set());
+  };
+
+  const handleDelete = async () => {
+    if (!confirm(`Delete ${selectedIds.size} meeting${selectedIds.size !== 1 ? "s" : ""}? This cannot be undone.`)) return;
+    setDeleting(true);
+    const ids = [...selectedIds];
+    try {
+      await Promise.all(ids.map((id) => apiRequest(`/meetings/${id}/`, { method: "DELETE" })));
+      setMeetings((prev) => prev.filter((m) => !selectedIds.has(m.id)));
+      setSelectedIds(new Set());
+    } catch {
+      alert("Some meetings could not be deleted. Please try again.");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   function formatDate(dateString?: string) {
     if (!dateString) return "—";
@@ -140,6 +169,41 @@ export default function MeetingsPage() {
           )}
 
           <div className="flex-1">
+            {/* Selection bar */}
+            {selectedIds.size > 0 && (
+              <div className="mb-3 flex items-center gap-3 rounded-lg bg-slate-800 px-5 py-2.5">
+                <span className="text-sm font-medium text-white">
+                  {selectedIds.size} record{selectedIds.size !== 1 ? "s" : ""} selected
+                </span>
+                <span className="text-slate-500">·</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedIds(new Set())}
+                  className="text-sm text-slate-400 hover:text-white"
+                >
+                  Clear
+                </button>
+                <div className="ml-2 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleDelete()}
+                    disabled={deleting}
+                    className="flex items-center gap-1.5 rounded border border-red-400 px-3 py-1 text-xs font-medium text-red-400 transition hover:bg-red-500 hover:text-white disabled:opacity-60"
+                  >
+                    {deleting ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                    {deleting ? "Deleting…" : "Delete"}
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedIds(new Set())}
+                  className="ml-auto rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-white"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+            )}
+
             {meetings.length === 0 ? (
               <div className="rounded-xl border border-slate-200 bg-white p-6 text-center">
                 <p className="text-sm font-medium text-slate-500">No meetings found.</p>
@@ -149,41 +213,58 @@ export default function MeetingsPage() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b bg-slate-50">
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Title</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">From</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">To</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Location</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Related To</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Contact</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Status</th>
+                      <th className="w-10 px-4 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.size === meetings.length && meetings.length > 0}
+                          ref={(el) => { if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < meetings.length; }}
+                          onChange={(e) => toggleSelectAll(e.target.checked)}
+                          className="h-4 w-4 cursor-pointer rounded border-slate-300 accent-blue-600"
+                        />
+                      </th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900">Title</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900">From</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900">To</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900">Location</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900">Related To</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900">Contact</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900">Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {meetings.map((meeting) => (
                       <tr
                         key={meeting.id}
-                        className="border-b transition hover:bg-slate-50 cursor-pointer"
+                        className={`border-b transition hover:bg-slate-50 cursor-pointer ${selectedIds.has(meeting.id) ? "bg-blue-50" : ""}`}
                         onClick={() => navigate(`/meetings/${meeting.id}`)}
                       >
-                        <td className="px-6 py-4 text-sm text-blue-600 hover:underline font-medium">
+                        <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(meeting.id)}
+                            onChange={() => toggleSelect(meeting.id)}
+                            className="h-4 w-4 cursor-pointer rounded border-slate-300 accent-blue-600"
+                          />
+                        </td>
+                        <td className="px-4 py-4 text-sm text-blue-600 hover:underline font-medium">
                           {meeting.title}
                         </td>
-                        <td className="px-6 py-4 text-sm text-slate-600">
+                        <td className="px-4 py-4 text-sm text-slate-600">
                           {formatDate(meeting.start_date)}
                         </td>
-                        <td className="px-6 py-4 text-sm text-slate-600">
+                        <td className="px-4 py-4 text-sm text-slate-600">
                           {formatDate(meeting.end_date)}
                         </td>
-                        <td className="px-6 py-4 text-sm text-slate-600">
+                        <td className="px-4 py-4 text-sm text-slate-600">
                           {meeting.location || "—"}
                         </td>
-                        <td className="px-6 py-4 text-sm text-slate-600">
+                        <td className="px-4 py-4 text-sm text-slate-600">
                           {meeting.account_name || "—"}
                         </td>
-                        <td className="px-6 py-4 text-sm text-slate-600">
+                        <td className="px-4 py-4 text-sm text-slate-600">
                           {meeting.contact_name || "—"}
                         </td>
-                        <td className="px-6 py-4 text-sm">
+                        <td className="px-4 py-4 text-sm">
                           <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
                             meeting.status === "Completed" ? "bg-green-100 text-green-800" :
                             meeting.status === "Cancelled" ? "bg-red-100 text-red-800" :

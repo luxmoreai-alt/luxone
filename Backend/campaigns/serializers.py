@@ -19,6 +19,7 @@ from .models import (
     CampaignDeal,
     CampaignLead,
     CampaignNote,
+    CampaignSubmission,
 )
 from .permissions import can_access_campaign_owner
 
@@ -257,4 +258,42 @@ class CampaignLogCallSerializer(serializers.Serializer):
 class CampaignScheduleMeetingSerializer(serializers.Serializer):
     meeting_subject = serializers.CharField(max_length=255)
     agenda = serializers.CharField(required=False, allow_blank=True)
+
+
+# ── Campaign Submission serializers ────────────────────────────────────────
+
+class CampaignSubmissionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CampaignSubmission
+        fields = [
+            "id",
+            "campaign",
+            "first_name",
+            "last_name",
+            "email",
+            "phone",
+            "company",
+            "notes",
+            "source",
+            "is_converted",
+            "converted_lead",
+            "submitted_at",
+        ]
+        read_only_fields = ["id", "campaign", "is_converted", "converted_lead", "submitted_at"]
+
+
+class CampaignPublicSubmitSerializer(serializers.Serializer):
+    first_name = serializers.CharField(max_length=150)
+    last_name = serializers.CharField(max_length=150)
+    email = serializers.EmailField()
+    phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    company = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    notes = serializers.CharField(required=False, allow_blank=True)
+
+
+class BulkConvertSerializer(serializers.Serializer):
+    submission_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        min_length=1,
+    )
 

@@ -1,253 +1,357 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { buildApiUrl } from "../api/config";
-import AuthCard from "../components/auth/AuthCard";
-import EmailStep from "../components/auth/EmailStep";
-import PasswordStep from "../components/auth/PasswordStep";
-import PromoPanel from "../components/auth/PromoPanel";
-import RoleStep, { type UserRole } from "../components/auth/RoleStep";
+import { login, storeAuthSession } from "../lib/api/authApi";
+import { getResolvedApiBaseUrl } from "../api/config";
 
-export type AuthStep = "email" | "role" | "password";
+type Step = "login" | "forgot-email" | "forgot-otp" | "forgot-reset";
 
-type ApiPayload = {
-  message?: string;
-  detail?: string;
-  success?: boolean;
-  access?: string;
-  token?: string;
-  access_token?: string;
-  refresh?: string;
-  refresh_token?: string;
-  tenant_db?: string;
-  user?: Record<string, unknown>;
-  data?: {
-    message?: string;
-    detail?: string;
-    access?: string;
-    token?: string;
-    access_token?: string;
-    refresh?: string;
-    refresh_token?: string;
-    tenant_db?: string;
-    user?: Record<string, unknown>;
-    role?: string;
-    email?: string;
-  };
-};
-
-const CHECK_EMAIL_URL = buildApiUrl("/auth/check-email");
-const LOGIN_URL = buildApiUrl("/auth/login");
-
-function toApiPayload(value: unknown): ApiPayload | null {
-  if (typeof value === "object" && value !== null) return value as ApiPayload;
-  return null;
+async function authPost<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${getResolvedApiBaseUrl()}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const text = await res.text();
+  let data: unknown;
+  try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+  if (!res.ok) {
+    const msg =
+      (data as { message?: string; detail?: string })?.message ||
+      (data as { detail?: string })?.detail ||
+      `Request failed (${res.status})`;
+    throw new Error(msg);
+  }
+  return data as T;
 }
 
-function extractErrorMessage(data: unknown, fallback: string): string {
-  const payload = toApiPayload(data);
-  if (payload?.message) return payload.message;
-  if (payload?.detail) return payload.detail;
-  if (payload?.data?.message) return payload.data.message;
-  if (payload?.data?.detail) return payload.data.detail;
-  if (typeof data === "string" && data.trim()) return data;
-  return fallback;
-}
+const inputCls =
+  "w-full rounded-[8px] border border-[#cfd7e6] px-3 py-2.5 text-sm text-slate-800 outline-none transition-colors focus:border-[#4d76ff] focus:ring-2 focus:ring-[#4d76ff]/10";
 
-const LoginPage = () => {
+export default function LoginPage() {
   const navigate = useNavigate();
 
-  const [step, setStep] = useState<AuthStep>("email");
+  // Login state
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<UserRole>("employee");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const [emailError, setEmailError] = useState("");
-  const [passwordError, setPasswordError] = useState("");
-  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
-  const [isSigningIn, setIsSigningIn] = useState(false);
-  const redirectTo =
+  // Forgot password state
+  const [step, setStep] = useState<Step>("login");
+  const [fpEmail, setFpEmail] = useState("");
+  const [fpOtp, setFpOtp] = useState("");
+  const [fpNewPwd, setFpNewPwd] = useState("");
+  const [fpConfirmPwd, setFpConfirmPwd] = useState("");
+  const [fpShowPwd, setFpShowPwd] = useState(false);
+  const [fpError, setFpError] = useState("");
+  const [fpLoading, setFpLoading] = useState(false);
+  const [fpSuccess, setFpSuccess] = useState("");
+
+  const rawRedirect =
     typeof window.history.state === "object" &&
     window.history.state !== null &&
     typeof (window.history.state as { usr?: { from?: unknown } }).usr?.from === "string"
       ? ((window.history.state as { usr: { from: string } }).usr.from || "/home")
       : "/home";
 
-  const handleNext = async () => {
-    const trimmedEmail = email.trim();
-    if (!trimmedEmail) {
-      setEmailError("Email is required");
-      return;
-    }
-    if (!/\S+@\S+\.\S+/.test(trimmedEmail)) {
-      setEmailError("Please enter a valid email address");
-      return;
-    }
-
-    try {
-      setIsCheckingEmail(true);
-      setEmailError("");
-
-      const response = await fetch(CHECK_EMAIL_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: trimmedEmail }),
-      });
-
-      const rawText = await response.text();
-      let data: unknown = null;
-      try {
-        data = rawText ? JSON.parse(rawText) : null;
-      } catch {
-        data = rawText;
-      }
-
-      if (!response.ok) {
-        setEmailError(extractErrorMessage(data, "Unable to verify this email"));
-        return;
-      }
-
-      const payload = toApiPayload(data);
-      const userRole = (payload?.data?.role as UserRole | undefined) ?? "employee";
-
-      setRole(userRole);
-      setStep("role");
-    } catch {
-      setEmailError("Unable to connect to backend");
-    } finally {
-      setIsCheckingEmail(false);
-    }
+  const MODULE_PATHS: Record<string, string> = {
+    sales: "/sales",
+    activities: "/activities",
+    inventory: "/inventory",
+    support: "/support",
+    integrations: "/integrations",
+    services: "/services",
+    projects: "/projects",
   };
 
-  const handleRoleContinue = () => {
-    setStep("password");
+  const getRedirectForModules = (path: string, allowedModules: string[]) => {
+    const restricted = Object.entries(MODULE_PATHS).some(
+      ([mod, prefix]) => path.startsWith(prefix) && !allowedModules.includes(mod)
+    );
+    // also check /deals, /leads, /contacts, /accounts under sales
+    const salesPaths = ["/deals", "/leads", "/contacts", "/accounts"];
+    const isSalesPath = salesPaths.some((p) => path.startsWith(p));
+    if (isSalesPath && !allowedModules.includes("sales")) return "/home";
+    return restricted ? "/home" : path;
   };
 
-  const handleSignIn = async () => {
-    const trimmedPassword = password.trim();
-    if (!trimmedPassword) {
-      setPasswordError("Password is required");
-      return;
-    }
-
+  // ── Login ──────────────────────────────────────────────────────────────────
+  const handleSubmit = async (e: { preventDefault(): void }) => {
+    e.preventDefault();
+    setError("");
+    if (!email.trim() || !password) { setError("Email and password are required."); return; }
+    setLoading(true);
     try {
-      setIsSigningIn(true);
-      setPasswordError("");
-
-      const response = await fetch(LOGIN_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), password: trimmedPassword }),
-      });
-
-      const rawText = await response.text();
-      let data: unknown = null;
-      try {
-        data = rawText ? JSON.parse(rawText) : null;
-      } catch {
-        data = rawText;
-      }
-
-      if (!response.ok) {
-        setPasswordError(extractErrorMessage(data, "Invalid email or password"));
-        return;
-      }
-
-      const payload = toApiPayload(data);
-      const accessToken =
-        payload?.access ||
-        payload?.token ||
-        payload?.access_token ||
-        payload?.data?.access ||
-        payload?.data?.token ||
-        payload?.data?.access_token ||
-        null;
-      const refreshToken =
-        payload?.refresh ||
-        payload?.refresh_token ||
-        payload?.data?.refresh ||
-        payload?.data?.refresh_token ||
-        null;
-      const tenantDb = payload?.tenant_db || payload?.data?.tenant_db || null;
-      const user = payload?.user || payload?.data?.user || null;
-
-      if (!accessToken) {
-        setPasswordError("Login succeeded but token was missing from backend response");
-        return;
-      }
-
-      localStorage.setItem("accessToken", accessToken);
-      if (refreshToken) localStorage.setItem("refreshToken", refreshToken);
-      if (tenantDb) localStorage.setItem("tenantDb", tenantDb);
-
-      const userWithRole = user ? { ...user, role } : { email: email.trim(), role };
-      localStorage.setItem("loggedInUser", JSON.stringify(userWithRole));
+      const res = await login(email.trim(), password);
+      if (!res.success || !res.data) { setError(res.message || "Login failed."); return; }
+      storeAuthSession(res.data);
       window.dispatchEvent(new Event("auth:login"));
-
-      navigate(redirectTo, { replace: true });
-    } catch {
-      setPasswordError("Unable to connect to backend");
+      if (res.data.user.must_change_password) {
+        navigate("/change-password", { replace: true });
+      } else {
+        const allowedModules: string[] = res.data.user.allowed_modules ?? [];
+        const finalRedirect = getRedirectForModules(rawRedirect, allowedModules);
+        navigate(finalRedirect, { replace: true });
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Login failed. Please try again.");
     } finally {
-      setIsSigningIn(false);
+      setLoading(false);
     }
   };
 
-  const resetToEmail = () => {
-    setPassword("");
-    setPasswordError("");
-    setRole("employee");
-    setStep("email");
+  // ── Forgot: send OTP ───────────────────────────────────────────────────────
+  const handleSendOtp = async (e: { preventDefault(): void }) => {
+    e.preventDefault();
+    setFpError("");
+    if (!fpEmail.trim()) { setFpError("Email is required."); return; }
+    setFpLoading(true);
+    try {
+      await authPost("/auth/forgot-password/", { email: fpEmail.trim() });
+      setStep("forgot-otp");
+    } catch (err) {
+      setFpError(err instanceof Error ? err.message : "Failed to send OTP.");
+    } finally {
+      setFpLoading(false);
+    }
   };
 
+  // ── Forgot: verify OTP ─────────────────────────────────────────────────────
+  const handleVerifyOtp = async (e: { preventDefault(): void }) => {
+    e.preventDefault();
+    setFpError("");
+    if (!fpOtp.trim()) { setFpError("Enter the OTP sent to your email."); return; }
+    setStep("forgot-reset");
+  };
+
+  // ── Forgot: reset password ─────────────────────────────────────────────────
+  const handleResetPassword = async (e: { preventDefault(): void }) => {
+    e.preventDefault();
+    setFpError("");
+    if (!fpNewPwd || !fpConfirmPwd) { setFpError("Both password fields are required."); return; }
+    if (fpNewPwd !== fpConfirmPwd) { setFpError("Passwords do not match."); return; }
+    if (fpNewPwd.length < 6) { setFpError("Password must be at least 6 characters."); return; }
+    setFpLoading(true);
+    try {
+      await authPost("/auth/reset-password/", {
+        email: fpEmail.trim(),
+        otp: fpOtp.trim(),
+        new_password: fpNewPwd,
+      });
+      setFpSuccess("Password reset successfully. You can now sign in.");
+      setStep("login");
+      setFpEmail(""); setFpOtp(""); setFpNewPwd(""); setFpConfirmPwd("");
+    } catch (err) {
+      setFpError(err instanceof Error ? err.message : "Reset failed. Check your OTP and try again.");
+    } finally {
+      setFpLoading(false);
+    }
+  };
+
+  const resetForgot = () => {
+    setStep("login");
+    setFpEmail(""); setFpOtp(""); setFpNewPwd(""); setFpConfirmPwd("");
+    setFpError(""); setFpLoading(false);
+  };
+
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-[#f5f7fb] px-4 py-8 sm:py-5">
-      <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-[820px] items-center justify-center">
-        <div className="grid w-full overflow-hidden rounded-[20px] border border-slate-200 bg-white shadow-[0_14px_36px_rgba(15,23,42,0.08)] lg:grid-cols-[1fr_0.92fr]">
-          <AuthCard>
-            {step === "email" && (
-              <EmailStep
-                email={email}
-                setEmail={setEmail}
-                onNext={handleNext}
-                error={emailError}
-                buttonText={isCheckingEmail ? "Checking..." : "Next"}
-                disabled={isCheckingEmail}
-              />
-            )}
-
-            {step === "role" && (
-              <RoleStep
-                email={email}
-                role={role}
-                onContinue={handleRoleContinue}
-                onBack={resetToEmail}
-              />
-            )}
-
-            {step === "password" && (
-              <PasswordStep
-                email={email}
-                password={password}
-                setPassword={setPassword}
-                onBack={() => {
-                  setPassword("");
-                  setPasswordError("");
-                  setStep("role");
-                }}
-                onSubmit={handleSignIn}
-                onOtpLogin={() => navigate("/otp-login")}
-                onForgotPassword={() => navigate("/forgot-password")}
-                error={passwordError}
-                buttonText={isSigningIn ? "Signing in..." : "Sign in"}
-                disabled={isSigningIn}
-              />
-            )}
-          </AuthCard>
-
-          <PromoPanel />
+    <div className="min-h-screen bg-[#f5f7fb] flex items-center justify-center px-4">
+      <div className="w-full max-w-[420px]">
+        <div className="mb-8 text-center">
+          <h1 className="text-3xl font-bold text-[#1f2d3d] tracking-tight">Zora CRM</h1>
+          <p className="mt-2 text-sm text-slate-500">Sign in to access your workspace</p>
         </div>
+
+        <div className="rounded-[20px] border border-slate-200 bg-white shadow-[0_14px_36px_rgba(15,23,42,0.08)] p-8">
+
+          {/* ── STEP: login ── */}
+          {step === "login" && (
+            <>
+              <h2 className="mb-6 text-[18px] font-semibold text-[#1f2d3d]">Welcome back</h2>
+
+              {fpSuccess && (
+                <div className="mb-4 rounded-[6px] border border-green-200 bg-green-50 px-3 py-2.5 text-sm text-green-700">
+                  {fpSuccess}
+                </div>
+              )}
+
+              <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4" noValidate>
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Email address
+                  </label>
+                  <input
+                    id="email" type="email" autoComplete="email" autoFocus
+                    value={email} onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com" className={inputCls}
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label htmlFor="password" className="block text-sm font-medium text-slate-700">
+                      Password
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => { setFpEmail(email); setFpError(""); setFpSuccess(""); setStep("forgot-email"); }}
+                      className="text-xs text-[#4d76ff] hover:underline"
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input
+                      id="password" type={showPassword ? "text" : "password"}
+                      autoComplete="current-password" value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Enter your password"
+                      className={inputCls + " pr-10"}
+                    />
+                    <button type="button" onClick={() => setShowPassword((v) => !v)}
+                      className="absolute inset-y-0 right-3 flex items-center text-slate-400 hover:text-slate-600 text-xs" tabIndex={-1}>
+                      {showPassword ? "Hide" : "Show"}
+                    </button>
+                  </div>
+                </div>
+
+                {error && (
+                  <div className="rounded-[6px] border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-600">
+                    {error}
+                  </div>
+                )}
+
+                <button type="submit" disabled={loading}
+                  className="mt-2 w-full rounded-[8px] bg-gradient-to-b from-[#4d76ff] to-[#365eea] py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60">
+                  {loading ? "Signing in…" : "Sign in"}
+                </button>
+              </form>
+            </>
+          )}
+
+          {/* ── STEP: forgot-email ── */}
+          {step === "forgot-email" && (
+            <>
+              <h2 className="mb-1 text-[18px] font-semibold text-[#1f2d3d]">Reset Password</h2>
+              <p className="mb-6 text-sm text-slate-500">Enter your email and we'll send you a one-time code.</p>
+
+              <form onSubmit={(e) => void handleSendOtp(e)} className="space-y-4" noValidate>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Email address</label>
+                  <input type="email" autoFocus value={fpEmail}
+                    onChange={(e) => setFpEmail(e.target.value)}
+                    placeholder="you@example.com" className={inputCls} />
+                </div>
+
+                {fpError && (
+                  <div className="rounded-[6px] border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-600">{fpError}</div>
+                )}
+
+                <button type="submit" disabled={fpLoading}
+                  className="w-full rounded-[8px] bg-gradient-to-b from-[#4d76ff] to-[#365eea] py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">
+                  {fpLoading ? "Sending…" : "Send OTP"}
+                </button>
+
+                <button type="button" onClick={resetForgot}
+                  className="w-full text-sm text-slate-500 hover:text-slate-700 py-1">
+                  Back to Sign in
+                </button>
+              </form>
+            </>
+          )}
+
+          {/* ── STEP: forgot-otp ── */}
+          {step === "forgot-otp" && (
+            <>
+              <h2 className="mb-1 text-[18px] font-semibold text-[#1f2d3d]">Enter OTP</h2>
+              <p className="mb-6 text-sm text-slate-500">
+                A 6-digit code was sent to <span className="font-medium text-slate-700">{fpEmail}</span>. It expires in 5 minutes.
+              </p>
+
+              <form onSubmit={(e) => void handleVerifyOtp(e)} className="space-y-4" noValidate>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">One-time code</label>
+                  <input type="text" autoFocus maxLength={6} value={fpOtp}
+                    onChange={(e) => setFpOtp(e.target.value.replace(/\D/g, ""))}
+                    placeholder="123456"
+                    className={inputCls + " tracking-[0.3em] text-center text-lg font-bold"} />
+                </div>
+
+                {fpError && (
+                  <div className="rounded-[6px] border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-600">{fpError}</div>
+                )}
+
+                <button type="submit" disabled={fpOtp.length < 6}
+                  className="w-full rounded-[8px] bg-gradient-to-b from-[#4d76ff] to-[#365eea] py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">
+                  Verify OTP
+                </button>
+
+                <div className="flex items-center justify-between text-sm">
+                  <button type="button" onClick={() => { setFpError(""); void handleSendOtp({ preventDefault: () => {} }); }}
+                    className="text-[#4d76ff] hover:underline">
+                    Resend OTP
+                  </button>
+                  <button type="button" onClick={resetForgot} className="text-slate-500 hover:text-slate-700">
+                    Back to Sign in
+                  </button>
+                </div>
+              </form>
+            </>
+          )}
+
+          {/* ── STEP: forgot-reset ── */}
+          {step === "forgot-reset" && (
+            <>
+              <h2 className="mb-1 text-[18px] font-semibold text-[#1f2d3d]">New Password</h2>
+              <p className="mb-6 text-sm text-slate-500">Choose a strong new password for your account.</p>
+
+              <form onSubmit={(e) => void handleResetPassword(e)} className="space-y-4" noValidate>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">New password</label>
+                  <div className="relative">
+                    <input type={fpShowPwd ? "text" : "password"} autoFocus value={fpNewPwd}
+                      onChange={(e) => setFpNewPwd(e.target.value)}
+                      placeholder="At least 6 characters"
+                      className={inputCls + " pr-10"} />
+                    <button type="button" onClick={() => setFpShowPwd((v) => !v)}
+                      className="absolute inset-y-0 right-3 flex items-center text-slate-400 hover:text-slate-600 text-xs" tabIndex={-1}>
+                      {fpShowPwd ? "Hide" : "Show"}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Confirm password</label>
+                  <input type={fpShowPwd ? "text" : "password"} value={fpConfirmPwd}
+                    onChange={(e) => setFpConfirmPwd(e.target.value)}
+                    placeholder="Re-enter new password" className={inputCls} />
+                </div>
+
+                {fpError && (
+                  <div className="rounded-[6px] border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-600">{fpError}</div>
+                )}
+
+                <button type="submit" disabled={fpLoading}
+                  className="w-full rounded-[8px] bg-gradient-to-b from-[#4d76ff] to-[#365eea] py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">
+                  {fpLoading ? "Resetting…" : "Reset Password"}
+                </button>
+
+                <button type="button" onClick={resetForgot}
+                  className="w-full text-sm text-slate-500 hover:text-slate-700 py-1">
+                  Back to Sign in
+                </button>
+              </form>
+            </>
+          )}
+
+        </div>
+
+        <p className="mt-6 text-center text-xs text-slate-400">
+          Contact your administrator if you don't have an account.
+        </p>
       </div>
     </div>
   );
-};
-
-export default LoginPage;
+}

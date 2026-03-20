@@ -8,6 +8,7 @@ import {
   Clock3,
   Filter,
   List,
+  Loader2,
   MoreHorizontal,
   Phone,
   Search,
@@ -15,8 +16,10 @@ import {
   ArrowUpDown,
   RefreshCw,
   Grid2x2,
+  Trash2,
   User,
   Lock,
+  X,
 } from "lucide-react";
 
 type CallForType = "Contact" | "Lead";
@@ -244,6 +247,8 @@ export default function CallsPage() {
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showLogModal, setShowLogModal] = useState(false);
   const [selectedCall, setSelectedCall] = useState<CallRecord | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [deleting, setDeleting] = useState(false);
 
   const createMenuRef = useRef<HTMLDivElement | null>(null);
 
@@ -296,6 +301,33 @@ export default function CallsPage() {
     setSelectedFilterItems((prev) =>
       prev.includes(item) ? prev.filter((entry) => entry !== item) : [...prev, item]
     );
+  };
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (checked: boolean) => {
+    setSelectedIds(checked ? new Set(filteredCalls.map((c) => c.id)) : new Set());
+  };
+
+  const handleDelete = async () => {
+    if (!confirm(`Delete ${selectedIds.size} call${selectedIds.size !== 1 ? "s" : ""}? This cannot be undone.`)) return;
+    setDeleting(true);
+    const ids = [...selectedIds];
+    try {
+      await Promise.all(ids.map((id) => apiRequest(`/calls/${id}/`, { method: "DELETE" })));
+      setCalls((prev) => prev.filter((c) => !selectedIds.has(c.id)));
+      setSelectedIds(new Set());
+    } catch {
+      alert("Some calls could not be deleted. Please try again.");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const handleCreateScheduledCall = async (form: CallFormState) => {
@@ -478,12 +510,53 @@ export default function CallsPage() {
           </aside>
 
           <section className="overflow-hidden rounded-md border border-slate-200 bg-white">
+            {/* Selection bar */}
+            {selectedIds.size > 0 && (
+              <div className="flex items-center gap-3 border-b border-slate-200 bg-slate-800 px-5 py-2.5">
+                <span className="text-sm font-medium text-white">
+                  {selectedIds.size} record{selectedIds.size !== 1 ? "s" : ""} selected
+                </span>
+                <span className="text-slate-500">·</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedIds(new Set())}
+                  className="text-sm text-slate-400 hover:text-white"
+                >
+                  Clear
+                </button>
+                <div className="ml-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleDelete()}
+                    disabled={deleting}
+                    className="flex items-center gap-1.5 rounded border border-red-400 px-3 py-1 text-xs font-medium text-red-400 transition hover:bg-red-500 hover:text-white disabled:opacity-60"
+                  >
+                    {deleting ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                    {deleting ? "Deleting…" : "Delete"}
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedIds(new Set())}
+                  className="ml-auto rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-white"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+            )}
+
             <div className="overflow-x-auto">
               <table className="min-w-full text-left">
                 <thead className="border-b border-slate-200 bg-[#fbfcfe]">
                   <tr className="text-sm text-slate-600">
                     <th className="w-12 px-4 py-3">
-                      <input type="checkbox" className="h-4 w-4 rounded border-slate-300" />
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.size === filteredCalls.length && filteredCalls.length > 0}
+                        ref={(el) => { if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < filteredCalls.length; }}
+                        onChange={(e) => toggleSelectAll(e.target.checked)}
+                        className="h-4 w-4 cursor-pointer rounded border-slate-300 accent-blue-600"
+                      />
                     </th>
                     <th className="px-4 py-3 font-medium">
                       <div className="flex items-center gap-2">
@@ -510,11 +583,16 @@ export default function CallsPage() {
                     filteredCalls.map((call) => (
                       <tr
                         key={call.id}
-                        className="cursor-pointer border-b border-slate-100 text-[15px] text-slate-700 hover:bg-slate-50"
+                        className={`cursor-pointer border-b border-slate-100 text-[15px] text-slate-700 hover:bg-slate-50 ${selectedIds.has(call.id) ? "bg-blue-50" : ""}`}
                         onClick={() => setSelectedCall(call)}
                       >
                         <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                          <input type="checkbox" className="h-4 w-4 rounded border-slate-300" />
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(call.id)}
+                            onChange={() => toggleSelect(call.id)}
+                            className="h-4 w-4 cursor-pointer rounded border-slate-300 accent-blue-600"
+                          />
                         </td>
                         <td className="px-4 py-3">
                           <button

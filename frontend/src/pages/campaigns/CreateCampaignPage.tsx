@@ -1,8 +1,8 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import { ChevronDown, Info, UserPlus } from "lucide-react";
-import { createCampaign, type CampaignFormData } from "../../lib/api/campaignsApi";
+import { createCampaign, getCampaignById, updateCampaign, type CampaignFormData } from "../../lib/api/campaignsApi";
 
 type CampaignFormState = {
   campaignOwner: string;
@@ -155,11 +155,36 @@ function CurrencyField({
 
 export default function CreateCampaignPage() {
   const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const isEdit = Boolean(id);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState<CampaignFormState>(initialFormData);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const ownerLabel = getLoggedInUserLabel();
+
+  // Load existing campaign when editing
+  useEffect(() => {
+    if (!id) return;
+    void (async () => {
+      const campaign = await getCampaignById(id);
+      if (!campaign) return;
+      setFormData({
+        campaignOwner: campaign.campaignOwnerId,
+        campaignName: campaign.campaignName,
+        type: campaign.type,
+        status: campaign.status,
+        startDate: campaign.startDate,
+        endDate: campaign.endDate,
+        expectedRevenue: campaign.expectedRevenue,
+        budgetedCost: campaign.budgetedCost,
+        actualCost: campaign.actualCost,
+        expectedResponse: campaign.expectedResponse,
+        numbersSent: campaign.numbersSent,
+        description: campaign.description,
+      });
+    })();
+  }, [id]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -206,15 +231,19 @@ export default function CreateCampaignPage() {
         description: formData.description,
       };
 
-      await createCampaign(payload);
+      if (isEdit && id) {
+        await updateCampaign(id, payload);
+      } else {
+        await createCampaign(payload);
+      }
 
-      if (goToNew) {
+      if (goToNew && !isEdit) {
         resetForm();
         setSuccessMessage("Campaign created successfully.");
         return;
       }
 
-      navigate("/campaigns");
+      navigate(isEdit ? `/campaigns/${id}` : "/campaigns");
     } catch (error) {
       setError(error instanceof Error ? error.message : "Failed to create campaign.");
     } finally {
@@ -229,7 +258,7 @@ export default function CreateCampaignPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <h1 className="text-[16px] font-semibold text-[#1f2d3d]">
-                Create Campaign
+                {isEdit ? "Edit Campaign" : "Create Campaign"}
               </h1>
               
             </div>
@@ -237,7 +266,7 @@ export default function CreateCampaignPage() {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => navigate("/campaigns")}
+                onClick={() => navigate(isEdit ? `/campaigns/${id}` : "/campaigns")}
                 disabled={saving}
                 className="h-[32px] rounded-[6px] border border-[#cfd7e6] bg-white px-6 text-[14px] text-[#334155] hover:bg-slate-50 disabled:opacity-60"
               >

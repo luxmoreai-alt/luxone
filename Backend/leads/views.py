@@ -75,7 +75,6 @@ class LeadViewSet(viewsets.ModelViewSet):
         base_qs = (
             Lead.objects.select_related(
                 "owner",
-                "organization",
                 "converted_account",
                 "converted_contact",
                 "converted_deal",
@@ -91,22 +90,7 @@ class LeadViewSet(viewsets.ModelViewSet):
             )
         )
 
-        user_org = getattr(user, "organization_id", None)
-        if not user_org:
-            qs = base_qs.all()
-        else:
-            role = getattr(user, "role", "employee")
-
-            if role == "admin":
-                qs = base_qs.filter(organization_id=user_org)
-            elif role == "manager":
-                team_ids = user.team_members.values_list("id", flat=True)
-                qs = base_qs.filter(organization_id=user_org).filter(
-                    django_models.Q(owner=user) | django_models.Q(owner__in=team_ids)
-                )
-            else:
-                qs = base_qs.filter(organization_id=user_org, owner=user)
-
+        qs = base_qs.all()
         owner_id = self.request.query_params.get("owner_id")
         if owner_id and getattr(user, "role", "employee") in ("admin", "manager"):
             qs = qs.filter(owner_id=owner_id)
@@ -139,8 +123,6 @@ class LeadViewSet(viewsets.ModelViewSet):
         save_kwargs = {}
         if not serializer.validated_data.get("owner"):
             save_kwargs["owner"] = user
-        if not serializer.validated_data.get("organization") and getattr(user, "organization_id", None):
-            save_kwargs["organization_id"] = user.organization_id
         lead = serializer.save(**save_kwargs)
         create_activity_log(
             lead=lead,

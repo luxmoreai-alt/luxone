@@ -1,16 +1,19 @@
 from django.core.exceptions import ObjectDoesNotExist
+from django.db import IntegrityError
 from django.http import Http404
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .filters import CampaignFilter
-from .models import CampaignAttachment
+from .models import Campaign, CampaignAttachment, CampaignSubmission
 from .permissions import CampaignPermission, can_access_campaign_owner
 from .serializers import (
+    BulkConvertSerializer,
     CampaignActivityActionSerializer,
     CampaignAttachmentCreateSerializer,
     CampaignAttachmentSerializer,
@@ -23,8 +26,10 @@ from .serializers import (
     CampaignLogCallSerializer,
     CampaignNoteCreateSerializer,
     CampaignNoteSerializer,
+    CampaignPublicSubmitSerializer,
     CampaignScheduleMeetingSerializer,
     CampaignStatsSerializer,
+    CampaignSubmissionSerializer,
     CampaignTimelineSerializer,
     CampaignWriteSerializer,
 )
@@ -236,6 +241,42 @@ class CampaignViewSet(viewsets.ModelViewSet):
         )
         return Response({"message": "Call logged successfully"}, status=status.HTTP_201_CREATED)
 
+    @action(detail=True, methods=["get"], url_path="submissions")
+    def submissions(self, request, pk=None):
+        campaign = self.get_object()
+        qs = CampaignSubmission.objects.filter(campaign=campaign)
+        # Optional filter: ?converted=true|false
+        converted_param = request.query_params.get("converted")
+        if converted_param == "true":
+            qs = qs.filter(is_converted=True)
+        elif converted_param == "false":
+            qs = qs.filter(is_converted=False)
+        return Response(CampaignSubmissionSerializer(qs, many=True).data)
+
+    @action(detail=True, methods=["post"], url_path="convert-submissions")
+    def convert_submissions(self, request, pk=None):
+        campaign = self.get_object()
+        serializer = BulkConvertSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        ids = serializer.validated_data["submission_ids"]
+        results = []
+        for sub_id in ids:
+            try:
+                submission = CampaignSubmission.objects.get(pk=sub_id, campaign=campaign)
+            except CampaignSubmission.DoesNotExist:
+                results.append({"id": sub_id, "success": False, "error": "Submission not found."})
+                continue
+            if submission.is_converted:
+                results.append({"id": sub_id, "success": False, "error": "Already converted."})
+                continue
+            try:
+                lead = _convert_submission(submission, request.user)
+                results.append({"id": sub_id, "success": True, "lead_id": lead.id})
+            except (ValidationError, IntegrityError) as exc:
+                msg = exc.detail[0] if hasattr(exc, "detail") else str(exc)
+                results.append({"id": sub_id, "success": False, "error": str(msg)})
+        return Response({"results": results})
+
 
 class CampaignAttachmentDetailAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -255,4 +296,98 @@ class CampaignAttachmentDetailAPIView(APIView):
 
         campaign_service.delete_attachment(attachment=attachment, user=request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# ── Submission helper ──────────────────────────────────────────────────────
+
+def _convert_submission(submission: CampaignSubmission, user):
+    """Create a Lead from a CampaignSubmission and mark it converted."""
+    from leads.models import Lead
+    from .models import CampaignLead
+
+    if submission.is_converted:
+        raise ValidationError("This submission has already been converted to a lead.")
+
+    try:
+        lead = Lead.objects.create(
+            first_name=submission.first_name,
+            last_name=submission.last_name,
+            email=submission.email,
+            phone=submission.phone or "",
+            company=submission.company or "Unknown",
+            lead_source="Campaign",
+            lead_status="New",
+            owner=user,
+            campaign=submission.campaign,
+            description=submission.notes or "",
+        )
+    except IntegrityError:
+        raise ValidationError(
+            f"A lead with email '{submission.email}' already exists."
+        )
+
+    submission.is_converted = True
+    submission.converted_lead = lead
+    submission.save(update_fields=["is_converted", "converted_lead"])
+
+    # Also link via CampaignLead join table
+    CampaignLead.objects.get_or_create(campaign=submission.campaign, lead=lead)
+
+    return lead
+
+
+# ── Single-submission convert view ────────────────────────────────────────
+
+class CampaignSubmissionConvertAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, submission_id: int):
+        try:
+            submission = CampaignSubmission.objects.select_related("campaign").get(pk=submission_id)
+        except CampaignSubmission.DoesNotExist:
+            return Response({"detail": "Submission not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            lead = _convert_submission(submission, request.user)
+        except ValidationError as exc:
+            msg = exc.detail[0] if hasattr(exc, "detail") else str(exc)
+            return Response({"detail": str(msg)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            {"message": "Lead created successfully.", "lead_id": lead.id},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+# ── Public form submission view (no auth required) ────────────────────────
+
+class CampaignPublicSubmitAPIView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []  # Skip JWT auth entirely
+
+    def post(self, request, campaign_id: int):
+        try:
+            campaign = Campaign.objects.get(pk=campaign_id, is_active=True)
+        except Campaign.DoesNotExist:
+            return Response({"detail": "Campaign not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = CampaignPublicSubmitSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        submission = CampaignSubmission.objects.create(
+            campaign=campaign,
+            first_name=data["first_name"],
+            last_name=data["last_name"],
+            email=data["email"],
+            phone=data.get("phone") or None,
+            company=data.get("company") or None,
+            notes=data.get("notes") or None,
+            source="Campaign Form",
+        )
+
+        return Response(
+            {"message": "Thank you! Your response has been recorded.", "id": submission.id},
+            status=status.HTTP_201_CREATED,
+        )
 

@@ -99,14 +99,6 @@ class Task(models.Model):
         null=True,
         blank=True,
     )
-    # organization this task belongs to
-    organization = models.ForeignKey(
-        "organizations.Organization",
-        on_delete=models.SET_NULL,
-        related_name="tasks",
-        null=True,
-        blank=True,
-    )
     contact = models.ForeignKey(
         "contacts.Contact",
         on_delete=models.SET_NULL,
@@ -134,7 +126,6 @@ class Task(models.Model):
             models.Index(fields=["owner", "created_at"]),
             models.Index(fields=["assigned_to", "created_at"]),
             models.Index(fields=["status", "due_date"]),
-            models.Index(fields=["organization", "created_at"]),
         ]
 
     def __str__(self):
