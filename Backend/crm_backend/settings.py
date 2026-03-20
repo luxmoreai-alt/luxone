@@ -59,7 +59,6 @@ INSTALLED_APPS = [
     'drf_yasg',
     
     # Local apps
-    'organizations',       # multi-org / RBAC
     'authentication',
     'leads',
     'accounts',
@@ -74,7 +73,6 @@ INSTALLED_APPS = [
     'services',
     'integrations',
     'django_filters',
-    'saas_admin',
     'documents',
 ]
 
@@ -128,8 +126,6 @@ DATABASES = {
         'PORT': DB_PORT,
     }
 }
-
-DATABASE_ROUTERS = ['crm_backend.routers.TenantRouter']
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators

@@ -66,14 +66,6 @@ class User(AbstractBaseUser, PermissionsMixin):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    # Multi-org / RBAC fields (nullable for safe migration)
-    organization = models.ForeignKey(
-        "organizations.Organization",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="users",
-    )
     role = models.CharField(
         max_length=30,
         choices=Role.choices,

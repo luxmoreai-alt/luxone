@@ -23,9 +23,6 @@ from .permissions import IsOrgAdmin, IsAdminOrManager
 from .models import OTP
 from .services import generate_and_send_otp
 from .utils import custom_response
-from crm_backend.middleware import set_current_db_name
-from saas_admin.models import Company
-from saas_admin.services import configure_tenant_database_in_settings
 
 User = get_user_model()
 
@@ -63,27 +60,9 @@ def get_allowed_modules(role, department=""):
     return ROLE_MODULE_MAP.get(role, ["sales", "activities"])
 
 
-def get_tenant_user_for_email(email, require_admin=True):
-    """
-    Finds the tenant database and user record for an email.
-    Re-registers tenant DBs in settings so login still works after server restarts.
-    """
-    for company in Company.objects.filter(status='Active'):
-        try:
-            configure_tenant_database_in_settings(company.db_name)
-            queryset = User.objects.using(company.db_name).filter(
-                email=email,
-                is_active=True,
-            )
-            if require_admin:
-                queryset = queryset.filter(is_admin=True)
-
-            user = queryset.first()
-            if user:
-                return company.db_name, user
-        except Exception:
-            continue
-    return None, None
+def get_user_by_email(email):
+    """Find an active user by email in the default database."""
+    return User.objects.filter(email__iexact=email, is_active=True).first()
 
 
 def get_tokens_for_user(user):
@@ -94,7 +73,7 @@ def get_tokens_for_user(user):
     }
 
 
-def build_auth_payload(user, db_name):
+def build_auth_payload(user):
     tokens = get_tokens_for_user(user)
     role = getattr(user, "role", "employee")
     department = getattr(user, "department", "") or ""
@@ -102,7 +81,6 @@ def build_auth_payload(user, db_name):
     return {
         "access_token": tokens["access_token"],
         "refresh_token": tokens["refresh_token"],
-        "tenant_db": db_name,
         "user": {
             "id": user.pk,
             "email": user.email,
@@ -175,19 +153,14 @@ class CheckEmailView(APIView):
         serializer = CheckEmailSerializer(data=request.data)
         if serializer.is_valid():
             email = serializer.validated_data['email']
-            db_name, user = get_tenant_user_for_email(email, require_admin=False)
-
-            if db_name and user:
-                set_current_db_name(db_name)
+            user = get_user_by_email(email)
+            if user:
                 return Response(custom_response(
                     success=True,
                     message="Email found",
-                    data={
-                        "role": getattr(user, "role", "employee"),
-                        "email": user.email,
-                    }
+                    data={"role": getattr(user, "role", "employee"), "email": user.email}
                 ), status=status.HTTP_200_OK)
-            return Response(custom_response(success=False, message="User not found or company inactive"), status=status.HTTP_404_NOT_FOUND)
+            return Response(custom_response(success=False, message="User not found"), status=status.HTTP_404_NOT_FOUND)
         return Response(custom_response(success=False, message=serializer.errors), status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -201,21 +174,11 @@ class LoginView(APIView):
             email = serializer.validated_data['email']
             password = serializer.validated_data['password']
 
-            db_name, tenant_user = get_tenant_user_for_email(email, require_admin=False)
-            if not db_name or not tenant_user:
+            user = get_user_by_email(email)
+            if not user or not user.check_password(password):
                 return Response(custom_response(success=False, message="Invalid credentials"), status=status.HTTP_401_UNAUTHORIZED)
 
-            set_current_db_name(db_name)
-
-            try:
-                user = User.objects.using(db_name).get(email__iexact=email, is_active=True)
-            except User.DoesNotExist:
-                return Response(custom_response(success=False, message="Invalid credentials"), status=status.HTTP_401_UNAUTHORIZED)
-
-            if not user.check_password(password):
-                return Response(custom_response(success=False, message="Invalid credentials"), status=status.HTTP_401_UNAUTHORIZED)
-
-            data = build_auth_payload(user, db_name)
+            data = build_auth_payload(user)
             return Response(custom_response(success=True, message="Login successful", data=data), status=status.HTTP_200_OK)
         return Response(custom_response(success=False, message=serializer.errors), status=status.HTTP_400_BAD_REQUEST)
 
@@ -228,10 +191,8 @@ class SendOTPView(APIView):
         serializer = SendOTPSerializer(data=request.data)
         if serializer.is_valid():
             email = serializer.validated_data['email']
-            db_name, user = get_tenant_user_for_email(email, require_admin=False)
-
-            if db_name and user:
-                set_current_db_name(db_name)
+            user = get_user_by_email(email)
+            if user:
                 if generate_and_send_otp(email):
                     return Response(custom_response(success=True, message="OTP sent successfully to " + email), status=status.HTTP_200_OK)
                 return Response(custom_response(success=False, message="Failed to send OTP"), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -249,18 +210,15 @@ class VerifyOTPView(APIView):
             email = serializer.validated_data['email']
             code = serializer.validated_data['otp']
 
-            db_name, user = get_tenant_user_for_email(email, require_admin=False)
-            if not db_name or not user:
+            user = get_user_by_email(email)
+            if not user:
                 return Response(custom_response(success=False, message="User not registered"), status=status.HTTP_404_NOT_FOUND)
 
-            set_current_db_name(db_name)
             otp_record = OTP.objects.filter(email=email, code=code, is_verified=False).order_by('-created_at').first()
-
             if otp_record and otp_record.is_valid():
                 otp_record.is_verified = True
                 otp_record.save()
-
-                data = build_auth_payload(user, db_name)
+                data = build_auth_payload(user)
                 return Response(custom_response(success=True, message="Login successful", data=data), status=status.HTTP_200_OK)
             return Response(custom_response(success=False, message="Invalid or expired OTP"), status=status.HTTP_401_UNAUTHORIZED)
         return Response(custom_response(success=False, message=serializer.errors), status=status.HTTP_400_BAD_REQUEST)
@@ -274,9 +232,8 @@ class ForgotPasswordView(APIView):
         serializer = SendOTPSerializer(data=request.data)
         if serializer.is_valid():
             email = serializer.validated_data['email']
-            db_name, user = get_tenant_user_for_email(email, require_admin=False)
-            if db_name and user:
-                set_current_db_name(db_name)
+            user = get_user_by_email(email)
+            if user:
                 if generate_and_send_otp(email):
                     return Response(custom_response(success=True, message="OTP sent successfully"), status=status.HTTP_200_OK)
                 return Response(custom_response(success=False, message="Failed to send OTP"), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -295,11 +252,10 @@ class ResetPasswordView(APIView):
             code = serializer.validated_data['otp']
             new_password = serializer.validated_data['new_password']
 
-            db_name, user = get_tenant_user_for_email(email, require_admin=False)
-            if not db_name or not user:
+            user = get_user_by_email(email)
+            if not user:
                 return Response(custom_response(success=False, message="User not registered"), status=status.HTTP_404_NOT_FOUND)
 
-            set_current_db_name(db_name)
             otp_record = OTP.objects.filter(email=email, code=code, is_verified=False).order_by('-created_at').first()
 
             if otp_record and otp_record.is_valid():
@@ -380,25 +336,15 @@ class UserManagementViewSet(viewsets.ViewSet):
     permission_classes = [IsAuthenticated, IsAdminOrManager]
 
     def _scoped_queryset(self, user, active_only=False):
-        """Returns users visible to the requesting user.
-        active_only=True is used for assignment dropdowns — excludes inactive/terminated.
-        """
-        from organizations.services import get_team_members
-
-        org_id = getattr(user, "organization_id", None)
-        if not org_id:
-            qs = User.objects.all()
-            return qs.filter(is_active=True) if active_only else qs
-
+        """Returns users visible to the requesting user based on role."""
         role = getattr(user, "role", "employee")
-        base = User.objects.filter(organization_id=org_id).select_related("manager", "organization")
+        base = User.objects.select_related("manager")
         if active_only:
             base = base.filter(is_active=True)
-
         if role in ("admin", "sub_admin"):
             return base
         if role in ("manager", "team_lead"):
-            team_ids = list(get_team_members(user).values_list("id", flat=True))
+            team_ids = list(User.objects.filter(manager=user, is_active=True).values_list("id", flat=True))
             team_ids.append(user.pk)
             return base.filter(pk__in=team_ids)
         return base.filter(pk=user.pk)
@@ -448,7 +394,6 @@ class UserManagementViewSet(viewsets.ViewSet):
         new_user.name = data.get("name", "")
         new_user.role = assigned_role
         new_user.department = data.get("department", "")
-        new_user.organization = creator.organization
         new_user.manager = manager_for_new_user
         new_user.is_active = True
         new_user.must_change_password = True

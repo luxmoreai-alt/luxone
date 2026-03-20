@@ -7,23 +7,10 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ("activities", "0014_call"),
-        ("organizations", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
-        # organization FK on Task
-        migrations.AddField(
-            model_name="task",
-            name="organization",
-            field=models.ForeignKey(
-                blank=True,
-                null=True,
-                on_delete=django.db.models.deletion.SET_NULL,
-                related_name="tasks",
-                to="organizations.organization",
-            ),
-        ),
         # assigned_to: who should work on this task
         migrations.AddField(
             model_name="task",
@@ -54,13 +41,6 @@ class Migration(migrations.Migration):
             index=models.Index(
                 fields=["assigned_to", "created_at"],
                 name="activities__assigne_created_idx",
-            ),
-        ),
-        migrations.AddIndex(
-            model_name="task",
-            index=models.Index(
-                fields=["organization", "created_at"],
-                name="activities__org_created_idx",
             ),
         ),
     ]

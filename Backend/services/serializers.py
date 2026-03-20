@@ -11,7 +11,6 @@ from contacts.models import Contact
 from deals.models import Deal
 from inventory.models import Product
 from leads.models import Lead
-from saas_admin.models import Company
 from support.models import SupportCase
 
 from .models import (
@@ -100,16 +99,7 @@ class ServicesModuleSettingsSerializer(serializers.ModelSerializer):
                 "phone": details.phone,
                 "address": details.address,
             }
-        company = Company.objects.order_by("-created_at").first()
-        if not company:
-            return None
-        return {
-            "company_name": company.company_name,
-            "company_email": company.company_email,
-            "contact_person": company.contact_person,
-            "phone": company.phone,
-            "address": company.address,
-        }
+        return None
 
     def get_public_booking_base_url(self, obj):
         return get_public_booking_base_url()

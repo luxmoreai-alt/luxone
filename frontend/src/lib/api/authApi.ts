@@ -28,7 +28,6 @@ export type LoginResponse = {
   data: {
     access_token: string;
     refresh_token: string;
-    tenant_db: string;
     user: AuthUser;
   };
 };
@@ -51,7 +50,6 @@ export function storeAuthSession(data: LoginResponse["data"]) {
   localStorage.setItem(AUTH_KEYS.isLoggedIn, "true");
   localStorage.setItem(AUTH_KEYS.accessToken, data.access_token);
   localStorage.setItem(AUTH_KEYS.refreshToken, data.refresh_token);
-  localStorage.setItem(AUTH_KEYS.tenantDb, data.tenant_db);
   localStorage.setItem(AUTH_KEYS.loggedInUser, JSON.stringify(data.user));
 }
 

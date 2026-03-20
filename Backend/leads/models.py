@@ -51,13 +51,6 @@ class Lead(models.Model):
         null=True,
         blank=True,
     )
-    organization = models.ForeignKey(
-        "organizations.Organization",
-        on_delete=models.SET_NULL,
-        related_name="leads",
-        null=True,
-        blank=True,
-    )
     converted_account = models.ForeignKey(
         "accounts.Account",
         on_delete=models.SET_NULL,
