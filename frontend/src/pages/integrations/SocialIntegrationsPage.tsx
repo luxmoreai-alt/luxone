@@ -7,11 +7,11 @@ import {
   automationTriggerOptions,
   integrationsNavTabs,
   socialPlatformOptions,
-  socialTabs,
 } from "../../integrations/config";
 import BrandForm from "../../integrations/components/BrandForm";
 import BrandSettingsSection from "../../integrations/components/BrandSettingsSection";
 import IntegrationHeader from "../../integrations/components/IntegrationHeader";
+import IntegrationSetupChecklist from "../../integrations/components/IntegrationSetupChecklist";
 import SocialAdminSettingsPanel from "../../integrations/components/SocialAdminSettingsPanel";
 import SocialAutomationRulesPanel from "../../integrations/components/SocialAutomationRulesPanel";
 import SocialLanding from "../../integrations/components/SocialLanding";
@@ -26,6 +26,7 @@ import type {
 } from "../../integrations/types";
 
 type Notice = { tone: "success" | "error"; message: string } | null;
+type ModalError = string | null;
 
 type AccountDraft = {
   brandId: number;
@@ -34,8 +35,6 @@ type AccountDraft = {
   account_name: string;
   handle: string;
   page_id: string;
-  access_token: string;
-  refresh_token: string;
 };
 
 type RuleDraft = {
@@ -54,8 +53,6 @@ const defaultAccountDraft: AccountDraft = {
   account_name: "",
   handle: "",
   page_id: "",
-  access_token: "",
-  refresh_token: "",
 };
 
 const defaultRuleDraft: RuleDraft = {
@@ -87,17 +84,18 @@ export default function SocialIntegrationsPage() {
   const [rules, setRules] = useState<SocialLeadAutomationRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<Notice>(null);
-  const [activeTab, setActiveTab] = useState("brand");
 
   const [brandModalOpen, setBrandModalOpen] = useState(false);
   const [editingBrand, setEditingBrand] = useState<SocialBrand | null>(null);
 
   const [accountModalOpen, setAccountModalOpen] = useState(false);
   const [accountDraft, setAccountDraft] = useState<AccountDraft>(defaultAccountDraft);
+  const [accountError, setAccountError] = useState<ModalError>(null);
 
   const [ruleModalOpen, setRuleModalOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<SocialLeadAutomationRule | null>(null);
   const [ruleDraft, setRuleDraft] = useState<RuleDraft>(defaultRuleDraft);
+  const [ruleError, setRuleError] = useState<ModalError>(null);
 
   const load = async () => {
     try {
@@ -121,7 +119,54 @@ export default function SocialIntegrationsPage() {
     void load();
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    const oauthStatus = params.get("social_oauth");
+    if (!oauthStatus) {
+      return;
+    }
+    const oauthMessage = params.get("social_message");
+    setNotice({
+      tone: oauthStatus === "facebook_success" ? "success" : "error",
+      message:
+        oauthMessage ||
+        (oauthStatus === "facebook_success"
+          ? "Facebook connected successfully."
+          : "Facebook connection failed."),
+    });
+    params.delete("social_oauth");
+    params.delete("social_message");
+    const nextQuery = params.toString();
+    const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}`;
+    window.history.replaceState({}, "", nextUrl);
+    void load();
+  }, []);
+
   const adminSetting = adminSettings[0] || null;
+  const connectedAccountsCount = accounts.filter((account) => account.is_connected).length;
+  const setupItems = useMemo(
+    () => [
+      {
+        label: "Create Brand",
+        description: "Set up the brand or business identity that owns the social channels.",
+        done: brands.length > 0,
+      },
+      {
+        label: "Connect Accounts",
+        description: "Connect at least one social account so the CRM can capture activity.",
+        done: connectedAccountsCount > 0,
+      },
+      {
+        label: "Enable Automation",
+        description: "Add rules only after accounts are connected and ownership is clear.",
+        done: rules.some((rule) => rule.is_active),
+      },
+    ],
+    [brands.length, connectedAccountsCount, rules]
+  );
 
   const brandsWithAccounts = useMemo(
     () =>
@@ -159,11 +204,21 @@ export default function SocialIntegrationsPage() {
     setBrandModalOpen(true);
   };
 
+  const startFacebookOAuth = async (accountId: number) => {
+    try {
+      const response = await integrationsApi.startFacebookSocialOAuth(accountId);
+      window.location.assign(response.auth_url);
+    } catch (error) {
+      setError(error);
+    }
+  };
+
   const openConnectModal = (
     brand: SocialBrand,
     platform: SocialPlatform,
     account?: SocialAccount
   ) => {
+    setAccountError(null);
     setAccountDraft({
       brandId: brand.id,
       platform,
@@ -171,13 +226,12 @@ export default function SocialIntegrationsPage() {
       account_name: account?.account_name || "",
       handle: account?.handle || "",
       page_id: account?.page_id || "",
-      access_token: "",
-      refresh_token: "",
     });
     setAccountModalOpen(true);
   };
 
   const openRuleModal = (rule?: SocialLeadAutomationRule) => {
+    setRuleError(null);
     setEditingRule(rule || null);
     setRuleDraft(
       rule
@@ -198,12 +252,25 @@ export default function SocialIntegrationsPage() {
   };
 
   const submitAccount = async () => {
+    const accountName = accountDraft.account_name.trim();
+    const handle = accountDraft.handle.trim();
+    const pageId = accountDraft.page_id.trim();
+
+    if (!accountName) {
+      setAccountError("Account name is required.");
+      return;
+    }
+
+    if (!handle && !pageId) {
+      setAccountError("Enter either a handle or page ID to identify the social account.");
+      return;
+    }
+
+    setAccountError(null);
     const payload: SocialConnectPayload = {
-      account_name: accountDraft.account_name,
-      handle: accountDraft.handle,
-      page_id: accountDraft.page_id,
-      access_token: accountDraft.access_token,
-      refresh_token: accountDraft.refresh_token,
+      account_name: accountName,
+      handle,
+      page_id: pageId,
     };
 
     if (accountDraft.accountId) {
@@ -211,9 +278,9 @@ export default function SocialIntegrationsPage() {
         () =>
           integrationsApi
             .updateSocialAccount(accountDraft.accountId!, {
-              account_name: accountDraft.account_name,
-              handle: accountDraft.handle,
-              page_id: accountDraft.page_id,
+              account_name: accountName,
+              handle,
+              page_id: pageId,
             })
             .then(() =>
               integrationsApi.connectSocialAccount(accountDraft.accountId!, payload)
@@ -229,9 +296,9 @@ export default function SocialIntegrationsPage() {
         const account = await integrationsApi.createSocialAccount({
           brand: accountDraft.brandId,
           platform: accountDraft.platform,
-          account_name: accountDraft.account_name,
-          handle: accountDraft.handle,
-          page_id: accountDraft.page_id,
+          account_name: accountName,
+          handle,
+          page_id: pageId,
         });
         await integrationsApi.connectSocialAccount(account.id, payload);
       },
@@ -241,14 +308,33 @@ export default function SocialIntegrationsPage() {
   };
 
   const submitRule = async () => {
+    const assignToUser = ruleDraft.assign_to_user.trim();
+    const assignToTeam = ruleDraft.assign_to_team.trim();
+    const qualificationLogicText = ruleDraft.qualification_logic_text.trim();
+
+    if (assignToUser && !/^\d+$/.test(assignToUser)) {
+      setRuleError("Assign To User ID must be a number.");
+      return;
+    }
+
+    if (qualificationLogicText) {
+      try {
+        JSON.parse(qualificationLogicText);
+      } catch {
+        setRuleError("Qualification logic must be valid JSON.");
+        return;
+      }
+    }
+
+    setRuleError(null);
     const payload = {
       platform: ruleDraft.platform,
       trigger_type: ruleDraft.trigger_type,
       action_type: ruleDraft.action_type,
       is_active: ruleDraft.is_active,
-      assign_to_user: ruleDraft.assign_to_user ? Number(ruleDraft.assign_to_user) : null,
-      assign_to_team: ruleDraft.assign_to_team || null,
-      qualification_logic: parseQualificationLogic(ruleDraft.qualification_logic_text),
+      assign_to_user: assignToUser ? Number(assignToUser) : null,
+      assign_to_team: assignToTeam || null,
+      qualification_logic: parseQualificationLogic(qualificationLogicText),
     };
 
     await runAction(
@@ -298,26 +384,18 @@ export default function SocialIntegrationsPage() {
           <div className="text-sm text-slate-500">Loading social integrations...</div>
         ) : null}
 
+        <IntegrationSetupChecklist
+          title="Setup Progress"
+          subtitle="Use this order for social integrations: create a brand, connect the channel, then add permissions and automation."
+          items={setupItems}
+        />
+
         <SocialLanding hasBrands={brands.length > 0} onGetStarted={openCreateBrand} />
 
-        <div className="flex flex-wrap gap-2">
-          {socialTabs.map((tab) => (
-            <button
-              key={tab.value}
-              type="button"
-              onClick={() => setActiveTab(tab.value)}
-              className={`rounded-md px-3 py-2 text-sm font-medium ${
-                activeTab === tab.value
-                  ? "bg-blue-600 text-white"
-                  : "border border-slate-300 bg-white text-slate-700"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {activeTab === "brand" ? (
+        <CRMSectionCard title="Step 1: Brand And Accounts">
+          <p className="mb-4 text-sm text-slate-600">
+            Start by creating a brand, then connect the social accounts that belong to it. Add the public account details here, and keep private platform credentials inside your backend or OAuth flow.
+          </p>
           <BrandSettingsSection
             brands={brandsWithAccounts}
             onCreateBrand={openCreateBrand}
@@ -341,10 +419,20 @@ export default function SocialIntegrationsPage() {
                 "Social account disconnected successfully."
               )
             }
+            onSyncAccount={(accountId) =>
+              void runAction(
+                () => integrationsApi.syncSocialAccount(accountId),
+                "Social account synced successfully."
+              )
+            }
+            onFacebookOAuthConnect={(accountId) => void startFacebookOAuth(accountId)}
           />
-        ) : null}
+        </CRMSectionCard>
 
-        {activeTab === "admin" ? (
+        <CRMSectionCard title="Step 2: Ownership And Visibility">
+          <p className="mb-4 text-sm text-slate-600">
+            Decide who can see the social area and which internal profiles should manage it.
+          </p>
           <SocialAdminSettingsPanel
             setting={adminSetting}
             onSave={(payload) =>
@@ -357,9 +445,12 @@ export default function SocialIntegrationsPage() {
               )
             }
           />
-        ) : null}
+        </CRMSectionCard>
 
-        {activeTab === "automation" ? (
+        <CRMSectionCard title="Step 3: Lead Automation">
+          <p className="mb-4 text-sm text-slate-600">
+            After your accounts are connected, add rules to decide when messages or mentions should create leads or cases.
+          </p>
           <SocialAutomationRulesPanel
             rules={rules}
             onCreate={() => openRuleModal()}
@@ -378,7 +469,7 @@ export default function SocialIntegrationsPage() {
               );
             }}
           />
-        ) : null}
+        </CRMSectionCard>
 
         <CRMSectionCard title="Social Overview">
           <div className="grid gap-3 md:grid-cols-3">
@@ -389,7 +480,7 @@ export default function SocialIntegrationsPage() {
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
               <div className="font-medium text-slate-900">Connected Accounts</div>
               <div className="mt-2 text-2xl font-semibold">
-                {accounts.filter((account) => account.is_connected).length}
+                {connectedAccountsCount}
               </div>
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
@@ -439,6 +530,14 @@ export default function SocialIntegrationsPage() {
             </>
           }
         >
+          {accountError ? (
+            <div className="mb-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+              {accountError}
+            </div>
+          ) : null}
+          <div className="mb-4 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-700">
+            Connect the channel using the public account details. Private access tokens stay in the backend integration setup and are not entered here.
+          </div>
           <div className="grid gap-4 md:grid-cols-2">
             <label className="space-y-1 text-sm">
               <span className="text-slate-600">Platform</span>
@@ -483,7 +582,7 @@ export default function SocialIntegrationsPage() {
                   }))
                 }
                 className="w-full rounded-md border border-slate-300 px-3 py-2"
-                placeholder="@brand"
+                placeholder={accountDraft.platform === "x" ? "@brand_handle" : "Optional public handle"}
               />
             </label>
             <label className="space-y-1 text-sm">
@@ -497,34 +596,11 @@ export default function SocialIntegrationsPage() {
                   }))
                 }
                 className="w-full rounded-md border border-slate-300 px-3 py-2"
-              />
-            </label>
-            <label className="space-y-1 text-sm md:col-span-2">
-              <span className="text-slate-600">Access Token</span>
-              <textarea
-                rows={3}
-                value={accountDraft.access_token}
-                onChange={(event) =>
-                  setAccountDraft((previous) => ({
-                    ...previous,
-                    access_token: event.target.value,
-                  }))
+                placeholder={
+                  accountDraft.platform === "facebook"
+                    ? "Facebook page ID"
+                    : "Optional platform page ID"
                 }
-                className="w-full rounded-md border border-slate-300 px-3 py-2"
-              />
-            </label>
-            <label className="space-y-1 text-sm md:col-span-2">
-              <span className="text-slate-600">Refresh Token</span>
-              <textarea
-                rows={3}
-                value={accountDraft.refresh_token}
-                onChange={(event) =>
-                  setAccountDraft((previous) => ({
-                    ...previous,
-                    refresh_token: event.target.value,
-                  }))
-                }
-                className="w-full rounded-md border border-slate-300 px-3 py-2"
               />
             </label>
           </div>
@@ -552,6 +628,11 @@ export default function SocialIntegrationsPage() {
             </>
           }
         >
+          {ruleError ? (
+            <div className="mb-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+              {ruleError}
+            </div>
+          ) : null}
           <div className="grid gap-4 md:grid-cols-2">
             <label className="space-y-1 text-sm">
               <span className="text-slate-600">Platform</span>
@@ -602,7 +683,7 @@ export default function SocialIntegrationsPage() {
                   }))
                 }
                 className="w-full rounded-md border border-slate-300 px-3 py-2"
-                placeholder="Optional user id"
+                placeholder="Internal CRM user ID"
               />
             </label>
             <label className="space-y-1 text-sm">
@@ -616,7 +697,7 @@ export default function SocialIntegrationsPage() {
                   }))
                 }
                 className="w-full rounded-md border border-slate-300 px-3 py-2"
-                placeholder="Optional team name"
+                placeholder="Sales team, support queue, or owner group"
               />
             </label>
             <label className="flex items-center gap-2 text-sm text-slate-700 md:col-span-2">

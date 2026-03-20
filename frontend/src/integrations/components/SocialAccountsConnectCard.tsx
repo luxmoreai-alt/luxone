@@ -7,9 +7,11 @@ type Props = {
   accounts: SocialAccount[];
   onConnect: (platform: SocialPlatform, account?: SocialAccount) => void;
   onDisconnect: (account: SocialAccount) => void;
+  onSync?: (account: SocialAccount) => void;
+  onFacebookOAuthConnect?: (account: SocialAccount) => void;
 };
 
-export default function SocialAccountsConnectCard({ accounts, onConnect, onDisconnect }: Props) {
+export default function SocialAccountsConnectCard({ accounts, onConnect, onDisconnect, onSync, onFacebookOAuthConnect }: Props) {
   const platforms: SocialPlatform[] = ["x", "facebook"];
 
   return (
@@ -30,6 +32,24 @@ export default function SocialAccountsConnectCard({ accounts, onConnect, onDisco
                 <button type="button" onClick={() => onConnect(platform, account)} className="rounded-md border border-slate-200 px-3 py-2 text-xs text-slate-700">
                   {account ? "Edit Account" : `Connect ${getPlatformLabel(platform)}`}
                 </button>
+                {platform === "facebook" && account ? (
+                  <button
+                    type="button"
+                    onClick={() => onFacebookOAuthConnect?.(account)}
+                    className="rounded-md border border-blue-200 px-3 py-2 text-xs text-blue-700"
+                  >
+                    Connect Facebook OAuth
+                  </button>
+                ) : null}
+                {account?.is_connected ? (
+                  <button
+                    type="button"
+                    onClick={() => onSync?.(account)}
+                    className="rounded-md border border-emerald-200 px-3 py-2 text-xs text-emerald-700"
+                  >
+                    Sync Now
+                  </button>
+                ) : null}
                 {account?.is_connected ? (
                   <button type="button" onClick={() => onDisconnect(account)} className="rounded-md border border-rose-200 px-3 py-2 text-xs text-rose-700">Disconnect</button>
                 ) : null}
@@ -41,4 +61,3 @@ export default function SocialAccountsConnectCard({ accounts, onConnect, onDisco
     </CRMSectionCard>
   );
 }
-

@@ -8,9 +8,10 @@ from django.db import models
 from core.base_models import BaseModel
 
 
-def _next_support_code(model_class, field_name: str, prefix: str) -> str:
+def _next_support_code(model_class, field_name: str, prefix: str, using: str | None = None) -> str:
     last_value = (
-        model_class.objects.filter(**{f"{field_name}__startswith": f"{prefix}-"})
+        model_class.objects.using(using or "default")
+        .filter(**{f"{field_name}__regex": rf"^{prefix}\d+$"})
         .order_by(f"-{field_name}")
         .values_list(field_name, flat=True)
         .first()
@@ -18,10 +19,10 @@ def _next_support_code(model_class, field_name: str, prefix: str) -> str:
     next_number = 1
     if last_value:
         try:
-            next_number = int(str(last_value).split("-")[-1]) + 1
+            next_number = int(str(last_value)[len(prefix) :]) + 1
         except (TypeError, ValueError):
             next_number = 1
-    return f"{prefix}-{next_number:04d}"
+    return f"{prefix}{next_number:04d}"
 
 
 class SupportCase(BaseModel):
@@ -115,7 +116,8 @@ class SupportCase(BaseModel):
 
     def save(self, *args, **kwargs):
         if self.pk is None and not self.case_number:
-            self.case_number = _next_support_code(SupportCase, "case_number", "CASE")
+            using = kwargs.get("using") or self._state.db
+            self.case_number = _next_support_code(SupportCase, "case_number", "CAS", using=using)
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -180,7 +182,8 @@ class SupportSolution(BaseModel):
 
     def save(self, *args, **kwargs):
         if self.pk is None and not self.solution_number:
-            self.solution_number = _next_support_code(SupportSolution, "solution_number", "SOL")
+            using = kwargs.get("using") or self._state.db
+            self.solution_number = _next_support_code(SupportSolution, "solution_number", "SOL", using=using)
         super().save(*args, **kwargs)
 
     def __str__(self):

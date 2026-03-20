@@ -17,7 +17,7 @@ from activities.services import (
 )
 from contacts.models import Contact
 from deals.models import Deal
-from inventory.models import Product
+from inventory.models import Invoice, Product, SalesOrder
 from leads.models import Lead
 from saas_admin.models import Company
 from support.models import SupportCase
@@ -223,6 +223,59 @@ def get_linked_record(record_type: str | None, record_id: int | None):
     return _resolve_record(get_linked_record_model(record_type), record_id)
 
 
+def get_first_product_for_document(sales_order: SalesOrder | None = None, invoice: Invoice | None = None):
+    if invoice:
+        invoice_item = invoice.items.filter(is_active=True).select_related("product").first()
+        if invoice_item and invoice_item.product and invoice_item.product.is_active:
+            return invoice_item.product
+    if sales_order:
+        sales_order_item = sales_order.items.filter(is_active=True).select_related("product").first()
+        if sales_order_item and sales_order_item.product and sales_order_item.product.is_active:
+            return sales_order_item.product
+    return None
+
+
+def build_service_operational_summary(queryset=None):
+    queryset = queryset or list_appointments()
+    today = timezone.localdate()
+    total = queryset.count()
+    active_pipeline_statuses = [
+        ServiceAppointment.Status.REQUESTED,
+        ServiceAppointment.Status.SCHEDULED,
+        ServiceAppointment.Status.CONFIRMED,
+        ServiceAppointment.Status.IN_PROGRESS,
+        ServiceAppointment.Status.RESCHEDULED,
+    ]
+    by_status = list(
+        queryset.values("status").annotate(count=Count("id")).order_by("status")
+    )
+    by_coverage = list(
+        queryset.exclude(coverage_type=ServiceAppointment.CoverageType.NONE)
+        .values("coverage_type")
+        .annotate(count=Count("id"))
+        .order_by("coverage_type")
+    )
+    workload = list(
+        queryset.values("assigned_member__email")
+        .annotate(count=Count("id"))
+        .order_by("-count", "assigned_member__email")[:5]
+    )
+    return {
+        "total_appointments": total,
+        "today_appointments": queryset.filter(appointment_date=today).count(),
+        "active_pipeline": queryset.filter(status__in=active_pipeline_statuses).count(),
+        "completed_appointments": queryset.filter(
+            status__in=[ServiceAppointment.Status.COMPLETED, ServiceAppointment.Status.CLOSED]
+        ).count(),
+        "covered_appointments": queryset.exclude(
+            coverage_type=ServiceAppointment.CoverageType.NONE
+        ).count(),
+        "by_status": by_status,
+        "by_coverage": by_coverage,
+        "top_workload": workload,
+    }
+
+
 def get_public_booking_base_url():
     verified = (
         ServiceDomainMapping.objects.filter(
@@ -345,10 +398,16 @@ def _log_appointment_activity(appointment: ServiceAppointment, user, action: str
 
 
 def list_appointments():
-    return ServiceAppointment.objects.filter(is_active=True).select_related(
+    return ServiceAppointment.objects.filter(
+        is_active=True,
+        service__is_active=True,
+    ).select_related(
         "service",
         "service__business_hours",
         "assigned_member",
+        "product",
+        "sales_order",
+        "invoice",
     ).order_by(
         "appointment_date",
         "appointment_start_time",
@@ -357,10 +416,16 @@ def list_appointments():
 
 
 def get_appointment(pk: int) -> ServiceAppointment:
-    return ServiceAppointment.objects.filter(is_active=True).select_related(
+    return ServiceAppointment.objects.filter(
+        is_active=True,
+        service__is_active=True,
+    ).select_related(
         "service",
         "service__business_hours",
         "assigned_member",
+        "product",
+        "sales_order",
+        "invoice",
     ).get(pk=pk)
 
 
@@ -432,12 +497,19 @@ def reschedule_appointment(appointment: ServiceAppointment, data: dict, user):
 
 
 def list_job_sheets():
-    return ServiceJobSheet.objects.filter(is_active=True).select_related("service", "appointment").prefetch_related("fields")
+    return (
+        ServiceJobSheet.objects.filter(
+            is_active=True,
+            service__is_active=True,
+        )
+        .select_related("service", "appointment")
+        .prefetch_related("fields")
+    )
 
 
 def get_job_sheet(pk: int) -> ServiceJobSheet:
     return (
-        ServiceJobSheet.objects.filter(is_active=True)
+        ServiceJobSheet.objects.filter(is_active=True, service__is_active=True)
         .select_related("service", "appointment")
         .prefetch_related("fields")
         .get(pk=pk)

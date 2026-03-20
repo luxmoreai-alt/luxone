@@ -2,6 +2,7 @@ import { apiRequest } from "../api/client";
 import type {
   AppointmentFormData,
   AppointmentRecord,
+  AppointmentSummary,
   BusinessHours,
   BusinessHoursDetails,
   CompanyDetails,
@@ -15,6 +16,7 @@ import type {
   ServiceMember,
   ServiceRecord,
   ServiceSettings,
+  ServicesLookupType,
   TeamMember,
 } from "./types";
 import { businessHoursPayloadFromForm, formatDuration, normalizeBusinessHoursDays } from "./utils";
@@ -114,6 +116,7 @@ function mapService(item: any): ServiceRecord {
     locationType: asString(item.location_type),
     location: asString(item.location),
     status: asString(item.status),
+    deliveryTeam: asString(item.delivery_team),
     availableDaysMode: asString(item.available_days_mode),
     availableTimeMode: asString(item.available_time_mode),
     businessHours: asString(item.business_hours),
@@ -148,9 +151,22 @@ function mapAppointment(item: any): AppointmentRecord {
     appointmentEndTime: asString(item.appointment_end_time),
     assignedMemberId: asString(item.assigned_member),
     assignedMemberEmail: asString(item.assigned_member_email),
+    productId: asString(item.product),
+    productName: asString(item.product_name),
+    salesOrderId: asString(item.sales_order),
+    salesOrderSubject: asString(item.sales_order_subject),
+    invoiceId: asString(item.invoice),
+    invoiceSubject: asString(item.invoice_subject),
+    customerAssetName: asString(item.customer_asset_name),
+    productSerialNumber: asString(item.product_serial_number),
+    coverageType: asString(item.coverage_type),
+    coverageStatus: asString(item.coverage_status),
     location: asString(item.location),
     status: asString(item.status),
     notes: asString(item.notes),
+    completionNotes: asString(item.completion_notes),
+    completionProofUrl: asString(item.completion_proof_url),
+    completedAt: asString(item.completed_at),
     publicBookingUrl: asString(item.public_booking_url),
     createdAt: asString(item.created_at),
     updatedAt: asString(item.updated_at),
@@ -170,6 +186,7 @@ function mapJobSheet(item: any): JobSheetRecord {
     fields: Array.isArray(item.fields)
       ? item.fields.map((field: any) => ({
           id: asString(field.id),
+          clientKey: asString(field.id) || undefined,
           fieldName: asString(field.field_name),
           fieldLabel: asString(field.field_label),
           fieldType: field.field_type || "text",
@@ -229,6 +246,34 @@ function mapHoliday(item: any): Holiday {
   };
 }
 
+function mapAppointmentSummary(item: any): AppointmentSummary {
+  return {
+    totalAppointments: asNumber(item.total_appointments),
+    todayAppointments: asNumber(item.today_appointments),
+    activePipeline: asNumber(item.active_pipeline),
+    completedAppointments: asNumber(item.completed_appointments),
+    coveredAppointments: asNumber(item.covered_appointments),
+    byStatus: Array.isArray(item.by_status)
+      ? item.by_status.map((entry: any) => ({
+          status: asString(entry.status),
+          count: asNumber(entry.count),
+        }))
+      : [],
+    byCoverage: Array.isArray(item.by_coverage)
+      ? item.by_coverage.map((entry: any) => ({
+          coverageType: asString(entry.coverage_type),
+          count: asNumber(entry.count),
+        }))
+      : [],
+    topWorkload: Array.isArray(item.top_workload)
+      ? item.top_workload.map((entry: any) => ({
+          email: asString(entry.assigned_member__email),
+          count: asNumber(entry.count),
+        }))
+      : [],
+  };
+}
+
 function buildServicePayload(values: ServiceFormData) {
   return {
     service_name: values.serviceName,
@@ -238,6 +283,7 @@ function buildServicePayload(values: ServiceFormData) {
     location_type: values.locationType,
     location: values.location || undefined,
     status: values.status,
+    delivery_team: values.deliveryTeam,
     available_days_mode: values.availableDaysMode,
     available_time_mode: values.availableTimeMode,
     business_hours: values.businessHoursId || undefined,
@@ -254,9 +300,18 @@ function buildAppointmentPayload(values: AppointmentFormData) {
     appointment_start_time: values.appointmentStartTime,
     appointment_end_time: values.appointmentEndTime || undefined,
     assigned_member: values.assignedMemberId ? Number(values.assignedMemberId) : undefined,
+    product: values.productId ? Number(values.productId) : undefined,
+    sales_order: values.salesOrderId ? Number(values.salesOrderId) : undefined,
+    invoice: values.invoiceId ? Number(values.invoiceId) : undefined,
+    customer_asset_name: values.customerAssetName || undefined,
+    product_serial_number: values.productSerialNumber || undefined,
+    coverage_type: values.coverageType,
+    coverage_status: values.coverageStatus,
     location: values.location || undefined,
     status: values.status,
     notes: values.notes || undefined,
+    completion_notes: values.completionNotes || undefined,
+    completion_proof_url: values.completionProofUrl || undefined,
   };
 }
 
@@ -337,13 +392,19 @@ export async function setDefaultBusinessHours(id: string) {
   return mapBusinessHours(await apiRequest<any>(`/services/business-hours/${id}/set-default/`, { method: "POST" }));
 }
 
-export async function listTeamMembers(query = "") {
-  return toList(await apiRequest<any[] | Paginated<any>>("/services/team-members/", { query: { q: query } })).map(
+export async function listTeamMembers(query = "", options?: { team?: string; serviceId?: string }) {
+  return toList(
+    await apiRequest<any[] | Paginated<any>>("/services/team-members/", {
+      query: { q: query, team: options?.team || "", service_id: options?.serviceId || "" },
+    })
+  ).map(
     (item) =>
       ({
         id: asString(item.id),
         email: asString(item.email),
         label: asString(item.label || item.email),
+        team: asString(item.team),
+        teamLabel: asString(item.team_label || item.team),
       }) as TeamMember
   );
 }
@@ -387,6 +448,10 @@ export async function listServiceMembers(id: string) {
 
 export async function listAppointments(query?: Record<string, string | number>) {
   return toList(await apiRequest<any[] | Paginated<any>>("/services/appointments/", { query })).map(mapAppointment);
+}
+
+export async function getAppointmentsSummary(query?: Record<string, string | number>) {
+  return mapAppointmentSummary(await apiRequest<any>("/services/appointments/summary/", { query }));
 }
 
 export async function getAppointment(id: string) {
@@ -515,7 +580,27 @@ export async function deleteHoliday(id: string) {
   await apiRequest(`/settings/holidays/${id}/`, { method: "DELETE" });
 }
 
-export async function listLookupOptions(type: "contact" | "account" | "lead" | "deal" | "case" | "product", q = "") {
+export async function listLookupOptions(type: ServicesLookupType, q = "") {
+  if (type === "sales-order" || type === "invoice") {
+    const endpointMap = {
+      "sales-order": "/inventory/lookups/sales-orders",
+      invoice: "/inventory/lookups/invoices",
+    } as const;
+    const payload = await apiRequest<any[]>(endpointMap[type], { query: { q } });
+    return payload.map(
+      (item) =>
+        ({
+          id: asString(item.id),
+          label: asString(item.label || item.name),
+          subtitle: [asString(item.account_id), asString(item.contact_id), asString(item.deal_id)].filter(Boolean).join(" • "),
+          accountId: asString(item.account_id),
+          contactId: asString(item.contact_id),
+          dealId: asString(item.deal_id),
+          salesOrderId: asString(item.sales_order_id),
+        }) as LookupOption
+    );
+  }
+
   if (type === "product" || type === "contact" || type === "account" || type === "deal" || type === "case") {
     const endpointMap = {
       product: "/support/lookups/products",
@@ -533,6 +618,9 @@ export async function listLookupOptions(type: "contact" | "account" | "lead" | "
           subtitle: asString(item.email || item.account_name || item.product_code || ""),
           email: asString(item.email),
           phone: asString(item.phone),
+          accountId: asString(item.account_id),
+          contactId: asString(item.contact_id),
+          dealId: asString(item.deal_id),
         }) as LookupOption
     );
   }

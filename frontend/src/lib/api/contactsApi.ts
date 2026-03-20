@@ -8,12 +8,15 @@ function endpoint(path: string): string {
 }
 
 function normalizeApiPath(pathOrUrl: string): string {
+  const normalizePath = (value: string) => value.replace(/^\/api(?=\/)/i, "") || "/";
+
   if (!/^https?:\/\//i.test(pathOrUrl)) {
-    return pathOrUrl;
+    const [pathname, search = ""] = pathOrUrl.split("?", 2);
+    return `${normalizePath(pathname)}${search ? `?${search}` : ""}`;
   }
 
   const parsed = new URL(pathOrUrl);
-  return `${parsed.pathname}${parsed.search}`;
+  return `${normalizePath(parsed.pathname)}${parsed.search}`;
 }
 
 type BackendContact = {
@@ -393,13 +396,14 @@ export async function logContactCall(
 
 export async function sendContactEmail(
   id: string,
-  payload: { subject: string; body: string }
+  payload: { subject: string; body: string; to?: string }
 ): Promise<void> {
   await apiRequest(endpoint(`/contacts/${id}/send-email`), {
     method: "POST",
     body: JSON.stringify({
       subject: payload.subject,
       body: payload.body,
+      to_email: payload.to ?? "",
     }),
   });
 }

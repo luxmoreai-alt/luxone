@@ -200,6 +200,7 @@ export default function CRMModuleListPage<T extends CRMRecord>({
       await sendContactEmail(activeRow.id, {
         subject: payload.subject,
         body: payload.body,
+        to: payload.to,
       });
       return;
     }
@@ -209,22 +210,22 @@ export default function CRMModuleListPage<T extends CRMRecord>({
       await sendAccountEmail(activeRow.id, {
         subject: payload.subject,
         body: payload.body,
+        to: payload.to,
       });
       return;
     }
 
     if (config.module === "leads") {
-      const { sendEmail, sendLeadEmail } = await import("../../lib/api/leadsApi");
-      await sendEmail(payload);
+      const { sendLeadEmail } = await import("../../lib/api/leadsApi");
       await sendLeadEmail(activeRow.id, {
         subject: payload.subject,
         body: payload.body,
+        to: payload.to,
       });
       return;
     }
 
-    const { sendEmail } = await import("../../lib/api/leadsApi");
-    await sendEmail(payload);
+    throw new Error(`Send Email is not wired for the ${config.module} module yet.`);
   };
 
   const handleCreateTask = async (payload: {

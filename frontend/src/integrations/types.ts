@@ -163,6 +163,9 @@ export type SalesInboxFeedItem = {
   id: number;
   subject: string;
   from_email: string;
+  preview_text?: string | null;
+  body_text?: string | null;
+  body_html?: string | null;
   direction: MessageDirection;
   status: MessageStatus;
   received_at: string;
@@ -181,6 +184,42 @@ export type SalesInboxFeedItem = {
   account_name: string | null;
   support_case_id: number | null;
   support_case_name: string | null;
+};
+
+export type EmailAttachment = {
+  id: number;
+  file_name: string;
+  file_type: string | null;
+  file_size: number;
+  file_url: string | null;
+  created_at: string;
+};
+
+export type EmailRecordLink = {
+  id: number;
+  lead: number | null;
+  lead_name: string | null;
+  contact: number | null;
+  contact_name: string | null;
+  account: number | null;
+  account_name: string | null;
+  deal: number | null;
+  deal_name: string | null;
+  support_case: number | null;
+  support_case_name: string | null;
+  created_at: string;
+};
+
+export type CRMEmailDetail = SalesInboxFeedItem & {
+  provider_account_id: number | null;
+  provider_email: string | null;
+  body_text?: string | null;
+  body_html?: string | null;
+  to_emails: string[];
+  cc_emails: string[];
+  bcc_emails: string[];
+  attachments: EmailAttachment[];
+  record_link?: EmailRecordLink | null;
 };
 
 export type EmailParserInbox = {
@@ -533,6 +572,8 @@ export type EmailProviderSyncResult = {
 export type IntegrationFilters = {
   search?: string;
   page?: number;
+  page_size?: number;
+  only_related?: boolean;
   provider_type?: IntegrationProviderType;
   is_active?: boolean;
   confirmation_status?: ConfirmationStatus;
@@ -544,6 +585,7 @@ export type IntegrationFilters = {
   account?: string | number;
   deal?: string | number;
   support_case?: string | number;
+  participant_email?: string;
   status?: string;
   direction?: MessageDirection;
 };

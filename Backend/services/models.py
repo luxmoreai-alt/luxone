@@ -109,6 +109,15 @@ class CRMService(BaseModel):
         CUSTOM = "custom", "Custom"
         ALL_DAYS = "all_days", "All Days"
 
+    class DeliveryTeam(models.TextChoices):
+        SALES = "sales", "Sales"
+        SUPPORT = "support", "Support"
+        SERVICE = "service", "Service"
+        TECHNICAL = "technical", "Technical"
+        CUSTOMER_SUCCESS = "customer_success", "Customer Success"
+        OPERATIONS = "operations", "Operations"
+        GENERAL = "general", "General"
+
     service_code = models.CharField(max_length=32, unique=True, blank=True, db_index=True)
     service_name = models.CharField(max_length=255, db_index=True)
     description = models.TextField(blank=True, null=True)
@@ -117,6 +126,12 @@ class CRMService(BaseModel):
     location_type = models.CharField(max_length=30, choices=LocationType.choices, default=LocationType.CUSTOM)
     location = models.CharField(max_length=255, blank=True, null=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT, db_index=True)
+    delivery_team = models.CharField(
+        max_length=30,
+        choices=DeliveryTeam.choices,
+        default=DeliveryTeam.GENERAL,
+        db_index=True,
+    )
     available_days_mode = models.CharField(
         max_length=30,
         choices=AvailabilityMode.choices,
@@ -155,16 +170,18 @@ class CRMService(BaseModel):
             models.Index(fields=["service_code"]),
             models.Index(fields=["service_name"]),
             models.Index(fields=["status"]),
+            models.Index(fields=["delivery_team"]),
             models.Index(fields=["business_hours"]),
             models.Index(fields=["is_active"]),
         ]
 
     def save(self, *args, **kwargs):
+        using = kwargs.get("using")
         creating = self.pk is None
         super().save(*args, **kwargs)
         if creating and not self.service_code:
             self.service_code = f"SRV-{self.pk:06d}"
-            super().save(update_fields=["service_code", "updated_at"])
+            super().save(using=using, update_fields=["service_code", "updated_at"])
 
     def __str__(self) -> str:
         return self.service_name
@@ -205,11 +222,27 @@ class ServiceAppointment(BaseModel):
         OTHER = "other", "Other"
 
     class Status(models.TextChoices):
+        REQUESTED = "requested", "Requested"
         SCHEDULED = "scheduled", "Scheduled"
+        CONFIRMED = "confirmed", "Confirmed"
+        IN_PROGRESS = "in_progress", "In Progress"
         COMPLETED = "completed", "Completed"
+        CLOSED = "closed", "Closed"
         CANCELLED = "cancelled", "Cancelled"
         RESCHEDULED = "rescheduled", "Rescheduled"
         NO_SHOW = "no_show", "No Show"
+
+    class CoverageType(models.TextChoices):
+        NONE = "none", "None"
+        WARRANTY = "warranty", "Warranty"
+        AMC = "amc", "AMC"
+        PAID = "paid", "Paid"
+
+    class CoverageStatus(models.TextChoices):
+        NOT_APPLICABLE = "not_applicable", "Not Applicable"
+        ACTIVE = "active", "Active"
+        EXPIRED = "expired", "Expired"
+        PENDING = "pending", "Pending Verification"
 
     appointment_number = models.CharField(max_length=32, unique=True, blank=True, db_index=True)
     service = models.ForeignKey("services.CRMService", on_delete=models.CASCADE, related_name="appointments")
@@ -230,9 +263,47 @@ class ServiceAppointment(BaseModel):
         null=True,
         blank=True,
     )
+    product = models.ForeignKey(
+        "inventory.Product",
+        on_delete=models.SET_NULL,
+        related_name="service_appointments",
+        null=True,
+        blank=True,
+    )
+    sales_order = models.ForeignKey(
+        "inventory.SalesOrder",
+        on_delete=models.SET_NULL,
+        related_name="service_appointments",
+        null=True,
+        blank=True,
+    )
+    invoice = models.ForeignKey(
+        "inventory.Invoice",
+        on_delete=models.SET_NULL,
+        related_name="service_appointments",
+        null=True,
+        blank=True,
+    )
+    customer_asset_name = models.CharField(max_length=255, blank=True, null=True)
+    product_serial_number = models.CharField(max_length=120, blank=True, null=True, db_index=True)
+    coverage_type = models.CharField(
+        max_length=20,
+        choices=CoverageType.choices,
+        default=CoverageType.NONE,
+        db_index=True,
+    )
+    coverage_status = models.CharField(
+        max_length=20,
+        choices=CoverageStatus.choices,
+        default=CoverageStatus.NOT_APPLICABLE,
+        db_index=True,
+    )
     location = models.CharField(max_length=255, blank=True, null=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.SCHEDULED, db_index=True)
     notes = models.TextField(blank=True, null=True)
+    completion_notes = models.TextField(blank=True, null=True)
+    completion_proof_url = models.URLField(max_length=500, blank=True, null=True)
+    completed_at = models.DateTimeField(blank=True, null=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -255,16 +326,21 @@ class ServiceAppointment(BaseModel):
             models.Index(fields=["appointment_date"]),
             models.Index(fields=["status"]),
             models.Index(fields=["assigned_member"]),
+            models.Index(fields=["product"]),
+            models.Index(fields=["sales_order"]),
+            models.Index(fields=["invoice"]),
+            models.Index(fields=["coverage_type", "coverage_status"]),
             models.Index(fields=["appointment_for_type", "appointment_for_id"]),
             models.Index(fields=["is_active"]),
         ]
 
     def save(self, *args, **kwargs):
+        using = kwargs.get("using")
         creating = self.pk is None
         super().save(*args, **kwargs)
         if creating and not self.appointment_number:
             self.appointment_number = f"APT-{self.pk:06d}"
-            super().save(update_fields=["appointment_number", "updated_at"])
+            super().save(using=using, update_fields=["appointment_number", "updated_at"])
 
     def __str__(self) -> str:
         return self.appointment_number

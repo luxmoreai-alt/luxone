@@ -6,6 +6,10 @@ import uuid
 from django.conf import settings
 
 
+def build_portal_tracking_key(portal_id: int, portal_name: str) -> str:
+    return hashlib.sha256(f"{portal_id}:{portal_name}:{settings.SECRET_KEY}".encode()).hexdigest()[:18]
+
+
 def generate_integration_email(prefix: str, domain: str = "crm.local") -> str:
     token = uuid.uuid4().hex[:12]
     return f"{prefix}-{token}@{domain}"
@@ -15,14 +19,15 @@ def generate_verification_code() -> str:
     return uuid.uuid4().hex[:6].upper()
 
 
-def build_tracking_code(portal_id: int, portal_name: str) -> str:
-    portal_hash = hashlib.sha256(f"{portal_id}:{portal_name}:{settings.SECRET_KEY}".encode()).hexdigest()[:18]
+def build_tracking_code(portal_id: int, portal_name: str, *, script_url: str | None = None) -> str:
+    portal_hash = build_portal_tracking_key(portal_id, portal_name)
+    tracker_url = script_url or "/api/integrations/visitors/tracker.js"
     return (
         "<script>"
         f"window.CRMVisitorPortal='{portal_hash}';"
         "(function(){var s=document.createElement('script');"
         "s.async=true;"
-        "s.src='/api/integrations/visitors/tracker.js';"
+        f"s.src='{tracker_url}';"
         "document.head.appendChild(s);})();"
         "</script>"
     )

@@ -121,7 +121,6 @@ const workspaceItems: NavItem[] = [
     icon: Wrench,
     expandable: true,
     children: [
-      { label: "Promo", icon: CircleDot, path: "/services/promo" },
       { label: "Business Hours", icon: CalendarDays, path: "/services/business-hours" },
       { label: "Catalog", icon: ClipboardList, path: "/services/catalog" },
       { label: "Appointments", icon: CalendarDays, path: "/services/appointments" },

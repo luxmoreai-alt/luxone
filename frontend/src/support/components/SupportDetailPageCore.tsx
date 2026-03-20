@@ -254,7 +254,8 @@ export default function SupportDetailPageCore({ moduleKey }: Props) {
                         {payload.related.emails.length ? payload.related.emails.map((item: any) => (
                           <div key={item.id} className="rounded-md border border-slate-200 p-3 text-sm">
                             <div className="font-medium text-slate-800">{item.subject}</div>
-                            <div className="mt-1 text-xs text-slate-500">{item.sentBy} | {item.sentAt}</div>
+                            <div className="mt-1 text-xs text-slate-500">{item.sentBy} | {item.status} | {item.sentAt}</div>
+                            {item.previewText ? <div className="mt-2 line-clamp-2 text-sm text-slate-600">{item.previewText}</div> : null}
                           </div>
                         )) : <div className="text-sm text-slate-500">No emails logged yet.</div>}
                       </div>

@@ -10,6 +10,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from integrations.services import create_outgoing_crm_email, get_user_default_email_provider
+
 from .filters import AccountFilter
 from .models import Account, AccountAttachment
 from .permissions import AccountPermission, can_access_account_owner
@@ -497,13 +499,42 @@ class AccountViewSet(viewsets.ModelViewSet):
         account = self.get_object()
         serializer = AccountSendEmailSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        provider = get_user_default_email_provider(request.user)
+        if not provider:
+            return Response(
+                {"detail": "No active CRM-synced email provider is configured for this user."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        recipient_email = (
+            serializer.validated_data.get("to_email")
+            or account.contacts.filter(is_active=True).exclude(email__isnull=True).exclude(email__exact="").values_list("email", flat=True).first()
+            or ""
+        ).strip()
+        if not recipient_email:
+            return Response(
+                {"detail": "Provide a recipient email address or add an email to an active contact for this account."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        create_outgoing_crm_email(
+            provider_integration=provider,
+            subject=serializer.validated_data["subject"],
+            body=serializer.validated_data["body"],
+            to_emails=[recipient_email],
+            owner=request.user,
+            account=account,
+            thread_id=f"account-{account.pk}",
+            metadata={
+                "from_name": provider.display_name or getattr(request.user, "email", "") or "CRM User",
+                "account_name": account.account_name,
+            },
+        )
         account_service.log_activity(
             account=account,
             action="Email sent",
             description=serializer.validated_data["subject"],
             user=request.user,
         )
-        return Response({"message": "Email logged successfully"}, status=status.HTTP_201_CREATED)
+        return Response({"message": "Email sent and synced successfully"}, status=status.HTTP_201_CREATED)
 
 
 class AccountAttachmentDetailAPIView(APIView):

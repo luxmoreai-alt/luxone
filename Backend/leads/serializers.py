@@ -288,6 +288,7 @@ class LeadMeetingSerializer(serializers.Serializer):
 class LeadSendEmailSerializer(serializers.Serializer):
     subject = serializers.CharField(max_length=255)
     body = serializers.CharField()
+    to_email = serializers.EmailField(required=False, allow_blank=True)
 
 
 class LeadEmailSerializer(serializers.ModelSerializer):
@@ -320,7 +321,19 @@ class LeadConnectedRecordSerializer(serializers.ModelSerializer):
         ]
 
     def get_source_label(self, obj):
-        return obj.payload.get("source_label") or obj.source_reference
+        payload = obj.payload or {}
+        if obj.source_type == IntegrationLeadSourceEvent.SourceType.EMAIL:
+            subject = payload.get("subject")
+            from_email = payload.get("from_email")
+            direction = payload.get("direction")
+            if subject and from_email:
+                suffix = "sent" if direction == "outgoing" else "received"
+                return f"{subject} ({from_email}, {suffix})"
+            if subject:
+                return subject
+            if from_email:
+                return from_email
+        return payload.get("source_label") or obj.source_reference
 
 
 class LeadAddTagsSerializer(serializers.Serializer):

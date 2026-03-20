@@ -58,6 +58,7 @@ const LOOKUP_PATHS = {
   "price-books": "/inventory/lookups/price-books",
   quotes: "/inventory/lookups/quotes",
   "sales-orders": "/inventory/lookups/sales-orders",
+  invoices: "/inventory/lookups/invoices",
   "purchase-orders": "/inventory/lookups/purchase-orders",
 } as const;
 
@@ -688,7 +689,6 @@ function serializeProduct(values: ProductFormValues) {
   return {
     owner: values.owner ? Number(values.owner) : undefined,
     product_name: values.productName,
-    product_code: values.productCode,
     vendor: values.vendor ? Number(values.vendor) : undefined,
     manufacturer: values.manufacturer || "",
     product_category: values.productCategory || "",

@@ -37,11 +37,11 @@ export default function SocialAdminSettingsPanel({ setting, onSave }: Props) {
         </label>
         <label className="space-y-1 text-sm">
           <span className="text-slate-600">Social Tab Profiles</span>
-          <input value={(current.social_tab_profiles || []).join(", ")} onChange={(e) => setDraft((previous) => ({ ...previous, social_tab_profiles: e.target.value.split(",").map((item) => item.trim()).filter(Boolean) }))} className="w-full rounded-md border border-slate-300 px-3 py-2" placeholder="Sales, Marketing" />
+          <input value={(current.social_tab_profiles || []).join(", ")} onChange={(e) => setDraft((previous) => ({ ...previous, social_tab_profiles: e.target.value.split(",").map((item) => item.trim()).filter(Boolean) }))} className="w-full rounded-md border border-slate-300 px-3 py-2" placeholder="Enter comma-separated profile names" />
         </label>
         <label className="space-y-1 text-sm md:col-span-2">
           <span className="text-slate-600">Social Profiles Mapping</span>
-          <textarea value={(current.social_profiles || []).join(", ")} onChange={(e) => setDraft((previous) => ({ ...previous, social_profiles: e.target.value.split(",").map((item) => item.trim()).filter(Boolean) }))} rows={4} className="w-full rounded-md border border-slate-300 px-3 py-2" placeholder="Brand Admin, Support Queue" />
+          <textarea value={(current.social_profiles || []).join(", ")} onChange={(e) => setDraft((previous) => ({ ...previous, social_profiles: e.target.value.split(",").map((item) => item.trim()).filter(Boolean) }))} rows={4} className="w-full rounded-md border border-slate-300 px-3 py-2" placeholder="Enter mapped profile groups separated by commas" />
         </label>
         <label className="flex items-center gap-2 text-sm text-slate-700">
           <input type="checkbox" checked={Boolean(current.private_handles_enabled)} onChange={(e) => setDraft((previous) => ({ ...previous, private_handles_enabled: e.target.checked }))} />

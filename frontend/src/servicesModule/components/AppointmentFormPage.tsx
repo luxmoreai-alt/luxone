@@ -1,8 +1,21 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import DashboardLayout from "../../components/layout/DashboardLayout";
-import { appointmentEntityTypeOptions, appointmentStatusOptions } from "../config";
-import { createAppointment, getAppointment, getService, listHolidays, listServices, listTeamMembers, updateAppointment } from "../api";
+import {
+  appointmentCoverageStatusOptions,
+  appointmentCoverageTypeOptions,
+  appointmentEntityTypeOptions,
+  appointmentStatusOptions,
+} from "../config";
+import {
+  createAppointment,
+  getAppointment,
+  getService,
+  listHolidays,
+  listServices,
+  listTeamMembers,
+  updateAppointment,
+} from "../api";
 import type { AppointmentFormData, Holiday, LookupOption, ServiceRecord, TeamMember } from "../types";
 import ServicesLookupModal from "./ServicesLookupModal";
 
@@ -18,22 +31,36 @@ const emptyForm: AppointmentFormData = {
   appointmentStartTime: "",
   appointmentEndTime: "",
   assignedMemberId: "",
+  productId: "",
+  salesOrderId: "",
+  invoiceId: "",
+  customerAssetName: "",
+  productSerialNumber: "",
+  coverageType: "none",
+  coverageStatus: "not_applicable",
   location: "",
   status: "scheduled",
   notes: "",
+  completionNotes: "",
+  completionProofUrl: "",
 };
 
 export default function AppointmentFormPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const isEdit = Boolean(id);
-  const [form, setForm] = useState<AppointmentFormData>(emptyForm);
+  const [form, setForm] = useState<AppointmentFormData>({
+    ...emptyForm,
+    serviceId: searchParams.get("service") || "",
+  });
   const [services, setServices] = useState<ServiceRecord[]>([]);
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [selectedService, setSelectedService] = useState<ServiceRecord | null>(null);
   const [appointmentNumber, setAppointmentNumber] = useState("");
   const [lookupOpen, setLookupOpen] = useState(false);
+  const [lookupMode, setLookupMode] = useState<"appointment" | "product" | "sales-order" | "invoice">("appointment");
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(Boolean(id));
   const [error, setError] = useState<string | null>(null);
@@ -41,14 +68,15 @@ export default function AppointmentFormPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const [serviceRows, memberRows, holidayRows] = await Promise.all([listServices(), listTeamMembers(), listHolidays()]);
+        const [serviceRows, holidayRows] = await Promise.all([listServices(), listHolidays()]);
         setServices(serviceRows);
-        setMembers(memberRows);
         setHolidays(holidayRows);
         if (id) {
           const detail = await getAppointment(id);
           const serviceDetail = await getService(detail.serviceId);
+          const memberRows = await listTeamMembers("", { serviceId: detail.serviceId });
           setSelectedService(serviceDetail);
+          setMembers(memberRows);
           setAppointmentNumber(detail.appointmentNumber);
           setForm({
             serviceId: detail.serviceId,
@@ -59,10 +87,29 @@ export default function AppointmentFormPage() {
             appointmentStartTime: detail.appointmentStartTime,
             appointmentEndTime: detail.appointmentEndTime,
             assignedMemberId: detail.assignedMemberId,
+            productId: detail.productId,
+            salesOrderId: detail.salesOrderId,
+            invoiceId: detail.invoiceId,
+            customerAssetName: detail.customerAssetName,
+            productSerialNumber: detail.productSerialNumber,
+            coverageType: detail.coverageType || "none",
+            coverageStatus: detail.coverageStatus || "not_applicable",
             location: detail.location,
             status: detail.status,
             notes: detail.notes,
+            completionNotes: detail.completionNotes,
+            completionProofUrl: detail.completionProofUrl,
           });
+        } else if (searchParams.get("service")) {
+          const serviceDetail = await getService(searchParams.get("service") as string);
+          const memberRows = await listTeamMembers("", { serviceId: serviceDetail.id });
+          setSelectedService(serviceDetail);
+          setMembers(memberRows);
+          setForm((prev) => ({
+            ...prev,
+            serviceId: serviceDetail.id,
+            location: prev.location || serviceDetail.location || "",
+          }));
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unable to load appointment form.");
@@ -71,7 +118,7 @@ export default function AppointmentFormPage() {
       }
     };
     void load();
-  }, [id]);
+  }, [id, searchParams]);
 
   useEffect(() => {
     const loadSelectedService = async () => {
@@ -81,14 +128,19 @@ export default function AppointmentFormPage() {
       }
       try {
         const detail = await getService(form.serviceId);
+        const serviceMembers = await listTeamMembers("", { serviceId: detail.id });
         setSelectedService(detail);
+        setMembers(serviceMembers);
         const allowedMemberIds = new Set((detail.members || []).map((member) => member.memberId));
-        if (allowedMemberIds.size && form.assignedMemberId && !allowedMemberIds.has(form.assignedMemberId)) {
+        const teamMemberIds = new Set(serviceMembers.map((member) => member.id));
+        if (form.assignedMemberId && !teamMemberIds.has(form.assignedMemberId)) {
           setForm((prev) => ({ ...prev, assignedMemberId: "" }));
         }
         if (allowedMemberIds.size === 1) {
           const [onlyMemberId] = Array.from(allowedMemberIds);
           setForm((prev) => ({ ...prev, assignedMemberId: prev.assignedMemberId || onlyMemberId }));
+        } else if (!allowedMemberIds.size && serviceMembers.length === 1) {
+          setForm((prev) => ({ ...prev, assignedMemberId: prev.assignedMemberId || serviceMembers[0].id }));
         }
         setForm((prev) => {
           if (prev.location.trim()) return prev;
@@ -102,15 +154,13 @@ export default function AppointmentFormPage() {
         });
       } catch {
         setSelectedService(null);
+        setMembers([]);
       }
     };
     void loadSelectedService();
   }, [form.serviceId]);
 
-  const memberOptions =
-    selectedService?.members?.length
-      ? members.filter((member) => selectedService.members?.some((assigned) => assigned.memberId === member.id))
-      : members;
+  const memberOptions = members;
 
   useEffect(() => {
     if (!selectedService || !form.appointmentStartTime) return;
@@ -122,6 +172,18 @@ export default function AppointmentFormPage() {
     const computed = `${String(normalizedHours).padStart(2, "0")}:${String(normalizedMinutes).padStart(2, "0")}`;
     setForm((prev) => (prev.appointmentEndTime === computed ? prev : { ...prev, appointmentEndTime: computed }));
   }, [form.appointmentStartTime, selectedService]);
+
+  useEffect(() => {
+    if (form.appointmentForType === "product" && form.appointmentForId && form.productId !== form.appointmentForId) {
+      setForm((prev) => ({ ...prev, productId: prev.appointmentForId }));
+    }
+  }, [form.appointmentForId, form.appointmentForType, form.productId]);
+
+  useEffect(() => {
+    if (form.coverageType === "none" && form.coverageStatus !== "not_applicable") {
+      setForm((prev) => ({ ...prev, coverageStatus: "not_applicable" }));
+    }
+  }, [form.coverageType, form.coverageStatus]);
 
   useEffect(() => {
     if (!form.appointmentDate) return;
@@ -197,7 +259,7 @@ export default function AppointmentFormPage() {
                   ) : (
                     <div className="flex gap-2">
                       <input readOnly className={`${inputClass} flex-1`} value={form.appointmentForLabel} placeholder="Choose record" />
-                      <button type="button" onClick={() => setLookupOpen(true)} className="rounded-md border border-slate-300 px-3 text-sm text-slate-700">Lookup</button>
+                      <button type="button" onClick={() => { setLookupMode("appointment"); setLookupOpen(true); }} className="rounded-md border border-slate-300 px-3 text-sm text-slate-700">Lookup</button>
                       {form.appointmentForId ? <button type="button" onClick={() => setForm({ ...form, appointmentForId: "", appointmentForLabel: "" })} className="rounded-md border border-slate-300 px-3 text-sm text-slate-700">Clear</button> : null}
                     </div>
                   )}
@@ -242,14 +304,129 @@ export default function AppointmentFormPage() {
                 {selectedService.businessHoursTimezone ? ` (${selectedService.businessHoursTimezone})` : ""}.
               </div>
             ) : null}
-            <div className="mt-4">
+            <div className="mt-6">
+              <h2 className="text-sm font-semibold text-slate-900">Asset & Coverage</h2>
+              <div className="mt-3 grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Customer Asset Name</label>
+                  <input className={inputClass} value={form.customerAssetName} onChange={(e) => setForm({ ...form, customerAssetName: e.target.value })} placeholder="AC Unit, Printer, Router..." />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Product Serial Number</label>
+                  <input className={inputClass} value={form.productSerialNumber} onChange={(e) => setForm({ ...form, productSerialNumber: e.target.value })} placeholder="Enter serial number" />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Coverage Type</label>
+                  <select className={inputClass} value={form.coverageType} onChange={(e) => setForm({ ...form, coverageType: e.target.value })}>
+                    {appointmentCoverageTypeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Coverage Status</label>
+                  <select className={inputClass} value={form.coverageStatus} onChange={(e) => setForm({ ...form, coverageStatus: e.target.value })} disabled={form.coverageType === "none"}>
+                    {appointmentCoverageStatusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Linked Product ID</label>
+                  <div className="flex gap-2">
+                    <input readOnly className={`${inputClass} flex-1`} value={form.productId} placeholder="Select product" />
+                    <button type="button" onClick={() => { setLookupMode("product"); setLookupOpen(true); }} className="rounded-md border border-slate-300 px-3 text-sm text-slate-700">Lookup</button>
+                    {form.productId ? <button type="button" onClick={() => setForm({ ...form, productId: "" })} className="rounded-md border border-slate-300 px-3 text-sm text-slate-700">Clear</button> : null}
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500">If you selected Product in appointment lookup, this fills automatically.</p>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Sales Order ID</label>
+                  <div className="flex gap-2">
+                    <input readOnly className={`${inputClass} flex-1`} value={form.salesOrderId} placeholder="Select sales order" />
+                    <button type="button" onClick={() => { setLookupMode("sales-order"); setLookupOpen(true); }} className="rounded-md border border-slate-300 px-3 text-sm text-slate-700">Lookup</button>
+                    {form.salesOrderId ? <button type="button" onClick={() => setForm({ ...form, salesOrderId: "" })} className="rounded-md border border-slate-300 px-3 text-sm text-slate-700">Clear</button> : null}
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Invoice ID</label>
+                  <div className="flex gap-2">
+                    <input readOnly className={`${inputClass} flex-1`} value={form.invoiceId} placeholder="Select invoice" />
+                    <button type="button" onClick={() => { setLookupMode("invoice"); setLookupOpen(true); }} className="rounded-md border border-slate-300 px-3 text-sm text-slate-700">Lookup</button>
+                    {form.invoiceId ? <button type="button" onClick={() => setForm({ ...form, invoiceId: "" })} className="rounded-md border border-slate-300 px-3 text-sm text-slate-700">Clear</button> : null}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="mt-6">
               <label className="mb-1.5 block text-sm font-medium text-slate-700">Notes</label>
               <textarea className={textareaClass} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+            </div>
+            <div className="mt-6">
+              <h2 className="text-sm font-semibold text-slate-900">Completion Details</h2>
+              <div className="mt-3 grid gap-4 md:grid-cols-2">
+                <div className="md:col-span-2">
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Completion Notes</label>
+                  <textarea className={textareaClass} value={form.completionNotes} onChange={(e) => setForm({ ...form, completionNotes: e.target.value })} placeholder="Work done, parts replaced, final condition..." />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Completion Proof URL</label>
+                  <input className={inputClass} value={form.completionProofUrl} onChange={(e) => setForm({ ...form, completionProofUrl: e.target.value })} placeholder="Photo, signature, drive link..." />
+                </div>
+              </div>
             </div>
           </div>
         ) : null}
       </div>
-      <ServicesLookupModal open={lookupOpen} type={form.appointmentForType} onClose={() => setLookupOpen(false)} onSelect={(option: LookupOption) => setForm({ ...form, appointmentForId: option.id, appointmentForLabel: option.label })} />
+      <ServicesLookupModal
+        open={lookupOpen}
+        type={lookupMode === "appointment" ? form.appointmentForType : lookupMode}
+        onClose={() => setLookupOpen(false)}
+        onSelect={(option: LookupOption) => {
+          if (lookupMode === "appointment") {
+            setForm({ ...form, appointmentForId: option.id, appointmentForLabel: option.label });
+            return;
+          }
+          if (lookupMode === "product") {
+            setForm((prev) => ({ ...prev, productId: option.id }));
+            return;
+          }
+          if (lookupMode === "sales-order") {
+            setForm((prev) => ({
+              ...prev,
+              salesOrderId: option.id,
+              appointmentForType:
+                prev.appointmentForId
+                  ? prev.appointmentForType
+                  : option.contactId
+                    ? "contact"
+                    : option.accountId
+                      ? "account"
+                      : option.dealId
+                        ? "deal"
+                        : prev.appointmentForType,
+              appointmentForId:
+                prev.appointmentForId || option.contactId || option.accountId || option.dealId || "",
+              appointmentForLabel: prev.appointmentForLabel || option.label,
+            }));
+            return;
+          }
+          setForm((prev) => ({
+            ...prev,
+            invoiceId: option.id,
+            salesOrderId: prev.salesOrderId || option.salesOrderId || "",
+            appointmentForType:
+              prev.appointmentForId
+                ? prev.appointmentForType
+                : option.contactId
+                  ? "contact"
+                  : option.accountId
+                    ? "account"
+                    : option.dealId
+                      ? "deal"
+                      : prev.appointmentForType,
+            appointmentForId:
+              prev.appointmentForId || option.contactId || option.accountId || option.dealId || "",
+            appointmentForLabel: prev.appointmentForLabel || option.label,
+          }));
+        }}
+      />
     </DashboardLayout>
   );
 }

@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from deals.models import Deal
 from deals.serializers import DealListSerializer
 from accounts.models import Account
+from integrations.services import create_outgoing_crm_email, get_user_default_email_provider
 
 from .filters import ContactFilter
 from .permissions import ContactPermission
@@ -515,6 +516,33 @@ class ContactViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         subject = serializer.validated_data["subject"]
+        provider = get_user_default_email_provider(request.user)
+        if not provider:
+            return Response(
+                {"detail": "No active CRM-synced email provider is configured for this user."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        recipient_email = (serializer.validated_data.get("to_email") or contact.email or "").strip()
+        if not recipient_email:
+            return Response(
+                {"detail": "Contact does not have an email address."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        create_outgoing_crm_email(
+            provider_integration=provider,
+            subject=subject,
+            body=serializer.validated_data["body"],
+            to_emails=[recipient_email],
+            owner=request.user,
+            contact=contact,
+            account=contact.account,
+            thread_id=f"contact-{contact.pk}",
+            metadata={
+                "from_name": provider.display_name or getattr(request.user, "email", "") or "CRM User",
+                "contact_name": getattr(contact, "contact_name", None) or f"{contact.first_name} {contact.last_name}".strip(),
+            },
+        )
 
         contact_service.log_activity(
             contact=contact,
@@ -524,7 +552,7 @@ class ContactViewSet(viewsets.ModelViewSet):
         )
 
         return Response(
-            {"message": "Email logged successfully"},
+            {"message": "Email sent and synced successfully"},
             status=status.HTTP_201_CREATED,
         )
 

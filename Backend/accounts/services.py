@@ -9,6 +9,7 @@ from django.db.models import Count, QuerySet
 from django.utils.text import slugify
 
 from activities.services import create_account_activity
+from integrations.models import SyncedEmailMessage
 from notes.services import (
     create_account_note,
     delete_account_note,
@@ -205,8 +206,20 @@ class AccountService:
         return account.activities.select_related("user")
 
     def list_account_emails(self, *, account: Account):
-        # Email module is not implemented yet in this codebase.
-        return []
+        return list(
+            SyncedEmailMessage.objects.filter(account=account)
+            .order_by("-sent_at", "-received_at", "-created_at")
+            .values(
+                "id",
+                "subject",
+                "from_email",
+                "to_emails",
+                "status",
+                "sent_at",
+                "received_at",
+                "direction",
+            )
+        )
 
     def list_account_products(self, *, account: Account):
         # Product module is not implemented yet in this codebase.

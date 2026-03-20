@@ -3,10 +3,11 @@ import { useNavigate, useParams } from "react-router-dom";
 import CRMDetailHeader from "../../components/crm/CRMDetailHeader";
 import CRMSectionCard from "../../components/crm/CRMSectionCard";
 import DashboardLayout from "../../components/layout/DashboardLayout";
-import { getService, listAppointments, listJobSheets, listTeamMembers } from "../api";
+import { getService, listAppointments, listJobSheets, listTeamMembers, setServiceMembers } from "../api";
 import ServiceMembersSection from "./ServiceMembersSection";
 import { formatCurrency, formatDuration, formatDateOnly, formatDateTime } from "../utils";
 import type { AppointmentRecord, JobSheetRecord, ServiceRecord, TeamMember } from "../types";
+import { serviceDeliveryTeamOptions } from "../config";
 
 export default function ServiceDetailPage() {
   const navigate = useNavigate();
@@ -23,12 +24,12 @@ export default function ServiceDetailPage() {
       if (!id) return;
       try {
         setLoading(true);
-        const [serviceDetail, serviceAppointments, serviceJobSheets, members] = await Promise.all([
+        const [serviceDetail, serviceAppointments, serviceJobSheets] = await Promise.all([
           getService(id),
           listAppointments({ service: id }),
           listJobSheets({ service: id }),
-          listTeamMembers(),
         ]);
+        const members = await listTeamMembers("", { team: serviceDetail.deliveryTeam, serviceId: id });
         setService(serviceDetail);
         setAppointments(serviceAppointments);
         setJobSheets(serviceJobSheets);
@@ -60,6 +61,7 @@ export default function ServiceDetailPage() {
                 <div><p className="text-xs uppercase tracking-wide text-slate-500">Duration</p><p className="mt-1 text-sm text-slate-800">{formatDuration(service.durationMinutes)}</p></div>
                 <div><p className="text-xs uppercase tracking-wide text-slate-500">Location</p><p className="mt-1 text-sm text-slate-800">{service.location || "-"}</p></div>
                 <div><p className="text-xs uppercase tracking-wide text-slate-500">Location Type</p><p className="mt-1 text-sm text-slate-800">{service.locationType}</p></div>
+                <div><p className="text-xs uppercase tracking-wide text-slate-500">Delivery Team</p><p className="mt-1 text-sm text-slate-800">{serviceDeliveryTeamOptions.find((item) => item.value === service.deliveryTeam)?.label || service.deliveryTeam || "-"}</p></div>
               </div>
               <div className="mt-4">
                 <p className="text-xs uppercase tracking-wide text-slate-500">Description</p>
@@ -77,7 +79,24 @@ export default function ServiceDetailPage() {
               </div>
             </CRMSectionCard>
 
-            <CRMSectionCard title="Appointments" action={<button type="button" onClick={() => navigate("/services/appointments/create")} className="text-xs font-medium text-blue-600">New Appointment</button>}>
+            <CRMSectionCard title="Service Summary">
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-xs uppercase tracking-wide text-slate-500">Appointments</div>
+                  <div className="mt-2 text-2xl font-semibold text-slate-900">{appointments.length}</div>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-xs uppercase tracking-wide text-slate-500">Job Sheets</div>
+                  <div className="mt-2 text-2xl font-semibold text-slate-900">{jobSheets.length}</div>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-xs uppercase tracking-wide text-slate-500">Assigned Members</div>
+                  <div className="mt-2 text-2xl font-semibold text-slate-900">{service.members?.length || 0}</div>
+                </div>
+              </div>
+            </CRMSectionCard>
+
+            <CRMSectionCard title="Appointments" action={<button type="button" onClick={() => navigate(`/services/appointments/create?service=${service.id}`)} className="text-xs font-medium text-blue-600">New Appointment</button>}>
               <div className="space-y-2">
                 {appointments.length ? appointments.map((item) => (
                   <button key={item.id} type="button" onClick={() => navigate(`/services/appointments/${item.id}`)} className="block w-full rounded-lg border border-slate-200 p-3 text-left hover:bg-slate-50">
@@ -90,7 +109,15 @@ export default function ServiceDetailPage() {
           </div>
 
           <div className="space-y-4">
-            <ServiceMembersSection members={service.members || []} teamMembers={teamMembers} />
+            <ServiceMembersSection
+              members={service.members || []}
+              teamMembers={teamMembers}
+              onSave={async (memberIds, primaryMemberId) => {
+                if (!id) return;
+                const nextMembers = await setServiceMembers(id, memberIds, primaryMemberId);
+                setService((current) => (current ? { ...current, members: nextMembers, membersCount: nextMembers.length } : current));
+              }}
+            />
             <CRMSectionCard title="Job Sheets" action={<button type="button" onClick={() => navigate("/services/job-sheets/create")} className="text-xs font-medium text-blue-600">New Job Sheet</button>}>
               <div className="space-y-2">
                 {jobSheets.length ? jobSheets.map((sheet) => (

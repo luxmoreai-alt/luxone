@@ -10,8 +10,19 @@ type FormState = {
   email: string;
   password: string;
   role: "manager" | "employee";
+  team: string;
   manager_id: string; // "" = unassigned
 };
+
+const teamOptions = [
+  { value: "general", label: "General" },
+  { value: "support", label: "Support" },
+  { value: "service", label: "Service" },
+  { value: "technical", label: "Technical" },
+  { value: "customer_success", label: "Customer Success" },
+  { value: "sales", label: "Sales" },
+  { value: "operations", label: "Operations" },
+];
 
 export default function UserCreatePage() {
   const navigate = useNavigate();
@@ -21,6 +32,7 @@ export default function UserCreatePage() {
     email: "",
     password: "",
     role: "employee",
+    team: "general",
     manager_id: "",
   });
   const [managers, setManagers] = useState<Manager[]>([]);
@@ -53,6 +65,7 @@ export default function UserCreatePage() {
         email: form.email.trim(),
         password: form.password,
         role: isAdmin ? form.role : "employee",
+        team: form.team,
       };
       if (isAdmin && form.manager_id) {
         payload.manager = Number(form.manager_id);
@@ -144,6 +157,23 @@ export default function UserCreatePage() {
               </select>
             </div>
           )}
+
+          <div className="mb-4">
+            <label className="mb-1.5 block text-sm font-medium text-slate-700">
+              Team
+            </label>
+            <select
+              value={form.team}
+              onChange={(e) => setForm((f) => ({ ...f, team: e.target.value }))}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            >
+              {teamOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
 
           {/* Manager assignment — admin creating an employee */}
           {showManagerDropdown && (

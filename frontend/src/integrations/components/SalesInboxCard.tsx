@@ -16,7 +16,10 @@ export default function SalesInboxCard({ setting, onSave }: Props) {
   };
 
   return (
-    <CRMSectionCard title="SalesInbox">
+    <CRMSectionCard
+      title="SalesInbox"
+      subtitle="Control whether synced conversations are shown in a CRM-aware inbox for the team."
+    >
       <div className="grid gap-4 md:grid-cols-[1.6fr_1fr]">
         <div>
           <p className="text-sm text-slate-700">Give sales teams a contextual inbox view with read status, CRM context, thread grouping, and timeline visibility.</p>
@@ -35,4 +38,3 @@ export default function SalesInboxCard({ setting, onSave }: Props) {
     </CRMSectionCard>
   );
 }
-

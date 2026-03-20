@@ -46,6 +46,8 @@ export const servicesModuleMeta: Record<
       { key: "appointmentEndTime", label: "End" },
       { key: "assignedMemberEmail", label: "Member" },
       { key: "appointmentForDisplay", label: "Customer" },
+      { key: "customerAssetName", label: "Asset" },
+      { key: "coverageType", label: "Coverage" },
       { key: "location", label: "Location" },
       { key: "status", label: "Status" },
     ],
@@ -57,30 +59,14 @@ export const servicesModuleMeta: Record<
           { key: "status", label: "Status" },
           { key: "assignedMemberEmail", label: "Member" },
           { key: "appointmentForDisplay", label: "Customer" },
+          { key: "customerAssetName", label: "Asset" },
+          { key: "coverageType", label: "Coverage" },
+          { key: "productSerialNumber", label: "Serial Number" },
         ],
       },
     ],
   },
 };
-
-export const servicesPromoSlides = [
-  {
-    title: "Sell your services like a product",
-    description: "Package service work into clean offerings with pricing, duration, and ownership.",
-  },
-  {
-    title: "Catalog your services",
-    description: "Build a reusable service catalog connected to business hours and staff availability.",
-  },
-  {
-    title: "Set up flexible appointments",
-    description: "Book appointments against real services, members, and linked CRM customers.",
-  },
-  {
-    title: "Collect the right information",
-    description: "Capture job-sheet details like model numbers, serial numbers, dates, and notes.",
-  },
-];
 
 export const businessHoursDayOrder: BusinessHoursDayKey[] = [
   "monday",
@@ -98,6 +84,16 @@ export const serviceStatusOptions = [
   { label: "Draft", value: "draft" },
 ];
 
+export const serviceDeliveryTeamOptions = [
+  { label: "General", value: "general" },
+  { label: "Support", value: "support" },
+  { label: "Service", value: "service" },
+  { label: "Technical", value: "technical" },
+  { label: "Customer Success", value: "customer_success" },
+  { label: "Sales", value: "sales" },
+  { label: "Operations", value: "operations" },
+];
+
 export const locationTypeOptions = [
   { label: "Onsite", value: "onsite" },
   { label: "Remote", value: "remote" },
@@ -113,11 +109,29 @@ export const availabilityModeOptions = [
 ];
 
 export const appointmentStatusOptions = [
+  { label: "Requested", value: "requested" },
   { label: "Scheduled", value: "scheduled" },
+  { label: "Confirmed", value: "confirmed" },
+  { label: "In Progress", value: "in_progress" },
   { label: "Completed", value: "completed" },
+  { label: "Closed", value: "closed" },
   { label: "Cancelled", value: "cancelled" },
   { label: "Rescheduled", value: "rescheduled" },
   { label: "No Show", value: "no_show" },
+];
+
+export const appointmentCoverageTypeOptions = [
+  { label: "None", value: "none" },
+  { label: "Warranty", value: "warranty" },
+  { label: "AMC", value: "amc" },
+  { label: "Paid", value: "paid" },
+];
+
+export const appointmentCoverageStatusOptions = [
+  { label: "Not Applicable", value: "not_applicable" },
+  { label: "Active", value: "active" },
+  { label: "Expired", value: "expired" },
+  { label: "Pending Verification", value: "pending" },
 ];
 
 export const appointmentEntityTypeOptions: Array<{ label: string; value: AppointmentEntityType }> = [

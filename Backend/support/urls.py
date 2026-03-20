@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import re_path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
@@ -8,7 +8,7 @@ from .views import (
     SupportSolutionViewSet,
 )
 
-router = DefaultRouter(trailing_slash=False)
+router = DefaultRouter()
 router.register(r"cases", SupportCaseViewSet, basename="case")
 router.register(r"solutions", SupportSolutionViewSet, basename="solution")
 router.register(r"support/cases", SupportCaseViewSet, basename="support-case")
@@ -16,6 +16,6 @@ router.register(r"support/solutions", SupportSolutionViewSet, basename="support-
 
 urlpatterns = [
     *router.urls,
-    path("support/lookups/<str:lookup_name>", SupportLookupAPIView.as_view(), name="support-lookup"),
-    path("support/products/quick-create", SupportQuickCreateProductAPIView.as_view(), name="support-product-quick-create"),
+    re_path(r"^support/lookups/(?P<lookup_name>[^/]+)/?$", SupportLookupAPIView.as_view(), name="support-lookup"),
+    re_path(r"^support/products/quick-create/?$", SupportQuickCreateProductAPIView.as_view(), name="support-product-quick-create"),
 ]

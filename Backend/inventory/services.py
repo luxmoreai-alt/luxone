@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
+from uuid import uuid4
 
 from django.db import transaction
 from django.db.models import Prefetch
@@ -28,6 +29,7 @@ from .models import (
 from .permissions import filter_queryset_for_user
 
 MONEY_ZERO = Decimal("0.00")
+PRODUCT_CODE_PREFIX = "PRD"
 
 
 def as_money(value: Any) -> Decimal:
@@ -70,6 +72,10 @@ def calculate_document_totals(items: list[dict[str, Any]], adjustment: Any = Non
         "adjustment": adjustment_value,
         "grand_total": grand_total,
     }
+
+
+def generate_product_code(product_id: int) -> str:
+    return f"{PRODUCT_CODE_PREFIX}{product_id:04d}"
 
 
 def _replace_items(
@@ -171,7 +177,11 @@ class ProductService:
     def create_product(self, *, data: dict[str, Any], user):
         if not data.get("owner"):
             data["owner"] = user
-        return Product.objects.create(**data)
+        temp_code = f"TEMP{uuid4().hex[:12].upper()}"
+        product = Product.objects.create(**data, product_code=temp_code)
+        product.product_code = generate_product_code(product.pk)
+        product.save(update_fields=["product_code", "updated_at"])
+        return product
 
     @transaction.atomic
     def update_product(self, *, product: Product, data: dict[str, Any]):

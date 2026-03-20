@@ -40,10 +40,22 @@ type EmployeeInfo = {
   id: number;
   email: string;
   role: string;
+  team: string;
+  team_label?: string | null;
   is_active: boolean;
   manager_email: string | null;
   organization_name: string | null;
 };
+
+const teamOptions = [
+  { value: "general", label: "General" },
+  { value: "support", label: "Support" },
+  { value: "service", label: "Service" },
+  { value: "technical", label: "Technical" },
+  { value: "customer_success", label: "Customer Success" },
+  { value: "sales", label: "Sales" },
+  { value: "operations", label: "Operations" },
+];
 
 type ApiList<T> = T[] | { results?: T[]; data?: T[] };
 
@@ -154,6 +166,10 @@ export default function EmployeeProfilePage() {
   const [selectedManager, setSelectedManager] = useState("");
   const [savingManager, setSavingManager] = useState(false);
   const [managerError, setManagerError] = useState("");
+  const [editingTeam, setEditingTeam] = useState(false);
+  const [selectedTeam, setSelectedTeam] = useState("");
+  const [savingTeam, setSavingTeam] = useState(false);
+  const [teamError, setTeamError] = useState("");
 
   useEffect(() => {
     if (!id) return;
@@ -211,6 +227,25 @@ export default function EmployeeProfilePage() {
     }
   };
 
+  const handleAssignTeam = async () => {
+    if (!selectedTeam || !id) return;
+    setSavingTeam(true);
+    setTeamError("");
+    try {
+      const updated = await apiRequest<EmployeeInfo>(`/auth/manage-users/${id}/`, {
+        method: "PATCH",
+        body: JSON.stringify({ team: selectedTeam }),
+      });
+      setEmployee(updated);
+      setEditingTeam(false);
+      setSelectedTeam("");
+    } catch (err) {
+      setTeamError(err instanceof Error ? err.message : "Failed to update team.");
+    } finally {
+      setSavingTeam(false);
+    }
+  };
+
   const leadPag = usePagination(leads);
   const taskPag = usePagination(tasks);
   const meetPag = usePagination(meetings);
@@ -259,6 +294,9 @@ export default function EmployeeProfilePage() {
           <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-slate-500">
             <span className="capitalize rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5 font-semibold">
               {employee.role}
+            </span>
+            <span className="rounded-full bg-sky-100 text-sky-700 px-2 py-0.5 font-semibold">
+              {employee.team_label || employee.team || "General"}
             </span>
             {employee.organization_name && <span>{employee.organization_name}</span>}
             <span className={employee.is_active ? "text-emerald-600" : "text-red-500"}>
@@ -320,6 +358,66 @@ export default function EmployeeProfilePage() {
                     Cancel
                   </button>
                   {managerError && <p className="w-full text-xs text-red-500">{managerError}</p>}
+                </div>
+              )}
+            </div>
+          )}
+
+          {isAdmin && (
+            <div className="mt-3">
+              {!editingTeam ? (
+                <div className="flex items-center gap-2">
+                  <UserCog size={13} className="text-slate-400" />
+                  <span className="text-xs text-slate-500">
+                    Team:{" "}
+                    <span className="font-medium text-slate-700">
+                      {employee.team_label ?? employee.team ?? "General"}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingTeam(true);
+                      setSelectedTeam(employee.team || "general");
+                      setTeamError("");
+                    }}
+                    className="flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 hover:bg-sky-100 hover:text-sky-700 transition"
+                  >
+                    <Pencil size={10} />
+                    Change
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <select
+                    value={selectedTeam}
+                    onChange={(e) => setSelectedTeam(e.target.value)}
+                    className="rounded-lg border border-sky-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                  >
+                    {teamOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={!selectedTeam || savingTeam}
+                    onClick={handleAssignTeam}
+                    className="flex items-center gap-1 rounded-lg bg-sky-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-sky-700 disabled:opacity-50 transition"
+                  >
+                    {savingTeam ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
+                    {savingTeam ? "Saving..." : "Confirm"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setEditingTeam(false); setSelectedTeam(""); setTeamError(""); }}
+                    className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition"
+                  >
+                    <X size={11} />
+                    Cancel
+                  </button>
+                  {teamError && <p className="w-full text-xs text-red-500">{teamError}</p>}
                 </div>
               )}
             </div>

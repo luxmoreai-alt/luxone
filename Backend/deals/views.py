@@ -89,7 +89,10 @@ class DealViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        deal = deal_service.create_deal(data=serializer.validated_data, user=request.user)
+        try:
+            deal = deal_service.create_deal(data=serializer.validated_data, user=request.user)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(DealDetailSerializer(deal).data, status=status.HTTP_201_CREATED)
 
     def retrieve(self, request, *args, **kwargs):
@@ -104,7 +107,10 @@ class DealViewSet(viewsets.ModelViewSet):
         deal = self.get_object()
         serializer = self.get_serializer(deal, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        updated = deal_service.update_deal(deal=deal, data=serializer.validated_data, user=request.user)
+        try:
+            updated = deal_service.update_deal(deal=deal, data=serializer.validated_data, user=request.user)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(DealDetailSerializer(updated).data)
 
     def destroy(self, request, *args, **kwargs):

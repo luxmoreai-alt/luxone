@@ -2,6 +2,7 @@ import { apiRequest } from "../api/client";
 import type {
   BCCDropboxSetting,
   CustomEmailFieldPreference,
+  CRMEmailDetail,
   EmailAuthenticationDomain,
   EmailComposeSetting,
   EmailCredibilityMetric,
@@ -56,6 +57,10 @@ function query(filters?: IntegrationFilters) {
 async function getList<T>(path: string, filters?: IntegrationFilters) {
   const data = await apiRequest<T[] | PaginatedResponse<T>>(path, { query: query(filters) });
   return toList(data);
+}
+
+async function getPaginatedList<T>(path: string, filters?: IntegrationFilters) {
+  return apiRequest<PaginatedResponse<T>>(path, { query: query(filters) });
 }
 
 function post<T>(path: string, payload?: unknown) {
@@ -134,7 +139,19 @@ export const integrationsApi = {
   createSalesInboxSetting: (payload: Partial<SalesInboxSetting>) => post<SalesInboxSetting>("/integrations/email/sales-inbox", payload),
   updateSalesInboxSetting: (id: number, payload: Partial<SalesInboxSetting>) => patch<SalesInboxSetting>(`/integrations/email/sales-inbox/${id}`, payload),
   listSalesInboxFeed: (filters?: IntegrationFilters) => getList<SalesInboxFeedItem>("/integrations/email/sales-inbox/feed", filters),
+  listSalesInboxFeedPaginated: (filters?: IntegrationFilters) => getPaginatedList<SalesInboxFeedItem>("/integrations/email/sales-inbox/feed", filters),
   listSyncedEmailMessages: (filters?: IntegrationFilters) => getList<SalesInboxFeedItem>("/integrations/email/messages", filters),
+  listLeadRecordEmails: (id: string | number) => getList<SalesInboxFeedItem>(`/integrations/leads/${id}/emails`),
+  listContactRecordEmails: (id: string | number) => getList<SalesInboxFeedItem>(`/integrations/contacts/${id}/emails`),
+  listAccountRecordEmails: (id: string | number) => getList<SalesInboxFeedItem>(`/integrations/accounts/${id}/emails`),
+  listDealRecordEmails: (id: string | number) => getList<SalesInboxFeedItem>(`/integrations/deals/${id}/emails`),
+  listCaseRecordEmails: (id: string | number) => getList<SalesInboxFeedItem>(`/integrations/cases/${id}/emails`),
+  getSyncedEmailMessage: (id: number) => apiRequest<CRMEmailDetail>(`/email/${id}/`),
+  updateSyncedEmailMessage: (id: number, payload: Partial<Pick<CRMEmailDetail, "is_read" | "is_starred">>) =>
+    apiRequest<CRMEmailDetail>(`/email/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
 
   listEmailParsers: () => getList<EmailParserInbox>("/integrations/email/parser"),
   generateEmailParser: (payload: ParserGeneratePayload) => post<EmailParserInbox>("/integrations/email/parser/generate", payload),
@@ -181,6 +198,8 @@ export const integrationsApi = {
   deleteSocialAccount: (id: number) => remove(`/integrations/social/accounts/${id}`),
   connectSocialAccount: (id: number, payload: SocialConnectPayload) => post<SocialAccount>(`/integrations/social/accounts/${id}/connect`, payload),
   disconnectSocialAccount: (id: number) => post<SocialAccount>(`/integrations/social/accounts/${id}/disconnect`),
+  syncSocialAccount: (id: number) => post<{ message: string; messages_synced: number; last_synced_at: string | null }>(`/integrations/social/accounts/${id}/sync`),
+  startFacebookSocialOAuth: (id: number) => post<{ auth_url: string }>(`/integrations/social/accounts/${id}/facebook/oauth/start`),
 
   listSocialAdminSettings: () => getList<SocialPermissionSetting>("/integrations/social/admin-settings"),
   createSocialAdminSetting: (payload: Partial<SocialPermissionSetting>) => post<SocialPermissionSetting>("/integrations/social/admin-settings", payload),

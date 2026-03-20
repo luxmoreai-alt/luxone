@@ -116,8 +116,11 @@ export type Deal = {
   closingDate: string;
   type: string;
   accountName?: string;
+  accountId?: string;
   contactName?: string;
+  contactId?: string;
   leadName?: string;
+  leadId?: string;
   dealOwner?: string;
   ownerEmail?: string;
   value?: number;
@@ -386,7 +389,8 @@ export type EmailRecord = {
   subject: string;
   sentAt: string;
   sentBy: string;
-  status: "Draft" | "Sent";
+  status: "Draft" | "Sent" | "Received";
+  previewText?: string;
 };
 
 export type Attachment = {

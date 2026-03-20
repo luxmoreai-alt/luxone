@@ -31,10 +31,17 @@ class EmailProviderIntegration(BaseModel):
     access_token = models.TextField(blank=True, null=True)
     refresh_token = models.TextField(blank=True, null=True)
     token_expiry = models.DateTimeField(blank=True, null=True)
+    imap_host = models.CharField(max_length=255, blank=True, null=True)
+    imap_port = models.PositiveIntegerField(default=993)
+    smtp_host = models.CharField(max_length=255, blank=True, null=True)
+    smtp_port = models.PositiveIntegerField(default=587)
+    smtp_use_tls = models.BooleanField(default=True)
+    smtp_use_ssl = models.BooleanField(default=False)
     sync_enabled = models.BooleanField(default=True)
     sales_inbox_enabled = models.BooleanField(default=False)
     instant_notification_enabled = models.BooleanField(default=False)
     crm_sync_enabled = models.BooleanField(default=True)
+    last_synced_at = models.DateTimeField(blank=True, null=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -451,6 +458,7 @@ class SocialAccount(BaseModel):
     refresh_token = models.TextField(blank=True, null=True)
     is_connected = models.BooleanField(default=False)
     connected_at = models.DateTimeField(blank=True, null=True)
+    last_synced_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         ordering = ["platform", "account_name"]
@@ -794,6 +802,67 @@ class SyncedEmailMessage(BaseModel):
                 name="integrations_synced_email_external_unique",
             ),
         ]
+
+
+class EmailAttachment(BaseModel):
+    email_message = models.ForeignKey(
+        "integrations.SyncedEmailMessage",
+        on_delete=models.CASCADE,
+        related_name="attachments",
+    )
+    file_name = models.CharField(max_length=255)
+    file_type = models.CharField(max_length=120, blank=True, null=True)
+    file_size = models.PositiveBigIntegerField(default=0)
+    file_url = models.URLField(blank=True, null=True)
+
+    class Meta:
+        ordering = ["file_name", "created_at"]
+
+
+class EmailRecordLink(BaseModel):
+    email_message = models.OneToOneField(
+        "integrations.SyncedEmailMessage",
+        on_delete=models.CASCADE,
+        related_name="record_link",
+    )
+    lead = models.ForeignKey(
+        "leads.Lead",
+        on_delete=models.SET_NULL,
+        related_name="email_record_links",
+        null=True,
+        blank=True,
+    )
+    contact = models.ForeignKey(
+        "contacts.Contact",
+        on_delete=models.SET_NULL,
+        related_name="email_record_links",
+        null=True,
+        blank=True,
+    )
+    account = models.ForeignKey(
+        "accounts.Account",
+        on_delete=models.SET_NULL,
+        related_name="email_record_links",
+        null=True,
+        blank=True,
+    )
+    deal = models.ForeignKey(
+        "deals.Deal",
+        on_delete=models.SET_NULL,
+        related_name="email_record_links",
+        null=True,
+        blank=True,
+    )
+    support_case = models.ForeignKey(
+        "support.SupportCase",
+        on_delete=models.SET_NULL,
+        related_name="email_record_links",
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
 
 
 class EmailSyncLog(BaseModel):

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import { createService, getService, listBusinessHours, listTeamMembers, setServiceMembers, updateService } from "../api";
-import { availabilityModeOptions, locationTypeOptions, serviceStatusOptions } from "../config";
+import { availabilityModeOptions, locationTypeOptions, serviceDeliveryTeamOptions, serviceStatusOptions } from "../config";
 import type { BusinessHours, ServiceFormData, TeamMember } from "../types";
 
 const inputClass = "h-[38px] w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-blue-500";
@@ -16,6 +16,7 @@ const emptyForm: ServiceFormData = {
   locationType: "custom",
   location: "",
   status: "draft",
+  deliveryTeam: "general",
   availableDaysMode: "business_hours",
   availableTimeMode: "business_hours",
   businessHoursId: "",
@@ -38,11 +39,12 @@ export default function ServiceFormPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const [hours, members] = await Promise.all([listBusinessHours(), listTeamMembers()]);
+        const hours = await listBusinessHours();
         setBusinessHours(hours);
-        setTeamMembers(members);
         if (id) {
           const detail = await getService(id);
+          const members = await listTeamMembers("", { team: detail.deliveryTeam });
+          setTeamMembers(members);
           setServiceCode(detail.serviceCode);
           setForm({
             serviceName: detail.serviceName,
@@ -52,12 +54,16 @@ export default function ServiceFormPage() {
             locationType: detail.locationType,
             location: detail.location,
             status: detail.status,
+            deliveryTeam: detail.deliveryTeam || "general",
             availableDaysMode: detail.availableDaysMode,
             availableTimeMode: detail.availableTimeMode,
             businessHoursId: detail.businessHours,
             memberIds: detail.members?.map((item) => item.memberId) || [],
             primaryMemberId: detail.members?.find((item) => item.isPrimary)?.memberId || "",
           });
+        } else {
+          const members = await listTeamMembers("", { team: emptyForm.deliveryTeam });
+          setTeamMembers(members);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unable to load service form.");
@@ -67,6 +73,26 @@ export default function ServiceFormPage() {
     };
     void load();
   }, [id]);
+
+  useEffect(() => {
+    const loadMembers = async () => {
+      try {
+        const members = await listTeamMembers("", { team: form.deliveryTeam });
+        setTeamMembers(members);
+        setForm((current) => {
+          const allowedMemberIds = new Set(members.map((item) => item.id));
+          const memberIds = current.memberIds.filter((memberId) => allowedMemberIds.has(memberId));
+          const primaryMemberId = memberIds.includes(current.primaryMemberId) ? current.primaryMemberId : "";
+          return memberIds.length === current.memberIds.length && primaryMemberId === current.primaryMemberId
+            ? current
+            : { ...current, memberIds, primaryMemberId };
+        });
+      } catch {
+        setTeamMembers([]);
+      }
+    };
+    void loadMembers();
+  }, [form.deliveryTeam]);
 
   const handleSubmit = async (createNew = false) => {
     if (!form.serviceName.trim()) {
@@ -155,6 +181,12 @@ export default function ServiceFormPage() {
                   </select>
                 </div>
                 <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Delivery Team</label>
+                  <select className={inputClass} value={form.deliveryTeam} onChange={(e) => setForm({ ...form, deliveryTeam: e.target.value })}>
+                    {serviceDeliveryTeamOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                </div>
+                <div>
                   <label className="mb-1.5 block text-sm font-medium text-slate-700">Business Hours</label>
                   <select className={inputClass} value={form.businessHoursId} onChange={(e) => setForm({ ...form, businessHoursId: e.target.value })}>
                     <option value="">Select business hours</option>
@@ -203,7 +235,7 @@ export default function ServiceFormPage() {
                               }))
                             }
                           />
-                          <span>{member.label}</span>
+                          <span>{member.label} <span className="text-xs text-slate-500">({member.teamLabel})</span></span>
                         </div>
                         <label className="flex items-center gap-2 text-xs text-slate-500">
                           <input
@@ -227,4 +259,3 @@ export default function ServiceFormPage() {
     </DashboardLayout>
   );
 }
-

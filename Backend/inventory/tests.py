@@ -189,3 +189,31 @@ class InventoryLinkingTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]["subject"], "Product Linked Quote")
+
+    def test_product_create_auto_generates_prd_code(self):
+        existing_count = Product.objects.count()
+        response = self.client.post(
+            "/api/products",
+            {
+                "product_name": "Auto Code Product",
+                "unit_price": "1200.00",
+                "tax": "120.00",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["product_code"], f"PRD{existing_count + 2:04d}")
+
+        second_response = self.client.post(
+            "/api/products",
+            {
+                "product_name": "Auto Code Product 2",
+                "unit_price": "2200.00",
+                "tax": "220.00",
+            },
+            format="json",
+        )
+
+        self.assertEqual(second_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(second_response.data["product_code"], f"PRD{existing_count + 3:04d}")

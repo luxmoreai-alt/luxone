@@ -107,8 +107,7 @@ export function SendEmailModal({
       if (onSend) {
         await onSend({ to: to.trim(), subject: subject.trim(), body: body.trim(), from_email: from.trim() || undefined });
       } else {
-        const { sendEmail } = await import("../../lib/api/leadsApi");
-        await sendEmail({ to: to.trim(), subject: subject.trim(), body: body.trim(), from_email: from.trim() || undefined });
+        throw new Error("Email sending is not configured for this screen.");
       }
 
       onClose();

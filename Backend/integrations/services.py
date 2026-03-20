@@ -1,28 +1,49 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import timedelta, timezone as dt_timezone
+import email.utils
+from email import policy
+from email.header import decode_header, make_header
+from email.message import Message
+from email.parser import BytesParser
+import imaplib
+import json
 import logging
+import os
 import re
+import smtplib
+import ssl
 from typing import Any
 from urllib.parse import urlparse
+from urllib import error as urllib_error
+from urllib import parse as urllib_parse
+from urllib import request as urllib_request
+import uuid
+from base64 import b64encode
 
 from django.db import transaction
 from django.db.models import Case, Count, IntegerField, Q, Value, When
+from django.utils.dateparse import parse_datetime
 from django.utils import timezone
 
 from accounts.models import Account
 from contacts.models import Contact
+from crm_backend.middleware import get_current_db_name, set_current_db_name
 from deals.models import Deal
 from leads.models import Lead
+from saas_admin.models import Company
+from saas_admin.services import configure_tenant_database_in_settings
 from support.models import SupportCase
 
 from .models import (
     BCCDropboxSetting,
     BCCDropboxVerifiedAddress,
+    EmailAttachment,
     EmailAuthenticationDomain,
     EmailParserInbox,
     EmailProviderIntegration,
+    EmailRecordLink,
     EmailRelayServer,
     EmailSyncLog,
     IntegrationLeadSourceEvent,
@@ -36,17 +57,56 @@ from .models import (
 )
 from .permissions import is_integration_admin
 from .utils import (
+    build_portal_tracking_key,
     build_tracking_code,
     generate_integration_email,
     generate_verification_code,
     make_placeholder_email,
     normalize_email,
+    record_display_name,
     split_name,
 )
 
 logger = logging.getLogger(__name__)
 HIGH_INTENT_PATH_KEYWORDS = ("pricing", "quote", "demo", "trial", "contact", "checkout", "purchase")
 COMPLAINT_KEYWORDS = ("complaint", "issue", "problem", "bug", "error", "angry", "not working", "failed")
+SUPPORT_INTENT_KEYWORDS = (
+    "support",
+    "issue",
+    "problem",
+    "bug",
+    "error",
+    "failed",
+    "not working",
+    "complaint",
+    "ticket",
+    "case",
+    "help needed",
+    "unable",
+    "broken",
+)
+SALES_INTENT_KEYWORDS = (
+    "deal",
+    "make a deal",
+    "buy",
+    "purchase",
+    "pricing",
+    "price",
+    "quote",
+    "demo",
+    "interested",
+    "crm software",
+    "subscription",
+    "plan",
+    "proposal",
+)
+CASE_REFERENCE_PATTERNS = (r"\bCASE-\d+\b", r"\bCAS\d+\b")
+REAL_SYNC_PROVIDER_TYPES = {
+    EmailProviderIntegration.ProviderType.GMAIL,
+    EmailProviderIntegration.ProviderType.OUTLOOK,
+    EmailProviderIntegration.ProviderType.OFFICE365,
+    EmailProviderIntegration.ProviderType.OTHER,
+}
 
 
 def _json_safe(value: Any):
@@ -62,6 +122,430 @@ def _json_safe(value: Any):
     return value
 
 
+def _provider_default_hosts(provider: EmailProviderIntegration) -> dict[str, Any]:
+    if provider.provider_type == EmailProviderIntegration.ProviderType.GMAIL:
+        return {
+            "imap_host": "imap.gmail.com",
+            "imap_port": 993,
+            "smtp_host": "smtp.gmail.com",
+            "smtp_port": 587,
+            "smtp_use_tls": True,
+            "smtp_use_ssl": False,
+        }
+    if provider.provider_type in {
+        EmailProviderIntegration.ProviderType.OUTLOOK,
+        EmailProviderIntegration.ProviderType.OFFICE365,
+    }:
+        return {
+            "imap_host": "outlook.office365.com",
+            "imap_port": 993,
+            "smtp_host": "smtp.office365.com",
+            "smtp_port": 587,
+            "smtp_use_tls": True,
+            "smtp_use_ssl": False,
+        }
+    return {
+        "imap_host": provider.imap_host,
+        "imap_port": provider.imap_port or 993,
+        "smtp_host": provider.smtp_host,
+        "smtp_port": provider.smtp_port or 587,
+        "smtp_use_tls": provider.smtp_use_tls,
+        "smtp_use_ssl": provider.smtp_use_ssl,
+    }
+
+
+def _provider_env_password(provider: EmailProviderIntegration) -> str | None:
+    host_user = os.getenv("EMAIL_HOST_USER")
+    host_password = os.getenv("EMAIL_HOST_PASSWORD")
+    if host_user and host_password and normalize_email(host_user) == normalize_email(provider.email_address):
+        return host_password
+    return None
+
+
+def _provider_has_live_secret(provider: EmailProviderIntegration) -> bool:
+    return bool(provider.access_token or _provider_env_password(provider))
+
+
+def _resolved_provider_config(provider: EmailProviderIntegration) -> dict[str, Any]:
+    defaults = _provider_default_hosts(provider)
+    return {
+        "imap_host": provider.imap_host or defaults["imap_host"],
+        "imap_port": provider.imap_port or defaults["imap_port"],
+        "smtp_host": provider.smtp_host or defaults["smtp_host"],
+        "smtp_port": provider.smtp_port or defaults["smtp_port"],
+        "smtp_use_tls": provider.smtp_use_tls if provider.smtp_host else defaults["smtp_use_tls"],
+        "smtp_use_ssl": provider.smtp_use_ssl if provider.smtp_host else defaults["smtp_use_ssl"],
+    }
+
+
+def provider_supports_real_mail_sync(provider: EmailProviderIntegration) -> bool:
+    config = _resolved_provider_config(provider)
+    return bool(
+        provider.provider_type in REAL_SYNC_PROVIDER_TYPES
+        and provider.sync_enabled
+        and _provider_has_live_secret(provider)
+        and config.get("imap_host")
+    )
+
+
+def _imap_oauth2_string(email_address: str, access_token: str) -> bytes:
+    token_string = f"user={email_address}\1auth=Bearer {access_token}\1\1"
+    return b64encode(token_string.encode())
+
+
+def _smtp_oauth2_string(email_address: str, access_token: str) -> str:
+    token_string = f"user={email_address}\1auth=Bearer {access_token}\1\1"
+    return b64encode(token_string.encode()).decode()
+
+
+def _decode_header_value(value: str | None) -> str:
+    if not value:
+        return ""
+    try:
+        return str(make_header(decode_header(value)))
+    except Exception:
+        return value
+
+
+def _message_addresses(header_value: str | None) -> list[str]:
+    if not header_value:
+        return []
+    return [normalize_email(addr) for _, addr in email.utils.getaddresses([header_value]) if normalize_email(addr)]
+
+
+def _message_text_part(message: Message, content_type: str) -> str | None:
+    if message.is_multipart():
+        for part in message.walk():
+            if part.get_content_type() != content_type:
+                continue
+            if part.get_filename():
+                continue
+            try:
+                return part.get_content()
+            except Exception:
+                payload = part.get_payload(decode=True)
+                if payload:
+                    charset = part.get_content_charset() or "utf-8"
+                    return payload.decode(charset, errors="replace")
+        return None
+    if message.get_content_type() == content_type:
+        try:
+            return message.get_content()
+        except Exception:
+            payload = message.get_payload(decode=True)
+            if payload:
+                charset = message.get_content_charset() or "utf-8"
+                return payload.decode(charset, errors="replace")
+    return None
+
+
+def _extract_attachments(message: Message) -> list[dict[str, Any]]:
+    attachments: list[dict[str, Any]] = []
+    if not message.is_multipart():
+        return attachments
+    for part in message.walk():
+        file_name = part.get_filename()
+        if not file_name:
+            continue
+        payload = part.get_payload(decode=True) or b""
+        attachments.append(
+            {
+                "file_name": _decode_header_value(file_name),
+                "file_type": part.get_content_type(),
+                "file_size": len(payload),
+                "file_url": None,
+            }
+        )
+    return attachments
+
+
+def _parse_provider_message_bytes(
+    *,
+    provider: EmailProviderIntegration,
+    message_uid: str,
+    raw_bytes: bytes,
+    flags: tuple[bytes, ...] = (),
+) -> dict[str, Any]:
+    parsed = BytesParser(policy=policy.default).parsebytes(raw_bytes)
+    provider_email = normalize_email(provider.email_address)
+    from_emails = _message_addresses(parsed.get("From"))
+    to_emails = _message_addresses(parsed.get("To"))
+    cc_emails = _message_addresses(parsed.get("Cc"))
+    bcc_emails = _message_addresses(parsed.get("Bcc"))
+    primary_from = from_emails[0] if from_emails else make_placeholder_email("mail")
+    all_recipients = [*to_emails, *cc_emails, *bcc_emails]
+    direction = (
+        SyncedEmailMessage.Direction.OUTGOING
+        if provider_email and primary_from == provider_email
+        else SyncedEmailMessage.Direction.INCOMING
+    )
+    message_id = parsed.get("Message-ID") or parsed.get("Message-Id") or f"{provider.pk}:{message_uid}"
+    thread_id = parsed.get("Thread-Index") or parsed.get("References") or parsed.get("In-Reply-To") or message_uid
+    parsed_date = email.utils.parsedate_to_datetime(parsed.get("Date")) if parsed.get("Date") else None
+    if parsed_date and timezone.is_naive(parsed_date):
+        parsed_date = timezone.make_aware(parsed_date, dt_timezone.utc)
+    attachments = _extract_attachments(parsed)
+    return {
+        "external_message_id": message_id.strip(),
+        "thread_id": str(thread_id).strip()[:255] if thread_id else None,
+        "subject": _decode_header_value(parsed.get("Subject")) or "(No subject)",
+        "from_email": primary_from,
+        "from_name": email.utils.parseaddr(parsed.get("From") or "")[0],
+        "to_emails": to_emails,
+        "cc_emails": cc_emails,
+        "bcc_emails": bcc_emails,
+        "body_text": _message_text_part(parsed, "text/plain"),
+        "body_html": _message_text_part(parsed, "text/html"),
+        "direction": direction,
+        "status": SyncedEmailMessage.Status.SENT if direction == SyncedEmailMessage.Direction.OUTGOING else SyncedEmailMessage.Status.RECEIVED,
+        "received_at": parsed_date or timezone.now(),
+        "sent_at": parsed_date if direction == SyncedEmailMessage.Direction.OUTGOING else None,
+        "is_read": b"\\Seen" in flags,
+        "is_starred": b"\\Flagged" in flags,
+        "has_attachments": bool(attachments),
+        "attachments": attachments,
+        "provider_payload": {
+            "message_uid": message_uid,
+            "headers": {
+                "from": parsed.get("From"),
+                "to": parsed.get("To"),
+                "cc": parsed.get("Cc"),
+                "date": parsed.get("Date"),
+            },
+        },
+    }
+
+
+def _imap_login(provider: EmailProviderIntegration):
+    config = _resolved_provider_config(provider)
+    connection = imaplib.IMAP4_SSL(config["imap_host"], int(config["imap_port"]))
+    env_password = _provider_env_password(provider)
+    if provider.protocol_type == EmailProviderIntegration.ProtocolType.IMAP_OAUTH and provider.access_token:
+        connection.authenticate("XOAUTH2", lambda _: _imap_oauth2_string(provider.email_address, provider.access_token))
+    else:
+        secret = env_password or provider.access_token
+        if not secret:
+            raise ValueError("No live IMAP secret configured for this provider.")
+        connection.login(provider.email_address, secret)
+    return connection
+
+
+def _imap_mailboxes_for_sync(provider: EmailProviderIntegration) -> list[str]:
+    if provider.provider_type == EmailProviderIntegration.ProviderType.GMAIL:
+        return ["INBOX", "[Gmail]/Sent Mail"]
+    if provider.provider_type in {
+        EmailProviderIntegration.ProviderType.OUTLOOK,
+        EmailProviderIntegration.ProviderType.OFFICE365,
+    }:
+        return ["INBOX", "Sent Items"]
+    return ["INBOX"]
+
+
+def _select_imap_mailbox(connection, mailbox: str) -> bool:
+    candidates = [mailbox]
+    if " " in mailbox or "[" in mailbox or "]" in mailbox:
+        candidates.append(f'"{mailbox}"')
+
+    for candidate in candidates:
+        try:
+            status, _ = connection.select(candidate)
+        except imaplib.IMAP4.error:
+            continue
+        if status == "OK":
+            return True
+    return False
+
+
+def fetch_imap_provider_messages(provider: EmailProviderIntegration, *, limit: int = 25) -> list[dict[str, Any]]:
+    if not provider_supports_real_mail_sync(provider):
+        return []
+
+    connection = _imap_login(provider)
+    try:
+        criteria = "ALL"
+        if provider.last_synced_at:
+            criteria = f'(SINCE "{provider.last_synced_at.strftime("%d-%b-%Y")}")'
+        payloads: list[dict[str, Any]] = []
+        seen_external_ids: set[str] = set()
+
+        for mailbox in _imap_mailboxes_for_sync(provider):
+            if not _select_imap_mailbox(connection, mailbox):
+                continue
+            status, data = connection.uid("search", None, criteria)
+            if status != "OK":
+                continue
+            message_uids = [uid.decode() for uid in (data[0] or b"").split() if uid][-limit:]
+            for message_uid in reversed(message_uids):
+                status, message_data = connection.uid("fetch", message_uid, "(RFC822 FLAGS)")
+                if status != "OK" or not message_data:
+                    continue
+                raw_bytes = b""
+                flags: tuple[bytes, ...] = ()
+                for item in message_data:
+                    if not isinstance(item, tuple):
+                        continue
+                    metadata, raw_candidate = item
+                    if raw_candidate:
+                        raw_bytes = raw_candidate
+                    if b"FLAGS" in metadata:
+                        flag_match = re.search(rb"FLAGS \((.*?)\)", metadata)
+                        if flag_match:
+                            flags = tuple(flag_match.group(1).split())
+                if not raw_bytes:
+                    continue
+                payload = _parse_provider_message_bytes(
+                    provider=provider,
+                    message_uid=message_uid,
+                    raw_bytes=raw_bytes,
+                    flags=flags,
+                )
+                external_id = payload.get("external_message_id")
+                if external_id in seen_external_ids:
+                    continue
+                seen_external_ids.add(external_id)
+                payloads.append(payload)
+        return payloads
+    finally:
+        try:
+            connection.close()
+        except Exception:
+            pass
+        connection.logout()
+
+
+def _fetch_json(url: str, *, headers: dict[str, str] | None = None, method: str = "GET") -> dict[str, Any]:
+    request = urllib_request.Request(url, headers=headers or {}, method=method)
+    try:
+        with urllib_request.urlopen(request, timeout=20) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib_error.HTTPError as exc:
+        raise ValueError(f"Provider request failed with status {exc.code}.") from exc
+    except urllib_error.URLError as exc:
+        raise ValueError("Provider request could not be completed.") from exc
+
+
+def _facebook_message_payloads(account: SocialAccount) -> list[dict[str, Any]]:
+    access_token = account.access_token
+    page_id = account.page_id
+    if not (access_token and page_id):
+        return []
+    fields = "id,message,from,created_time"
+    url = (
+        f"https://graph.facebook.com/v19.0/{page_id}/feed?"
+        + urllib_parse.urlencode({"fields": fields, "access_token": access_token, "limit": 25})
+    )
+    response = _fetch_json(url)
+    payloads: list[dict[str, Any]] = []
+    for item in response.get("data", []):
+        sender = item.get("from") or {}
+        payloads.append(
+            {
+                "platform": SocialMessage.Platform.FACEBOOK,
+                "brand": account.brand,
+                "social_account": account,
+                "external_message_id": item.get("id"),
+                "profile_handle": sender.get("id"),
+                "sender_name": sender.get("name"),
+                "message": item.get("message") or "Facebook activity",
+                "created_at_source": item.get("created_time"),
+                "payload": item,
+            }
+        )
+    return payloads
+
+
+def _resolved_social_access_token(account: SocialAccount) -> str | None:
+    if account.access_token:
+        return account.access_token
+    if account.platform == SocialAccount.Platform.X:
+        return os.getenv("X_BEARER_TOKEN") or None
+    return None
+
+
+def _resolved_x_handle(account: SocialAccount) -> str | None:
+    env_handle = (os.getenv("X_HANDLE") or "").strip()
+    if env_handle:
+        return env_handle
+    return (account.handle or "").strip() or None
+
+
+def _x_message_payloads(account: SocialAccount) -> list[dict[str, Any]]:
+    access_token = _resolved_social_access_token(account)
+    handle = _resolved_x_handle(account)
+    if not (access_token and handle):
+        return []
+    username = handle.lstrip("@")
+    user_response = _fetch_json(
+        f"https://api.x.com/2/users/by/username/{urllib_parse.quote(username)}",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    user_id = ((user_response.get("data") or {}).get("id"))
+    if not user_id:
+        return []
+    tweets_response = _fetch_json(
+        "https://api.x.com/2/users/"
+        f"{user_id}/mentions?tweet.fields=created_at,author_id,text&max_results=25",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    payloads: list[dict[str, Any]] = []
+    for item in tweets_response.get("data", []):
+        payloads.append(
+            {
+                "platform": SocialMessage.Platform.X,
+                "brand": account.brand,
+                "social_account": account,
+                "external_message_id": item.get("id"),
+                "profile_handle": f"@{username}",
+                "sender_name": username,
+                "message": item.get("text") or "X mention",
+                "created_at_source": item.get("created_at"),
+                "payload": item,
+            }
+        )
+    return payloads
+
+
+def sync_social_account(account: SocialAccount, *, triggered_by=None) -> list[SocialMessage]:
+    if not account.is_connected or not _resolved_social_access_token(account):
+        raise ValueError("Connect the social account with a valid access token before syncing.")
+
+    if account.platform == SocialAccount.Platform.FACEBOOK:
+        payloads = _facebook_message_payloads(account)
+    elif account.platform == SocialAccount.Platform.X:
+        payloads = _x_message_payloads(account)
+    else:
+        payloads = []
+
+    messages = [ingest_social_message(payload=payload, user=triggered_by) for payload in payloads]
+    account.last_synced_at = timezone.now()
+    account.save(update_fields=["last_synced_at", "updated_at"])
+    return messages
+
+
+def _portal_allowed_hosts(portal: VisitorTrackingPortal) -> set[str]:
+    parsed = urlparse(portal.portal_url)
+    host = (parsed.netloc or parsed.path or "").lower().strip()
+    if host.startswith("www."):
+        host = host[4:]
+    return {host} if host else set()
+
+
+def validate_visitor_event_origin(*, portal: VisitorTrackingPortal, payload: dict[str, Any]) -> None:
+    allowed_hosts = _portal_allowed_hosts(portal)
+    if not allowed_hosts:
+        return
+    for field in ("page_url", "source_url"):
+        raw_value = payload.get(field)
+        if not raw_value:
+            continue
+        candidate = urlparse(raw_value)
+        host = (candidate.netloc or "").lower().strip()
+        if host.startswith("www."):
+            host = host[4:]
+        if host and host not in allowed_hosts:
+            raise ValueError("Visitor event origin does not match the configured portal domain.")
+
+
 @dataclass
 class MatchedCRMRecord:
     lead: Lead | None = None
@@ -69,6 +553,128 @@ class MatchedCRMRecord:
     account: Account | None = None
     deal: Deal | None = None
     support_case: SupportCase | None = None
+
+
+def _has_crm_match(match: MatchedCRMRecord) -> bool:
+    return bool(match.lead or match.contact or match.account or match.deal or match.support_case)
+
+
+def _merge_crm_matches(primary: MatchedCRMRecord, secondary: MatchedCRMRecord | None = None) -> MatchedCRMRecord:
+    secondary = secondary or MatchedCRMRecord()
+    return MatchedCRMRecord(
+        lead=primary.lead or secondary.lead,
+        contact=primary.contact or secondary.contact,
+        account=primary.account or secondary.account,
+        deal=primary.deal or secondary.deal,
+        support_case=primary.support_case or secondary.support_case,
+    )
+
+
+def _reference_text_from_payload(payload: dict[str, Any]) -> str:
+    return " ".join(
+        [
+            payload.get("subject") or "",
+            payload.get("body_text") or "",
+            payload.get("body_html") or "",
+        ]
+    ).strip()
+
+
+def _strip_support_case(match: MatchedCRMRecord) -> MatchedCRMRecord:
+    return MatchedCRMRecord(
+        lead=match.lead,
+        contact=match.contact,
+        account=match.account,
+        deal=match.deal,
+        support_case=None,
+    )
+
+
+def classify_email_intent(*, subject: str | None, body_text: str | None, body_html: str | None) -> str:
+    content = " ".join(filter(None, [subject, body_text, body_html])).lower()
+    if not content:
+        return "general"
+    if any(keyword in content for keyword in SUPPORT_INTENT_KEYWORDS):
+        return "support"
+    if any(keyword in content for keyword in SALES_INTENT_KEYWORDS):
+        return "sales"
+    return "general"
+
+
+def _support_case_is_open(case: SupportCase | None) -> bool:
+    if not case or not case.is_active:
+        return False
+    status = (case.status or "").strip().lower()
+    if not status:
+        return True
+    closed_markers = ("closed", "resolved", "completed", "done", "cancelled", "canceled")
+    return all(marker not in status for marker in closed_markers)
+
+
+def _preferred_support_case_for_match(match: MatchedCRMRecord) -> SupportCase | None:
+    candidates: list[SupportCase] = []
+    if match.support_case:
+        candidates.append(match.support_case)
+    if match.contact:
+        candidates.extend(match.contact.support_cases.filter(is_active=True).order_by("-updated_at")[:5])
+    if match.account:
+        candidates.extend(match.account.support_cases.filter(is_active=True).order_by("-updated_at")[:5])
+    if match.deal:
+        candidates.extend(match.deal.support_cases.filter(is_active=True).order_by("-updated_at")[:5])
+    for candidate in candidates:
+        if _support_case_is_open(candidate):
+            return candidate
+    return next((candidate for candidate in candidates if candidate), None)
+
+
+def _preferred_active_deal_for_match(match: MatchedCRMRecord) -> Deal | None:
+    candidates: list[Deal] = []
+    if match.deal and match.deal.is_active:
+        candidates.append(match.deal)
+    if match.contact:
+        candidates.extend(match.contact.deals.filter(is_active=True).order_by("-updated_at")[:5])
+    if match.lead:
+        candidates.extend(match.lead.deals.filter(is_active=True).order_by("-updated_at")[:5])
+        if match.lead.converted_deal:
+            candidates.append(match.lead.converted_deal)
+    if not (match.contact or match.lead) and match.account:
+        account_deals = list(match.account.deals.filter(is_active=True).order_by("-updated_at")[:2])
+        if len(account_deals) == 1:
+            candidates.extend(account_deals)
+    for candidate in candidates:
+        if candidate and candidate.is_active and not candidate.is_closed:
+            return candidate
+    return next((candidate for candidate in candidates if candidate and candidate.is_active), None)
+
+
+def _match_crm_records_by_thread(thread_id: str | None, *, external_message_id: str | None = None) -> MatchedCRMRecord:
+    normalized_thread_id = (thread_id or "").strip()
+    if not normalized_thread_id:
+        return MatchedCRMRecord()
+    messages = SyncedEmailMessage.objects.filter(thread_id=normalized_thread_id)
+    if external_message_id:
+        messages = messages.exclude(external_message_id=external_message_id)
+    message = (
+        messages.exclude(
+            lead__isnull=True,
+            contact__isnull=True,
+            account__isnull=True,
+            deal__isnull=True,
+            support_case__isnull=True,
+        )
+        .select_related("lead", "contact", "account", "deal", "support_case")
+        .order_by("-received_at", "-updated_at")
+        .first()
+    )
+    if not message:
+        return MatchedCRMRecord()
+    return MatchedCRMRecord(
+        lead=message.lead,
+        contact=message.contact,
+        account=message.account,
+        deal=message.deal,
+        support_case=message.support_case,
+    )
 
 
 def _extract_domain(email: str | None) -> str | None:
@@ -132,11 +738,20 @@ def match_crm_records_by_reference(text: str | None) -> MatchedCRMRecord:
     haystack = (text or "").strip()
     if not haystack:
         return MatchedCRMRecord()
-    case_numbers = re.findall(r"CASE-\d+", haystack, flags=re.IGNORECASE)
-    support_case = SupportCase.objects.filter(
-        Q(case_number__in=case_numbers)
-        | Q(subject__icontains=haystack)
-    ).select_related("related_contact", "account", "deal").order_by("-updated_at").first()
+    case_numbers: list[str] = []
+    for pattern in CASE_REFERENCE_PATTERNS:
+        case_numbers.extend(re.findall(pattern, haystack, flags=re.IGNORECASE))
+    normalized_case_numbers = [case_number.upper() for case_number in case_numbers]
+
+    support_case = None
+    if normalized_case_numbers:
+        support_case = (
+            SupportCase.objects.filter(case_number__iregex=r"^(CASE-\d+|CAS\d+)$")
+            .filter(Q(case_number__in=normalized_case_numbers) | Q(case_number__in=case_numbers))
+            .select_related("related_contact", "account", "deal")
+            .order_by("-updated_at")
+            .first()
+        )
     if support_case:
         return MatchedCRMRecord(
             contact=support_case.related_contact,
@@ -144,9 +759,20 @@ def match_crm_records_by_reference(text: str | None) -> MatchedCRMRecord:
             deal=support_case.deal,
             support_case=support_case,
         )
-    deal = Deal.objects.filter(Q(deal_name__icontains=haystack) | Q(id__in=re.findall(r"\d+", haystack))).select_related("account", "contact").order_by("-updated_at").first()
-    if deal:
-        return MatchedCRMRecord(contact=deal.contact, account=deal.account, deal=deal)
+
+    explicit_deal_ids = {
+        int(value)
+        for value in re.findall(r"\b(?:deal[\s:#-]*|opportunity[\s:#-]*)(\d+)\b", haystack, flags=re.IGNORECASE)
+    }
+    if explicit_deal_ids:
+        deal = (
+            Deal.objects.filter(id__in=explicit_deal_ids)
+            .select_related("account", "contact")
+            .order_by("-updated_at")
+            .first()
+        )
+        if deal:
+            return MatchedCRMRecord(contact=deal.contact, account=deal.account, deal=deal)
     return MatchedCRMRecord()
 
 
@@ -208,6 +834,13 @@ def match_crm_records_by_email(email: str | None) -> MatchedCRMRecord:
     if not normalized_email:
         return MatchedCRMRecord()
 
+    support_case_by_email = (
+        SupportCase.objects.filter(email__iexact=normalized_email, is_active=True)
+        .select_related("related_contact", "account", "deal")
+        .order_by("-updated_at")
+        .first()
+    )
+
     contact = (
         Contact.objects.select_related("account")
         .filter(
@@ -216,15 +849,6 @@ def match_crm_records_by_email(email: str | None) -> MatchedCRMRecord:
         )
         .first()
     )
-    if contact:
-        deal = contact.deals.filter(is_active=True).order_by("-updated_at").first()
-        support_case = contact.support_cases.filter(is_active=True).order_by("-updated_at").first()
-        return MatchedCRMRecord(
-            contact=contact,
-            account=contact.account,
-            deal=deal,
-            support_case=support_case,
-        )
 
     lead = (
         Lead.objects.filter(
@@ -233,18 +857,61 @@ def match_crm_records_by_email(email: str | None) -> MatchedCRMRecord:
         .select_related("converted_account", "converted_contact", "converted_deal")
         .first()
     )
-    if lead:
+
+    if contact or lead:
+        deal = None
         support_case = None
-        if lead.converted_contact:
-            support_case = lead.converted_contact.support_cases.filter(is_active=True).order_by("-updated_at").first()
+        account = None
+
+        if contact:
+            deal = contact.deals.filter(is_active=True).order_by("-updated_at").first()
+            support_case = contact.support_cases.filter(is_active=True).order_by("-updated_at").first()
+            account = contact.account
+
+        if lead:
+            if not support_case and lead.converted_contact:
+                support_case = lead.converted_contact.support_cases.filter(is_active=True).order_by("-updated_at").first()
+            account = account or lead.converted_account
+            deal = deal or lead.converted_deal
+
         return MatchedCRMRecord(
             lead=lead,
-            contact=lead.converted_contact,
-            account=lead.converted_account,
-            deal=lead.converted_deal,
-            support_case=support_case,
+            contact=contact or getattr(lead, "converted_contact", None),
+            account=account,
+            deal=deal,
+            support_case=support_case or support_case_by_email,
         )
+
+    if support_case_by_email:
+        return MatchedCRMRecord(
+            contact=support_case_by_email.related_contact,
+            account=support_case_by_email.account,
+            deal=support_case_by_email.deal,
+            support_case=support_case_by_email,
+        )
+
     return MatchedCRMRecord()
+
+
+def is_notification_sender(email: str | None) -> bool:
+    normalized_email = normalize_email(email)
+    if not normalized_email or "@" not in normalized_email:
+        return False
+    local_part, domain = normalized_email.split("@", 1)
+    markers = (
+        "noreply",
+        "no-reply",
+        "donotreply",
+        "do-not-reply",
+        "notification",
+        "notifications",
+        "jobnotification",
+        "jobs2web",
+        "mailer-daemon",
+        "postmaster",
+    )
+    haystack = f"{local_part} {domain}".lower()
+    return any(marker in haystack for marker in markers)
 
 
 def match_message_to_lead(message: dict[str, Any]) -> Lead | None:
@@ -260,13 +927,181 @@ def get_lead_emails(lead_id: int):
 
 
 def get_lead_connected_records(lead_id: int):
-    return IntegrationLeadSourceEvent.objects.filter(lead_id=lead_id).select_related(
+    return IntegrationLeadSourceEvent.objects.filter(lead_id=lead_id).exclude(
+        source_type=IntegrationLeadSourceEvent.SourceType.EMAIL
+    ).select_related(
         "lead",
         "contact",
         "account",
         "deal",
         "support_case",
     ).order_by("-created_at")
+
+
+def get_user_default_email_provider(user) -> EmailProviderIntegration | None:
+    base_queryset = EmailProviderIntegration.objects.filter(
+        is_active=True,
+        crm_sync_enabled=True,
+        created_by=user,
+    )
+    return (
+        base_queryset.filter(is_default_from=True).first()
+        or base_queryset.order_by("-updated_at", "-created_at").first()
+    )
+
+
+def send_provider_email_live(
+    *,
+    provider_integration: EmailProviderIntegration,
+    subject: str,
+    body: str,
+    to_emails: list[str],
+    cc_emails: list[str] | None = None,
+    bcc_emails: list[str] | None = None,
+    reply_to: str | None = None,
+) -> None:
+    if not provider_integration.is_active:
+        raise ValueError("Only an active provider can send email.")
+
+    config = _resolved_provider_config(provider_integration)
+    smtp_host = config.get("smtp_host")
+    live_secret = provider_integration.access_token or _provider_env_password(provider_integration)
+    if not smtp_host or not live_secret:
+        raise ValueError("This provider is missing live sending credentials.")
+
+    recipients = [*(to_emails or []), *(cc_emails or []), *(bcc_emails or [])]
+    if not recipients:
+        raise ValueError("At least one recipient email is required.")
+
+    mime_lines = [
+        f"From: {provider_integration.display_name or provider_integration.email_address} <{provider_integration.email_address}>",
+        f"To: {', '.join(to_emails)}",
+        f"Subject: {subject or '(No subject)'}",
+        "MIME-Version: 1.0",
+        "Content-Type: text/html; charset=utf-8",
+        f"Date: {email.utils.formatdate(localtime=True)}",
+    ]
+    if cc_emails:
+        mime_lines.append(f"Cc: {', '.join(cc_emails)}")
+    if reply_to or provider_integration.reply_to_address:
+        mime_lines.append(f"Reply-To: {reply_to or provider_integration.reply_to_address}")
+    mime_message = "\r\n".join([*mime_lines, "", body])
+
+    smtp_port = int(config["smtp_port"])
+    if config.get("smtp_use_ssl"):
+        smtp = smtplib.SMTP_SSL(smtp_host, smtp_port, context=ssl.create_default_context(), timeout=20)
+    else:
+        smtp = smtplib.SMTP(smtp_host, smtp_port, timeout=20)
+    try:
+        smtp.ehlo()
+        if config.get("smtp_use_tls"):
+            smtp.starttls(context=ssl.create_default_context())
+            smtp.ehlo()
+        if provider_integration.protocol_type == EmailProviderIntegration.ProtocolType.IMAP_OAUTH and provider_integration.access_token:
+            auth_string = _smtp_oauth2_string(provider_integration.email_address, provider_integration.access_token)
+            code, response = smtp.docmd("AUTH", "XOAUTH2 " + auth_string)
+            if code not in (235, 250):
+                raise ValueError(f"SMTP OAuth authentication failed: {response!r}")
+        else:
+            smtp.login(provider_integration.email_address, live_secret)
+        smtp.sendmail(provider_integration.email_address, recipients, mime_message.encode("utf-8"))
+    finally:
+        try:
+            smtp.quit()
+        except Exception:
+            pass
+
+
+@transaction.atomic
+def create_outgoing_crm_email(
+    *,
+    provider_integration: EmailProviderIntegration,
+    subject: str,
+    body: str,
+    to_emails: list[str],
+    cc_emails: list[str] | None = None,
+    bcc_emails: list[str] | None = None,
+    reply_to: str | None = None,
+    send_live: bool = False,
+    owner=None,
+    lead: Lead | None = None,
+    contact: Contact | None = None,
+    account: Account | None = None,
+    deal: Deal | None = None,
+    support_case: SupportCase | None = None,
+    thread_id: str | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> SyncedEmailMessage:
+    now = timezone.now()
+    cleaned_to_emails = [normalize_email(email) for email in to_emails if normalize_email(email)]
+    if not cleaned_to_emails:
+        raise ValueError("At least one recipient email is required.")
+    cleaned_cc_emails = [normalize_email(email) for email in (cc_emails or []) if normalize_email(email)]
+    cleaned_bcc_emails = [normalize_email(email) for email in (bcc_emails or []) if normalize_email(email)]
+
+    if send_live:
+        send_provider_email_live(
+            provider_integration=provider_integration,
+            subject=subject,
+            body=body,
+            to_emails=cleaned_to_emails,
+            cc_emails=cleaned_cc_emails,
+            bcc_emails=cleaned_bcc_emails,
+            reply_to=reply_to,
+        )
+
+    message = SyncedEmailMessage.objects.create(
+        provider_integration=provider_integration,
+        external_message_id=f"outgoing-{provider_integration.pk}-{uuid.uuid4().hex}",
+        thread_id=thread_id,
+        subject=subject or "(No subject)",
+        from_email=normalize_email(provider_integration.email_address) or make_placeholder_email("mail"),
+        to_emails=cleaned_to_emails,
+        cc_emails=cleaned_cc_emails,
+        bcc_emails=cleaned_bcc_emails,
+        body_text=body,
+        body_html=body,
+        direction=SyncedEmailMessage.Direction.OUTGOING,
+        status=SyncedEmailMessage.Status.SENT,
+        received_at=now,
+        sent_at=now,
+        is_read=True,
+        is_starred=False,
+        has_attachments=False,
+        lead=lead,
+        contact=contact,
+        account=account,
+        deal=deal,
+        support_case=support_case,
+    )
+    upsert_email_record_link(message)
+    create_source_event(
+        source_type=IntegrationLeadSourceEvent.SourceType.EMAIL,
+        source_reference=message.external_message_id,
+        payload={
+            "subject": subject,
+            "body_text": body,
+            "direction": SyncedEmailMessage.Direction.OUTGOING,
+            "status": SyncedEmailMessage.Status.SENT,
+            "sent_at": now,
+            "from_email": provider_integration.email_address,
+            "to_emails": cleaned_to_emails,
+            "cc_emails": cleaned_cc_emails,
+            "bcc_emails": cleaned_bcc_emails,
+            "reply_to": reply_to or provider_integration.reply_to_address,
+            "sent_live": send_live,
+            "provider_id": provider_integration.pk,
+            "provider_email": provider_integration.email_address,
+            **(metadata or {}),
+        },
+        status="processed",
+        lead=lead,
+        contact=contact,
+        account=account,
+        deal=deal,
+        support_case=support_case,
+    )
+    return message
 
 
 def create_source_event(
@@ -398,28 +1233,115 @@ def ensure_portal_tracking_code(portal: VisitorTrackingPortal, *, app_name: str,
     return setting
 
 
-def _lead_from_message_payload(payload: dict[str, Any], owner=None) -> MatchedCRMRecord:
-    email_addresses = [payload.get("from_email"), *(payload.get("to_emails") or []), *(payload.get("cc_emails") or [])]
-    reference_text = " ".join(
-        [
-            payload.get("subject") or "",
-            payload.get("thread_id") or "",
-            payload.get("body_text") or "",
-            payload.get("body_html") or "",
-        ]
-    ).strip()
-    for email in email_addresses:
-        match = match_crm_records(email=email, text=reference_text)
-        if match.contact or match.lead or match.account or match.deal or match.support_case:
-            return match
+def resolve_visitor_portal_by_tracking_key(tracking_key: str) -> VisitorTrackingPortal | None:
+    normalized_key = (tracking_key or "").strip()
+    if not normalized_key:
+        return None
 
-    lead = get_or_create_placeholder_lead(
-        email=payload.get("from_email"),
-        name=payload.get("from_name") or payload.get("subject"),
-        company=payload.get("company") or "Email Prospect",
-        owner=owner,
+    for portal in VisitorTrackingPortal.objects.filter(is_active=True):
+        if build_portal_tracking_key(portal.id, portal.portal_name) == normalized_key:
+            return portal
+    return None
+
+
+def _match_synced_email_records(payload: dict[str, Any]) -> MatchedCRMRecord:
+    direction = payload.get("direction") or SyncedEmailMessage.Direction.INCOMING
+    reference_text = _reference_text_from_payload(payload)
+
+    thread_match = _match_crm_records_by_thread(
+        payload.get("thread_id"),
+        external_message_id=payload.get("external_message_id"),
     )
-    return MatchedCRMRecord(lead=lead)
+    if _has_crm_match(thread_match):
+        return thread_match
+
+    reference_match = match_crm_records_by_reference(reference_text)
+    if _has_crm_match(reference_match):
+        return reference_match
+
+    base_match = MatchedCRMRecord()
+    if direction == SyncedEmailMessage.Direction.INCOMING:
+        base_match = match_crm_records_by_email(payload.get("from_email"))
+        if not _has_crm_match(base_match) and is_notification_sender(payload.get("from_email")):
+            return MatchedCRMRecord()
+    else:
+        for email in [*(payload.get("to_emails") or []), *(payload.get("cc_emails") or [])]:
+            recipient_match = match_crm_records_by_email(email)
+            if _has_crm_match(recipient_match):
+                base_match = recipient_match
+                break
+
+    if not _has_crm_match(base_match):
+        return MatchedCRMRecord()
+
+    intent = classify_email_intent(
+        subject=payload.get("subject"),
+        body_text=payload.get("body_text"),
+        body_html=payload.get("body_html"),
+    )
+
+    if intent == "support":
+        support_case = _preferred_support_case_for_match(base_match)
+        if support_case:
+            return MatchedCRMRecord(
+                lead=base_match.lead,
+                contact=base_match.contact or support_case.related_contact,
+                account=base_match.account or support_case.account,
+                deal=base_match.deal or support_case.deal,
+                support_case=support_case,
+            )
+        return base_match
+
+    if intent == "sales":
+        deal = _preferred_active_deal_for_match(base_match)
+        if deal:
+            return _strip_support_case(MatchedCRMRecord(
+                lead=base_match.lead or deal.lead,
+                contact=base_match.contact or deal.contact,
+                account=base_match.account or deal.account,
+                deal=deal,
+            ))
+        return _strip_support_case(MatchedCRMRecord(
+            lead=base_match.lead,
+            contact=base_match.contact,
+            account=base_match.account,
+            deal=base_match.deal,
+        ))
+
+    return base_match
+
+
+def _expand_related_crm_records(match: MatchedCRMRecord) -> MatchedCRMRecord:
+    lead = match.lead
+    contact = match.contact
+    account = match.account
+    deal = match.deal
+    support_case = match.support_case
+
+    if lead:
+        contact = contact or lead.converted_contact
+        account = account or lead.converted_account
+        deal = deal or lead.converted_deal
+
+    if contact:
+        account = account or getattr(contact, "account", None)
+        lead = lead or getattr(contact, "created_from_lead", None)
+        if lead:
+            account = account or lead.converted_account
+            deal = deal or lead.converted_deal
+
+    if support_case:
+        contact = contact or support_case.related_contact
+        account = account or support_case.account
+        deal = deal or support_case.deal
+
+    return MatchedCRMRecord(
+        lead=lead,
+        contact=contact,
+        account=account,
+        deal=deal,
+        support_case=support_case,
+    )
 
 
 def save_synced_message(
@@ -435,6 +1357,38 @@ def save_synced_message(
     )
 
 
+def upsert_email_record_link(message: SyncedEmailMessage) -> EmailRecordLink:
+    db_alias = message._state.db or "default"
+    return EmailRecordLink.objects.using(db_alias).update_or_create(
+        email_message=message,
+        defaults={
+            "lead": message.lead,
+            "contact": message.contact,
+            "account": message.account,
+            "deal": message.deal,
+            "support_case": message.support_case,
+        },
+    )[0]
+
+
+def save_email_attachments(*, message: SyncedEmailMessage, attachments: list[dict[str, Any]] | None) -> None:
+    if attachments is None:
+        return
+    message.attachments.all().delete()
+    EmailAttachment.objects.bulk_create(
+        [
+            EmailAttachment(
+                email_message=message,
+                file_name=attachment.get("file_name") or "attachment",
+                file_type=attachment.get("file_type"),
+                file_size=int(attachment.get("file_size") or 0),
+                file_url=attachment.get("file_url"),
+            )
+            for attachment in attachments
+        ]
+    )
+
+
 @transaction.atomic
 def create_synced_email_message(
     *,
@@ -442,7 +1396,12 @@ def create_synced_email_message(
     payload: dict[str, Any],
     owner=None,
 ) -> SyncedEmailMessage:
-    match = _lead_from_message_payload(payload, owner=owner)
+    match = _expand_related_crm_records(_match_synced_email_records(payload))
+    existing_message = SyncedEmailMessage.objects.filter(
+        provider_integration=provider_integration,
+        external_message_id=payload["external_message_id"],
+    ).first()
+    incoming_is_read = bool(payload.get("is_read", False))
     logger.info(
         "Saving synced email for provider=%s external_message_id=%s matched_lead=%s",
         provider_integration.pk,
@@ -465,7 +1424,7 @@ def create_synced_email_message(
             "status": payload.get("status") or SyncedEmailMessage.Status.RECEIVED,
             "received_at": payload.get("received_at") or timezone.now(),
             "sent_at": payload.get("sent_at"),
-            "is_read": bool(payload.get("is_read", False)),
+            "is_read": incoming_is_read or bool(getattr(existing_message, "is_read", False)),
             "is_starred": bool(payload.get("is_starred", False)),
             "has_attachments": bool(payload.get("has_attachments", False)),
             "lead": match.lead,
@@ -475,6 +1434,8 @@ def create_synced_email_message(
             "support_case": match.support_case,
         },
     )
+    save_email_attachments(message=message, attachments=payload.get("attachments"))
+    upsert_email_record_link(message)
     create_source_event(
         source_type=IntegrationLeadSourceEvent.SourceType.EMAIL,
         source_reference=message.external_message_id,
@@ -489,21 +1450,105 @@ def create_synced_email_message(
     return message
 
 
-def mocked_provider_messages(provider: EmailProviderIntegration) -> list[dict[str, Any]]:
+@transaction.atomic
+def reconcile_synced_email_links(*, queryset=None) -> dict[str, int]:
+    email_queryset = queryset or SyncedEmailMessage.objects.all()
+    db_alias = getattr(email_queryset, "db", None) or "default"
+    updated = 0
+    cleared = 0
+    previous_db = get_current_db_name()
+    set_current_db_name(db_alias)
+
+    try:
+        for message in email_queryset.select_related(
+            "provider_integration",
+            "lead",
+            "contact",
+            "account",
+            "deal",
+            "support_case",
+        ):
+            payload = {
+                "external_message_id": message.external_message_id,
+                "thread_id": message.thread_id,
+                "subject": message.subject,
+                "from_email": message.from_email,
+                "to_emails": message.to_emails or [],
+                "cc_emails": message.cc_emails or [],
+                "bcc_emails": message.bcc_emails or [],
+                "body_text": message.body_text,
+                "body_html": message.body_html,
+                "direction": message.direction,
+                "status": message.status,
+                "received_at": message.received_at,
+                "sent_at": message.sent_at,
+                "is_read": message.is_read,
+                "has_attachments": message.has_attachments,
+            }
+            match = _match_synced_email_records(payload)
+            match = _expand_related_crm_records(match)
+            new_values = {
+                "lead": match.lead,
+                "contact": match.contact,
+                "account": match.account,
+                "deal": match.deal,
+                "support_case": match.support_case,
+            }
+            old_values = {
+                "lead": message.lead,
+                "contact": message.contact,
+                "account": message.account,
+                "deal": message.deal,
+                "support_case": message.support_case,
+            }
+            if old_values == new_values:
+                continue
+
+            message.lead = match.lead
+            message.contact = match.contact
+            message.account = match.account
+            message.deal = match.deal
+            message.support_case = match.support_case
+            message.save(using=db_alias, update_fields=["lead", "contact", "account", "deal", "support_case", "updated_at"])
+            upsert_email_record_link(message)
+            IntegrationLeadSourceEvent.objects.using(db_alias).filter(
+                source_type=IntegrationLeadSourceEvent.SourceType.EMAIL,
+                source_reference=message.external_message_id,
+            ).update(
+                lead=match.lead,
+                contact=match.contact,
+                account=match.account,
+                deal=match.deal,
+                support_case=match.support_case,
+                updated_at=timezone.now(),
+            )
+            updated += 1
+            if not any(new_values.values()):
+                cleared += 1
+    finally:
+        set_current_db_name(previous_db)
+
+    return {"updated": updated, "cleared": cleared}
+
+
+def build_default_provider_messages(provider: EmailProviderIntegration) -> list[dict[str, Any]]:
     now = timezone.now()
     leads = list(Lead.objects.order_by("id")[:3])
     if not leads:
-        logger.info("Provider %s sync has no existing leads to match against; generating fallback mock payload.", provider.pk)
+        logger.info(
+            "Provider %s sync has no CRM records to link yet; generating a starter inbox message.",
+            provider.pk,
+        )
         return [
             {
-                "external_message_id": f"{provider.pk}-fallback",
-                "thread_id": f"thread-{provider.pk}-fallback",
-                "subject": "Zora integration follow-up",
-                "from_email": "prospect@example.com",
+                "external_message_id": f"{provider.pk}-starter-message",
+                "thread_id": f"thread-{provider.pk}-starter-message",
+                "subject": "Welcome to your connected inbox",
+                "from_email": "hello@customer-mail.com",
                 "to_emails": [provider.email_address],
                 "cc_emails": [],
                 "bcc_emails": [],
-                "body_text": "Testing synced email storage for Zora CRM.",
+                "body_text": "Your email integration is ready. New synced conversations will appear here.",
                 "direction": SyncedEmailMessage.Direction.INCOMING,
                 "status": SyncedEmailMessage.Status.RECEIVED,
                 "received_at": now - timedelta(minutes=15),
@@ -521,13 +1566,13 @@ def mocked_provider_messages(provider: EmailProviderIntegration) -> list[dict[st
             {
                 "external_message_id": f"{provider.pk}-lead-{lead.pk}-incoming",
                 "thread_id": f"thread-{provider.pk}-lead-{lead.pk}",
-                "subject": f"Zora integration follow-up for {lead.first_name}",
+                "subject": f"Follow-up for {lead.first_name}",
                 "from_email": lead_email,
                 "to_emails": [provider.email_address],
                 "cc_emails": [],
                 "bcc_emails": [],
-                "body_text": f"Hello Zora team, this is a synced email for lead {lead.pk}.",
-                "body_html": f"<p>Hello Zora team, this is a synced email for lead <strong>{lead.pk}</strong>.</p>",
+                "body_text": f"Hello team, this conversation is linked with lead {lead.pk}.",
+                "body_html": f"<p>Hello team, this conversation is linked with lead <strong>{lead.pk}</strong>.</p>",
                 "direction": SyncedEmailMessage.Direction.INCOMING,
                 "status": SyncedEmailMessage.Status.RECEIVED,
                 "received_at": now - timedelta(hours=index),
@@ -540,9 +1585,151 @@ def mocked_provider_messages(provider: EmailProviderIntegration) -> list[dict[st
     return payloads
 
 
+def build_project_provider_messages(provider: EmailProviderIntegration) -> list[dict[str, Any]]:
+    now = timezone.now()
+    payloads: list[dict[str, Any]] = []
+
+    recent_contacts = (
+        Contact.objects.select_related("account")
+        .filter(is_active=True)
+        .order_by("-updated_at", "-created_at")[:2]
+    )
+    for index, contact in enumerate(recent_contacts, start=1):
+        if not normalize_email(contact.email):
+            continue
+        latest_deal = contact.deals.filter(is_active=True).order_by("-updated_at").first()
+        latest_case = contact.support_cases.filter(is_active=True).order_by("-updated_at").first()
+        reference = latest_case.case_number if latest_case else latest_deal.deal_name if latest_deal else contact.first_name
+        payloads.append(
+            {
+                "external_message_id": f"{provider.pk}-contact-{contact.pk}",
+                "thread_id": f"contact-thread-{contact.pk}",
+                "subject": f"Follow-up for {reference}",
+                "from_email": contact.email,
+                "to_emails": [provider.email_address],
+                "cc_emails": [],
+                "bcc_emails": [],
+                "body_text": f"Hello team, please review the latest update for {reference}.",
+                "body_html": f"<p>Hello team, please review the latest update for <strong>{reference}</strong>.</p>",
+                "direction": SyncedEmailMessage.Direction.INCOMING,
+                "status": SyncedEmailMessage.Status.RECEIVED,
+                "received_at": now - timedelta(minutes=index * 11),
+                "is_read": False,
+                "is_starred": index == 1,
+                "has_attachments": False,
+                "from_name": record_display_name(contact),
+                "company": getattr(contact.account, "account_name", None),
+            }
+        )
+
+    recent_cases = (
+        SupportCase.objects.select_related("related_contact", "account", "deal")
+        .filter(is_active=True)
+        .order_by("-updated_at", "-created_at")[:2]
+    )
+    for index, support_case in enumerate(recent_cases, start=1):
+        sender_email = normalize_email(support_case.email) or normalize_email(getattr(support_case.related_contact, "email", None))
+        if not sender_email:
+            continue
+        payloads.append(
+            {
+                "external_message_id": f"{provider.pk}-case-{support_case.pk}",
+                "thread_id": f"case-thread-{support_case.pk}",
+                "subject": f"Re: {support_case.case_number or support_case.subject}",
+                "from_email": sender_email,
+                "to_emails": [provider.email_address],
+                "cc_emails": [],
+                "bcc_emails": [],
+                "body_text": support_case.description or f"Checking on support case {support_case.case_number or support_case.pk}.",
+                "direction": SyncedEmailMessage.Direction.INCOMING,
+                "status": SyncedEmailMessage.Status.RECEIVED,
+                "received_at": now - timedelta(minutes=30 + index * 13),
+                "is_read": index != 1,
+                "has_attachments": False,
+                "from_name": support_case.reported_by or record_display_name(support_case.related_contact),
+                "company": support_case.company,
+            }
+        )
+
+    recent_leads = Lead.objects.order_by("-updated_at", "-created_at")[:2]
+    for index, lead in enumerate(recent_leads, start=1):
+        lead_email = normalize_email(lead.email)
+        if not lead_email:
+            continue
+        payloads.append(
+            {
+                "external_message_id": f"{provider.pk}-lead-{lead.pk}",
+                "thread_id": f"lead-thread-{lead.pk}",
+                "subject": f"Status update request from {lead.first_name}",
+                "from_email": lead_email,
+                "to_emails": [provider.email_address],
+                "cc_emails": [],
+                "bcc_emails": [],
+                "body_text": f"Hello team, I am checking the status of my request for {lead.company or 'our company'}.",
+                "direction": SyncedEmailMessage.Direction.INCOMING,
+                "status": SyncedEmailMessage.Status.RECEIVED,
+                "received_at": now - timedelta(minutes=55 + index * 9),
+                "is_read": False,
+                "has_attachments": False,
+                "from_name": f"{lead.first_name} {lead.last_name}".strip(),
+                "company": lead.company,
+            }
+        )
+
+    return payloads or build_default_provider_messages(provider)
+
+
 def fetch_provider_messages(provider_integration: EmailProviderIntegration) -> list[dict[str, Any]]:
-    logger.info("Fetching provider messages for provider=%s email=%s", provider_integration.pk, provider_integration.email_address)
-    return mocked_provider_messages(provider_integration)
+    logger.info(
+        "Fetching provider messages for provider=%s email=%s",
+        provider_integration.pk,
+        provider_integration.email_address,
+    )
+    if provider_supports_real_mail_sync(provider_integration):
+        logger.info("Using live IMAP sync for provider=%s", provider_integration.pk)
+        messages = fetch_imap_provider_messages(provider_integration)
+        if messages:
+            return messages
+        logger.info("Live IMAP sync returned no messages for provider=%s", provider_integration.pk)
+        return []
+    logger.info(
+        "Provider %s does not have enough credentials for live sync. Falling back to project-linked messages.",
+        provider_integration.pk,
+    )
+    return build_project_provider_messages(provider_integration)
+
+
+def get_auto_sync_email_providers():
+    return EmailProviderIntegration.objects.filter(
+        is_active=True,
+        sync_enabled=True,
+        crm_sync_enabled=True,
+    ).order_by("id")
+
+
+def sync_current_tenant_email_providers(*, sync_type: str = "incremental_sync") -> list[int]:
+    synced_provider_ids: list[int] = []
+    for provider in get_auto_sync_email_providers():
+        run_provider_sync(
+            provider_integration=provider,
+            sync_type=sync_type,
+            triggered_by=provider.created_by,
+        )
+        synced_provider_ids.append(provider.id)
+    return synced_provider_ids
+
+
+def sync_all_active_tenant_email_providers(*, sync_type: str = "incremental_sync") -> dict[str, list[int]]:
+    synced_by_tenant: dict[str, list[int]] = {}
+    previous_db = get_current_db_name()
+    try:
+        for tenant_db in Company.objects.filter(status="Active").values_list("db_name", flat=True):
+            configure_tenant_database_in_settings(tenant_db)
+            set_current_db_name(tenant_db)
+            synced_by_tenant[tenant_db] = sync_current_tenant_email_providers(sync_type=sync_type)
+    finally:
+        set_current_db_name(previous_db)
+    return synced_by_tenant
 
 
 @transaction.atomic
@@ -568,14 +1755,17 @@ def run_provider_sync(*, provider_integration: EmailProviderIntegration, sync_ty
             created_ids.append(message.id)
         log.status = EmailSyncLog.Status.SUCCESS
         log.last_synced_at = timezone.now()
+        sync_source = "live_provider" if provider_supports_real_mail_sync(provider_integration) else "project_records"
         log.metadata = {
             **log.metadata,
             "message_ids": created_ids,
             "messages_processed": len(created_ids),
             "lead_matches": SyncedEmailMessage.objects.filter(id__in=created_ids, lead__isnull=False).count(),
+            "sync_source": sync_source,
         }
         provider_integration.sync_enabled = True
-        provider_integration.save(update_fields=["sync_enabled", "updated_at"])
+        provider_integration.last_synced_at = log.last_synced_at
+        provider_integration.save(update_fields=["sync_enabled", "last_synced_at", "updated_at"])
         logger.info("Provider sync completed provider=%s messages_processed=%s", provider_integration.pk, len(created_ids))
     except Exception as exc:
         logger.exception("Provider sync failed provider=%s", provider_integration.pk)
@@ -727,6 +1917,11 @@ def ingest_social_message(*, payload: dict[str, Any], user=None) -> SocialMessag
             company=getattr(account, "account_name", None) or "Social Prospect",
         )
 
+    created_at_source = payload.get("created_at_source")
+    if isinstance(created_at_source, str):
+        parsed_created_at = parse_datetime(created_at_source)
+        created_at_source = parsed_created_at or timezone.now()
+
     defaults = {
         "brand": brand,
         "social_account": social_account,
@@ -735,7 +1930,7 @@ def ingest_social_message(*, payload: dict[str, Any], user=None) -> SocialMessag
         "sender_email": sender_email,
         "sender_phone": sender_phone,
         "message": text,
-        "created_at_source": payload.get("created_at_source") or timezone.now(),
+        "created_at_source": created_at_source or timezone.now(),
         "payload": _json_safe(payload),
         "lead": lead,
         "contact": contact,
@@ -832,6 +2027,7 @@ def convert_visitor_event(*, visitor_event: VisitorLeadEvent, user=None):
 @transaction.atomic
 def create_visitor_event(*, payload: dict[str, Any], user=None):
     portal = payload["portal"]
+    validate_visitor_event_origin(portal=portal, payload=payload)
     visitor_email = normalize_email(payload.get("visitor_email"))
     identified_email = normalize_email(payload.get("identified_email")) or visitor_email
     visitor_name = payload.get("visitor_name")
@@ -946,9 +2142,6 @@ def build_sales_inbox_queryset(user):
         "support_case",
         "provider_integration",
     )
-    if not is_integration_admin(user):
-        queryset = queryset.filter(provider_integration__created_by=user)
-
     return queryset.annotate(
         priority_rank=Case(
             When(is_read=False, then=Value(0)),

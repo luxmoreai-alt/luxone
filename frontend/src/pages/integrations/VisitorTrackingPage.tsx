@@ -3,6 +3,7 @@ import CRMSectionCard from "../../components/crm/CRMSectionCard";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import { integrationsApi } from "../../integrations/api";
 import IntegrationHeader from "../../integrations/components/IntegrationHeader";
+import IntegrationSetupChecklist from "../../integrations/components/IntegrationSetupChecklist";
 import VisitorLeadGenerationModal from "../../integrations/components/VisitorLeadGenerationModal";
 import VisitorPortalForm from "../../integrations/components/VisitorPortalForm";
 import VisitorTrackingCodeModal from "../../integrations/components/VisitorTrackingCodeModal";
@@ -62,6 +63,30 @@ export default function VisitorTrackingPage() {
         return result;
       }, {}),
     [settings]
+  );
+  const portalsWithTracking = useMemo(
+    () => portals.filter((portal) => Boolean(settingsByPortal[portal.id]?.tracking_code)),
+    [portals, settingsByPortal]
+  );
+  const setupItems = useMemo(
+    () => [
+      {
+        label: "Create Portal",
+        description: "Add the website or portal you want to track from the CRM.",
+        done: portals.length > 0,
+      },
+      {
+        label: "Generate Tracking Code",
+        description: "Open a portal and copy the tracking code snippet for the website team.",
+        done: portalsWithTracking.length > 0,
+      },
+      {
+        label: "Receive Visitor Events",
+        description: "Confirm visitor activity is arriving and can be converted into leads.",
+        done: events.length > 0,
+      },
+    ],
+    [portals.length, portalsWithTracking.length, events.length]
   );
 
   const setSuccess = (message: string) => setNotice({ tone: "success", message });
@@ -150,33 +175,87 @@ export default function VisitorTrackingPage() {
           <div className="text-sm text-slate-500">Loading visitor tracking...</div>
         ) : null}
 
+        <IntegrationSetupChecklist
+          title="Setup Progress"
+          subtitle="Use this order for visitor tracking: create a portal, copy the tracking code, then confirm visitor events are coming in."
+          items={setupItems}
+        />
+
         <VisitorTrackingLanding
           hasPortals={portals.length > 0}
           onGetStarted={openCreatePortal}
         />
 
-        <VisitorTrackingTable
-          portals={portals}
-          events={events}
-          onCreatePortal={openCreatePortal}
-          onManagePortal={handleManagePortal}
-          onDeactivatePortal={(portal) => {
-            if (!window.confirm(`Deactivate visitor portal "${portal.portal_name}"?`)) {
-              return;
+        <CRMSectionCard title="Step 1: Portal Setup">
+          <p className="mb-4 text-sm text-slate-600">
+            Create the portal or website entry first. Each portal gets its own lead capture settings and tracking snippet.
+          </p>
+          <VisitorTrackingTable
+            portals={portals}
+            events={[]}
+            onCreatePortal={openCreatePortal}
+            onManagePortal={handleManagePortal}
+            onDeactivatePortal={(portal) => {
+              if (!window.confirm(`Deactivate visitor portal "${portal.portal_name}"?`)) {
+                return;
+              }
+              void runAction(
+                () => integrationsApi.deactivateVisitorPortal(portal.id),
+                "Visitor portal deactivated successfully."
+              );
+            }}
+            onViewCode={(portal) => void handleViewCode(portal)}
+            onConvertEvent={() => undefined}
+            showEvents={false}
+          />
+        </CRMSectionCard>
+
+        <CRMSectionCard title="Step 2: Install Tracking And Lead Rules">
+          <div className="grid gap-4 lg:grid-cols-[1fr,0.95fr]">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+              <div className="font-medium text-slate-900">What To Do Next</div>
+              <ol className="mt-3 list-decimal space-y-2 pl-5">
+                <li>Open a portal and click <span className="font-medium text-slate-900">View Code</span>.</li>
+                <li>Share the tracking script with the website team.</li>
+                <li>Use <span className="font-medium text-slate-900">Manage</span> to define how visitors become leads or contacts.</li>
+              </ol>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+              <div className="font-medium text-slate-900">Tracking Coverage</div>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-slate-500">Portals With Code</div>
+                  <div className="mt-1 text-2xl font-semibold text-slate-900">{portalsWithTracking.length}</div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-slate-500">Lead Rules Enabled</div>
+                  <div className="mt-1 text-2xl font-semibold text-slate-900">{settings.filter((setting) => setting.status_enabled).length}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </CRMSectionCard>
+
+        <CRMSectionCard title="Step 3: Review Visitor Events">
+          <p className="mb-4 text-sm text-slate-600">
+            Once tracking is live, visitor events appear here. Convert important visitors into leads when they are ready for follow-up.
+          </p>
+          <VisitorTrackingTable
+            portals={[]}
+            events={events}
+            onCreatePortal={openCreatePortal}
+            onManagePortal={handleManagePortal}
+            onDeactivatePortal={() => undefined}
+            onViewCode={() => undefined}
+            onConvertEvent={(event) =>
+              void runAction(
+                () => integrationsApi.convertVisitorEventToLead(event.id),
+                "Visitor event converted to lead successfully."
+              )
             }
-            void runAction(
-              () => integrationsApi.deactivateVisitorPortal(portal.id),
-              "Visitor portal deactivated successfully."
-            );
-          }}
-          onViewCode={(portal) => void handleViewCode(portal)}
-          onConvertEvent={(event) =>
-            void runAction(
-              () => integrationsApi.convertVisitorEventToLead(event.id),
-              "Visitor event converted to lead successfully."
-            )
-          }
-        />
+            showPortals={false}
+          />
+        </CRMSectionCard>
 
         <CRMSectionCard title="Visitor Tracking Overview">
           <div className="grid gap-3 md:grid-cols-3">

@@ -44,7 +44,6 @@ const getPageTitle = (pathname: string) => {
   if (pathname === "/campaigns" || pathname.startsWith("/campaigns/")) return "Campaigns";
   if (pathname === "/support/cases" || pathname.startsWith("/support/cases/")) return "Cases";
   if (pathname === "/support/solutions" || pathname.startsWith("/support/solutions/")) return "Solutions";
-  if (pathname === "/services/promo" || pathname.startsWith("/services/promo/")) return "Services";
   if (pathname === "/services/business-hours" || pathname.startsWith("/services/business-hours/")) return "Business Hours";
   if (pathname === "/services/catalog" || pathname.startsWith("/services/catalog/")) return "Services Catalog";
   if (pathname === "/services/appointments" || pathname.startsWith("/services/appointments/")) return "Appointments";

@@ -61,6 +61,13 @@ export default function ServicesListPage() {
   }, [rows, visibleColumns, sidebarFilters, columnFilters, sortState]);
 
   const paginatedRows = useMemo(() => processedRows.slice((page - 1) * 10, page * 10), [page, processedRows]);
+  const activeServicesCount = useMemo(() => rows.filter((row) => row.status.toLowerCase() === "active").length, [rows]);
+  const draftServicesCount = useMemo(() => rows.filter((row) => row.status.toLowerCase() === "draft").length, [rows]);
+  const totalAssignedMembers = useMemo(() => rows.reduce((sum, row) => sum + (row.membersCount || 0), 0), [rows]);
+  const averageDuration = useMemo(
+    () => (rows.length ? Math.round(rows.reduce((sum, row) => sum + row.durationMinutes, 0) / rows.length) : 0),
+    [rows]
+  );
 
   return (
     <DashboardLayout>
@@ -74,6 +81,28 @@ export default function ServicesListPage() {
           onToggleFilter={() => setFilterOpen((prev) => !prev)}
           onCreateClick={() => navigate("/services/catalog/create")}
         />
+
+        {!loading && !error ? (
+          <div className="grid gap-3 md:grid-cols-4">
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="text-xs uppercase tracking-wide text-slate-500">Total Services</div>
+              <div className="mt-2 text-2xl font-semibold text-slate-900">{rows.length}</div>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="text-xs uppercase tracking-wide text-slate-500">Active Services</div>
+              <div className="mt-2 text-2xl font-semibold text-slate-900">{activeServicesCount}</div>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="text-xs uppercase tracking-wide text-slate-500">Draft Services</div>
+              <div className="mt-2 text-2xl font-semibold text-slate-900">{draftServicesCount}</div>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="text-xs uppercase tracking-wide text-slate-500">Avg Duration</div>
+              <div className="mt-2 text-2xl font-semibold text-slate-900">{averageDuration} min</div>
+              <div className="mt-1 text-xs text-slate-500">{totalAssignedMembers} member assignments</div>
+            </div>
+          </div>
+        ) : null}
 
         {loading ? <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Loading services...</div> : null}
         {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-600">{error}</div> : null}
@@ -137,4 +166,3 @@ export default function ServicesListPage() {
     </DashboardLayout>
   );
 }
-

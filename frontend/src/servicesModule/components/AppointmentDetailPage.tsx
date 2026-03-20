@@ -59,12 +59,26 @@ export default function AppointmentDetailPage() {
               <div><p className="text-xs uppercase tracking-wide text-slate-500">Time</p><p className="mt-1 text-sm text-slate-800">{formatTimeValue(appointment.appointmentStartTime)} - {formatTimeValue(appointment.appointmentEndTime)}</p></div>
               <div><p className="text-xs uppercase tracking-wide text-slate-500">Location</p><p className="mt-1 break-words text-sm text-slate-800">{appointment.location || "-"}</p></div>
               <div><p className="text-xs uppercase tracking-wide text-slate-500">Status</p><p className="mt-1 text-sm text-slate-800">{appointment.status}</p></div>
+              <div><p className="text-xs uppercase tracking-wide text-slate-500">Coverage</p><p className="mt-1 text-sm text-slate-800">{appointment.coverageType || "-"} / {appointment.coverageStatus || "-"}</p></div>
+              <div><p className="text-xs uppercase tracking-wide text-slate-500">Asset</p><p className="mt-1 text-sm text-slate-800">{appointment.customerAssetName || appointment.productName || "-"}</p></div>
+              <div><p className="text-xs uppercase tracking-wide text-slate-500">Serial Number</p><p className="mt-1 text-sm text-slate-800">{appointment.productSerialNumber || "-"}</p></div>
+              <div><p className="text-xs uppercase tracking-wide text-slate-500">Sales Order</p><p className="mt-1 text-sm text-slate-800">{appointment.salesOrderSubject || appointment.salesOrderId || "-"}</p></div>
+              <div><p className="text-xs uppercase tracking-wide text-slate-500">Invoice</p><p className="mt-1 text-sm text-slate-800">{appointment.invoiceSubject || appointment.invoiceId || "-"}</p></div>
+              <div><p className="text-xs uppercase tracking-wide text-slate-500">Completed At</p><p className="mt-1 text-sm text-slate-800">{appointment.completedAt ? new Date(appointment.completedAt).toLocaleString() : "-"}</p></div>
               <div><p className="text-xs uppercase tracking-wide text-slate-500">Business Hours</p><p className="mt-1 text-sm text-slate-800">{appointment.businessHoursName || "-"}</p></div>
               <div><p className="text-xs uppercase tracking-wide text-slate-500">Timezone</p><p className="mt-1 text-sm text-slate-800">{appointment.businessHoursTimezone || "-"}</p></div>
             </div>
             <div className="mt-4">
               <p className="text-xs uppercase tracking-wide text-slate-500">Notes</p>
               <p className="mt-1 whitespace-pre-wrap text-sm text-slate-800">{appointment.notes || "-"}</p>
+            </div>
+            <div className="mt-4">
+              <p className="text-xs uppercase tracking-wide text-slate-500">Completion Notes</p>
+              <p className="mt-1 whitespace-pre-wrap text-sm text-slate-800">{appointment.completionNotes || "-"}</p>
+            </div>
+            <div className="mt-4">
+              <p className="text-xs uppercase tracking-wide text-slate-500">Completion Proof</p>
+              <p className="mt-1 break-all text-sm text-slate-800">{appointment.completionProofUrl || "-"}</p>
             </div>
             <div className="mt-4">
               <p className="text-xs uppercase tracking-wide text-slate-500">Public Booking URL</p>

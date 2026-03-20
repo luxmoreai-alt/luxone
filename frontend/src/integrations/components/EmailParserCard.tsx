@@ -12,6 +12,7 @@ export default function EmailParserCard({ parser, onGenerate, onUpdate, onIngest
   return (
     <CRMSectionCard
       title="Email Parser"
+      subtitle="Use a parser inbox only when you want structured inbound emails to create CRM records automatically."
       action={
         <div className="flex gap-2">
           {!parser ? (
@@ -43,4 +44,3 @@ export default function EmailParserCard({ parser, onGenerate, onUpdate, onIngest
     </CRMSectionCard>
   );
 }
-

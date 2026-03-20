@@ -8,7 +8,10 @@ type Props = {
 
 export default function SocialLanding({ hasBrands, onGetStarted }: Props) {
   return (
-    <CRMSectionCard title="Social Integration">
+    <CRMSectionCard
+      title="Social Integration"
+      subtitle="Connect brand-owned social channels so engagement can be assigned and tracked inside the CRM."
+    >
       {hasBrands ? (
         <div className="grid gap-4 md:grid-cols-3">
           {[
@@ -32,4 +35,3 @@ export default function SocialLanding({ hasBrands, onGetStarted }: Props) {
     </CRMSectionCard>
   );
 }
-

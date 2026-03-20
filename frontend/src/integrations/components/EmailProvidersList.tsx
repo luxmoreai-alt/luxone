@@ -16,7 +16,10 @@ type Props = {
 export default function EmailProvidersList({ providers, syncingProviderId, onCreate, onEdit, onSync, onDelete }: Props) {
   return (
     <div className="space-y-4">
-      <CRMSectionCard title="Email Providers">
+      <CRMSectionCard
+        title="Email Providers"
+        subtitle="Choose the mailbox provider you want to connect to the CRM."
+      >
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {emailServiceCards.map((card) => (
             <div key={card.key} className="rounded-xl border border-slate-200 p-4">
@@ -34,6 +37,7 @@ export default function EmailProvidersList({ providers, syncingProviderId, onCre
 
       <CRMSectionCard
         title="Connected Providers"
+        subtitle="These providers are available for sync, sending defaults, and inbox visibility."
         action={
           <button type="button" onClick={() => onCreate()} className="rounded-md bg-blue-600 px-3 py-2 text-xs font-medium text-white">
             Add Provider

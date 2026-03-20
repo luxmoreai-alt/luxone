@@ -90,17 +90,20 @@ function mapEmail(parentId: string, item: any) {
     sentAt: asString(item.created_at),
     sentBy: asString(item.sent_by_email),
     status: "Sent" as const,
+    previewText: asString(item.body || item.body_text || item.body_html),
   };
 }
 
 function mapIntegrationEmail(parentId: string, item: any) {
+  const direction = asString(item.direction).toLowerCase();
   return {
     id: `integration-${asString(item.id)}`,
     parentId,
     subject: asString(item.subject) || "(No subject)",
     sentAt: asString(item.sent_at || item.received_at || item.created_at),
     sentBy: asString(item.from_email),
-    status: "Sent" as const,
+    status: direction === "incoming" ? ("Received" as const) : ("Sent" as const),
+    previewText: asString(item.preview_text),
   };
 }
 
@@ -208,43 +211,17 @@ export async function getSupportList(moduleKey: SupportModuleKey): Promise<CRMRe
 }
 
 export async function getCaseDetail(id: string): Promise<CaseDetailData> {
-  const [detail, integrationEmails, integrationSourceEvents, socialMessages] = await Promise.all([
-    apiRequest<any>(`${modulePathMap.cases}/${id}`),
-    integrationsApi.listSyncedEmailMessages({ support_case: id }).catch(() => []),
-    integrationsApi.listLeadSourceEvents({ support_case: id }).catch(() => []),
+  const detail = await apiRequest<any>(`${modulePathMap.cases}/${id}`);
+  const [integrationEmails, socialMessages] = await Promise.all([
+    integrationsApi.listCaseRecordEmails(id).catch(() => []),
     integrationsApi.listSocialMessages({ support_case: id }).catch(() => []),
   ]);
-  const integrationConnectedRecords = (
-    await Promise.all([
-      detail.related_contact ? integrationsApi.listLeadSourceEvents({ contact: detail.related_contact }).catch(() => []) : Promise.resolve([]),
-      detail.deal ? integrationsApi.listLeadSourceEvents({ deal: detail.deal }).catch(() => []) : Promise.resolve([]),
-    ])
-  )
-    .flat()
-    .concat(integrationSourceEvents)
-    .map((item: any) => ({
-      id: `integration-event-${asString(item.id)}`,
-      parentId: id,
-      recordType: asString(item.source_type).replace(/_/g, " "),
-      name: asString(item.source_label || item.source_reference),
-      owner: "",
-      status: asString(item.status || item.source_reference),
-    }));
   const relatedEmails = mergeEmails(
     (detail.emails || []).map((item: any) => mapEmail(id, item)),
     integrationEmails.map((item: any) => mapIntegrationEmail(id, item))
   );
   const relatedConnectedRecords = [
     ...(detail.linked_records || []).map((item: any) => mapConnectedRecord(id, item)),
-    ...integrationConnectedRecords,
-    ...socialMessages.map((item: any) => ({
-      id: `social-${asString(item.id)}`,
-      parentId: id,
-      recordType: `${asString(item.platform)} message`,
-      name: asString(item.sender_name || item.sender_email || item.profile_handle || "Social message"),
-      owner: asString(item.contact_name || item.account_name || item.lead_name),
-      status: "Linked",
-    })),
   ].filter((item, index, list) => {
     const key = `${item.recordType}|${item.name}|${item.status}`;
     return list.findIndex((entry) => `${entry.recordType}|${entry.name}|${entry.status}` === key) === index;

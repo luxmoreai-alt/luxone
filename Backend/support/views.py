@@ -10,6 +10,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from integrations.models import SyncedEmailMessage
+from integrations.services import create_outgoing_crm_email, get_user_default_email_provider
 
 from .filters import SupportCaseFilter, SupportSolutionFilter
 from .models import SupportImportJob
@@ -255,6 +256,25 @@ class SupportCaseViewSet(SupportBaseMixin, viewsets.ModelViewSet):
         serializer = SupportEmailLogSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         email_log = add_email_log("case", case, serializer.validated_data, request.user)
+        provider = get_user_default_email_provider(request.user)
+        recipient_email = (serializer.validated_data.get("to_email") or case.email or "").strip()
+        if provider and recipient_email:
+            create_outgoing_crm_email(
+                provider_integration=provider,
+                subject=serializer.validated_data["subject"],
+                body=serializer.validated_data["body"],
+                to_emails=[recipient_email],
+                owner=request.user,
+                account=case.account,
+                contact=case.related_contact,
+                deal=case.deal,
+                support_case=case,
+                thread_id=f"case-{case.pk}",
+                metadata={
+                    "from_name": provider.display_name or getattr(request.user, "email", "") or "CRM User",
+                    "case_number": case.case_number,
+                },
+            )
         return Response(SupportEmailLogSerializer(email_log).data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=["post"], url_path="import/upload")
@@ -439,6 +459,22 @@ class SupportSolutionViewSet(SupportBaseMixin, viewsets.ModelViewSet):
         serializer = SupportEmailLogSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         email_log = add_email_log("solution", solution, serializer.validated_data, request.user)
+        provider = get_user_default_email_provider(request.user)
+        recipient_email = (serializer.validated_data.get("to_email") or "").strip()
+        if provider and recipient_email:
+            create_outgoing_crm_email(
+                provider_integration=provider,
+                subject=serializer.validated_data["subject"],
+                body=serializer.validated_data["body"],
+                to_emails=[recipient_email],
+                owner=request.user,
+                support_case=solution.case,
+                thread_id=f"solution-{solution.pk}",
+                metadata={
+                    "from_name": provider.display_name or getattr(request.user, "email", "") or "CRM User",
+                    "solution_number": solution.solution_number,
+                },
+            )
         return Response(SupportEmailLogSerializer(email_log).data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=["post"], url_path="import/upload")

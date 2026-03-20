@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import re_path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
@@ -14,7 +14,7 @@ from .views import (
     VendorViewSet,
 )
 
-router = DefaultRouter(trailing_slash=False)
+router = DefaultRouter()
 router.register(r"products", ProductViewSet, basename="product")
 router.register(r"vendors", VendorViewSet, basename="vendor")
 router.register(r"price-books", PriceBookViewSet, basename="price-book")
@@ -34,5 +34,5 @@ router.register(r"inventory/configurator-rules", ConfiguratorRuleViewSet, basena
 
 urlpatterns = [
     *router.urls,
-    path("inventory/lookups/<str:lookup_name>", InventoryLookupAPIView.as_view(), name="inventory-lookup"),
+    re_path(r"^inventory/lookups/(?P<lookup_name>[^/]+)/?$", InventoryLookupAPIView.as_view(), name="inventory-lookup"),
 ]

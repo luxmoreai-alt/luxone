@@ -967,6 +967,24 @@ class InventoryLookupAPIView(APIView):
                     for obj in queryset[:25]
                 ]
             )
+        if lookup_name == "invoices":
+            queryset = invoice_service.list_invoices(user=request.user)
+            if query:
+                queryset = queryset.filter(subject__icontains=query)
+            return Response(
+                [
+                    {
+                        "id": obj.id,
+                        "name": obj.subject,
+                        "label": obj.subject,
+                        "account_id": obj.account_id,
+                        "contact_id": obj.contact_id,
+                        "deal_id": obj.deal_id,
+                        "sales_order_id": obj.sales_order_id,
+                    }
+                    for obj in queryset[:25]
+                ]
+            )
         if lookup_name == "purchase-orders":
             queryset = purchase_order_service.list_purchase_orders(user=request.user)
             if query:

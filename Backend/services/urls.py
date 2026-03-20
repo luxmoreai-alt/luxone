@@ -5,6 +5,7 @@ from .views import (
     AppointmentDetailAPIView,
     AppointmentListCreateAPIView,
     AppointmentRescheduleAPIView,
+    AppointmentSummaryAPIView,
     BusinessHoursDetailAPIView,
     BusinessHoursListCreateAPIView,
     BusinessHoursSetDefaultAPIView,
@@ -39,6 +40,7 @@ urlpatterns = [
         name="services-business-hours-set-default",
     ),
     path("services/appointments/", AppointmentListCreateAPIView.as_view(), name="services-appointments-list"),
+    path("services/appointments/summary/", AppointmentSummaryAPIView.as_view(), name="services-appointments-summary"),
     path("services/appointments/<int:id>/", AppointmentDetailAPIView.as_view(), name="services-appointments-detail"),
     path("services/appointments/<int:id>/cancel/", AppointmentCancelAPIView.as_view(), name="services-appointments-cancel"),
     path(

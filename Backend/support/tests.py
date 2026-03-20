@@ -59,7 +59,7 @@ class SupportSmartDefaultsTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         case = SupportCase.objects.get(pk=response.data["id"])
-        self.assertEqual(case.case_number, "CASE-0001")
+        self.assertEqual(case.case_number, "CAS0001")
         self.assertEqual(case.owner, self.user)
         self.assertEqual(case.status, "Open")
         self.assertEqual(case.priority, "Medium")
@@ -102,7 +102,7 @@ class SupportSmartDefaultsTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         solution = SupportSolution.objects.get(pk=response.data["id"])
-        self.assertEqual(solution.solution_number, "SOL-0001")
+        self.assertEqual(solution.solution_number, "SOL0001")
         self.assertEqual(solution.owner, self.user)
         self.assertEqual(solution.status, "Draft")
         self.assertEqual(solution.product, self.product)

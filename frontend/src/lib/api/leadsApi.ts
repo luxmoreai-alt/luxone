@@ -314,7 +314,7 @@ export async function getLeadConnectedRecords(id: string): Promise<ConnectedReco
     recordType: item.source_type,
     name: item.source_label,
     owner: "",
-    status: item.source_reference,
+    status: item.source_type === "email" ? "Linked" : item.source_reference,
   }));
 }
 
@@ -348,22 +348,26 @@ export async function addLeadNote(id: string, note: string) {
   if (!res.ok) throw new Error(await res.text());
 }
 
-export async function sendLeadEmail(id: string, payload: { subject: string; body: string }) {
+export async function sendLeadEmail(id: string, payload: { subject: string; body: string; to?: string }) {
   const res = await fetch(api(`/leads/${id}/send-email`), {
     method: "POST",
     headers: buildHeaders(),
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      subject: payload.subject,
+      body: payload.body,
+      to_email: payload.to ?? "",
+    }),
   });
   if (!res.ok) throw new Error(await res.text());
 }
 
-export async function sendEmail(payload: {
+export async function sendEmail(_payload: {
   to: string;
   subject: string;
   body: string;
   from_email?: string;
 }) {
-  console.log("sendEmail", payload);
+  throw new Error("Direct provider send is not available here. Send from a CRM record with integrations enabled.");
 }
 
 export async function createLeadTask(id: string, payload: { subject: string; description?: string }) {

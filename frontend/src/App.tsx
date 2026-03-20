@@ -44,7 +44,6 @@ import SolutionsPage from "./pages/support/SolutionsPage";
 import SolutionFormRoute from "./pages/support/SolutionFormRoute";
 import SolutionDetailRoute from "./pages/support/SolutionDetailRoute";
 import SolutionImportRoute from "./pages/support/SolutionImportRoute";
-import ServicesPromoRoute from "./pages/servicesModule/ServicesPromoRoute";
 import BusinessHoursRoute from "./pages/servicesModule/BusinessHoursRoute";
 import ServicesCatalogPage from "./pages/servicesModule/ServicesCatalogPage";
 import ServiceFormRoute from "./pages/servicesModule/ServiceFormRoute";
@@ -170,7 +169,6 @@ export default function App() {
         <Route path="/support/solutions/:id/edit" element={<SolutionFormRoute />} />
         <Route path="/support/solutions/import" element={<SolutionImportRoute />} />
 
-        <Route path="/services/promo" element={<ServicesPromoRoute />} />
         <Route path="/services/business-hours" element={<BusinessHoursRoute />} />
         <Route path="/services/business-hours/new" element={<BusinessHoursRoute />} />
         <Route path="/services/catalog" element={<ServicesCatalogPage />} />

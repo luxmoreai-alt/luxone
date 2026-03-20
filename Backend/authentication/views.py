@@ -266,6 +266,7 @@ class UserManagementViewSet(viewsets.ViewSet):
             password=data["password"],
         )
         new_user.role = assigned_role
+        new_user.team = data.get("team", User.Team.GENERAL)
         new_user.organization = creator.organization
         new_user.manager = manager_for_new_user
         new_user.is_active = True

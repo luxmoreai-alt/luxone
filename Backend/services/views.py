@@ -7,6 +7,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from organizations.services import get_assignable_users
+
 from .models import BusinessHours, ServiceDomainMapping, ServiceHoliday
 from .serializers import (
     AppointmentSerializer,
@@ -36,6 +38,7 @@ from .services import (
     get_hierarchy_preference,
     get_service,
     get_services_settings,
+    build_service_operational_summary,
     list_appointments,
     list_business_hours,
     list_job_sheets,
@@ -58,11 +61,33 @@ class ServicesAuthenticatedMixin:
 class ServiceTeamMembersAPIView(ServicesAuthenticatedMixin, APIView):
     def get(self, request):
         query = (request.query_params.get("q") or "").strip()
-        queryset = User.objects.filter(is_active=True).order_by("email")
+        team = (request.query_params.get("team") or "").strip()
+        service_id = (request.query_params.get("service_id") or "").strip()
+        queryset = get_assignable_users(request.user).order_by("email")
+        if service_id:
+            service = get_service(service_id)
+            team = service.delivery_team
+        if team:
+            queryset = queryset.filter(team=team)
         if query:
             queryset = queryset.filter(email__icontains=query)
         queryset = queryset[:50]
         return Response(ServiceUserLookupSerializer(queryset, many=True).data)
+
+
+class AppointmentSummaryAPIView(ServicesAuthenticatedMixin, APIView):
+    def get(self, request):
+        queryset = list_appointments()
+        service_id = request.query_params.get("service")
+        assigned_member = request.query_params.get("assigned_member")
+        status_value = request.query_params.get("status")
+        if service_id:
+            queryset = queryset.filter(service_id=service_id)
+        if assigned_member:
+            queryset = queryset.filter(assigned_member_id=assigned_member)
+        if status_value:
+            queryset = queryset.filter(status=status_value)
+        return Response(build_service_operational_summary(queryset))
 
 
 class ServicesSetupStatusAPIView(ServicesAuthenticatedMixin, APIView):
@@ -180,11 +205,14 @@ class ServiceMembersAPIView(ServicesAuthenticatedMixin, APIView):
         primary_member_id = request.data.get("primary_member_id")
         if not isinstance(member_ids, list):
             return Response({"member_ids": ["Member ids must be provided as a list."]}, status=status.HTTP_400_BAD_REQUEST)
-        valid_member_ids = set(User.objects.filter(id__in=member_ids, is_active=True).values_list("id", flat=True))
+        valid_users = User.objects.filter(id__in=member_ids, is_active=True)
+        if service.delivery_team:
+            valid_users = valid_users.filter(team=service.delivery_team)
+        valid_member_ids = set(valid_users.values_list("id", flat=True))
         missing_ids = [member_id for member_id in member_ids if member_id not in valid_member_ids]
         if missing_ids:
             return Response(
-                {"member_ids": [f"Invalid active member ids: {', '.join(str(member_id) for member_id in missing_ids)}"]},
+                {"member_ids": [f"Invalid members for the selected delivery team: {', '.join(str(member_id) for member_id in missing_ids)}"]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if primary_member_id is not None and primary_member_id not in valid_member_ids:
@@ -206,8 +234,29 @@ class ServiceMemberDetailAPIView(ServicesAuthenticatedMixin, APIView):
 class AppointmentListCreateAPIView(ServicesAuthenticatedMixin, generics.ListCreateAPIView):
     serializer_class = AppointmentSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ["service", "status", "assigned_member", "appointment_for_type", "appointment_date"]
-    search_fields = ["appointment_number", "location", "notes"]
+    filterset_fields = [
+        "service",
+        "status",
+        "assigned_member",
+        "appointment_for_type",
+        "appointment_date",
+        "product",
+        "sales_order",
+        "invoice",
+        "coverage_type",
+        "coverage_status",
+    ]
+    search_fields = [
+        "appointment_number",
+        "location",
+        "notes",
+        "customer_asset_name",
+        "product_serial_number",
+        "completion_notes",
+        "sales_order__subject",
+        "invoice__subject",
+        "product__product_name",
+    ]
     ordering_fields = ["appointment_date", "appointment_start_time", "created_at", "updated_at"]
     ordering = ["appointment_date", "appointment_start_time", "id"]
 

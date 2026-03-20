@@ -3,7 +3,6 @@ from django.core.validators import EmailValidator
 from django.db import models as django_models
 from django.db import transaction
 from django.db.models import Prefetch
-from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
@@ -14,7 +13,12 @@ from rest_framework.response import Response
 
 from activities.models import Call, LeadActivity
 from activities.serializers import LeadActivitySerializer
-from integrations.services import get_lead_connected_records, get_lead_emails
+from integrations.services import (
+    create_outgoing_crm_email,
+    get_lead_connected_records,
+    get_lead_emails,
+    get_user_default_email_provider,
+)
 from notes.models import LeadNote
 from notes.serializers import LeadNoteSerializer
 
@@ -534,13 +538,42 @@ class LeadViewSet(viewsets.ModelViewSet):
         lead = self.get_object()
         serializer = LeadSendEmailSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        provider = get_user_default_email_provider(request.user)
+        if not provider:
+            return Response(
+                {"detail": "No active CRM-synced email provider is configured for this user."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        recipient_email = (serializer.validated_data.get("to_email") or lead.email or "").strip()
+        if not recipient_email:
+            return Response(
+                {"detail": "Lead does not have an email address."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        create_outgoing_crm_email(
+            provider_integration=provider,
+            subject=serializer.validated_data["subject"],
+            body=serializer.validated_data["body"],
+            to_emails=[recipient_email],
+            owner=request.user,
+            lead=lead,
+            contact=lead.converted_contact,
+            account=lead.converted_account,
+            deal=lead.converted_deal,
+            thread_id=f"lead-{lead.pk}",
+            metadata={
+                "from_name": provider.display_name or getattr(request.user, "email", "") or "CRM User",
+                "company": lead.company,
+            },
+        )
         create_activity_log(
             lead=lead,
             action="Email sent",
             description=serializer.validated_data["subject"],
             user=request.user,
         )
-        return Response({"message": "Email logged successfully"}, status=status.HTTP_201_CREATED)
+        return Response({"message": "Email sent and synced successfully"}, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["get"], url_path="emails")
     def emails(self, request, pk=None):

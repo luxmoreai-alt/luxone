@@ -39,9 +39,11 @@ function flattenErrorPayload(value: unknown): string[] {
 }
 
 function buildUrl(path: string, query?: RequestOptions["query"]) {
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const normalizedPathWithPrefix = path.startsWith("/") ? path : `/${path}`;
+  const [pathname, search = ""] = normalizedPathWithPrefix.split("?", 2);
+  const normalizedPath = pathname.endsWith("/") ? pathname : `${pathname}/`;
   const base = getResolvedApiBaseUrl();
-  const url = new URL(`${base}${normalizedPath}`);
+  const url = new URL(`${base}${normalizedPath}${search ? `?${search}` : ""}`);
 
   if (query) {
     Object.entries(query).forEach(([key, value]) => {

@@ -1,13 +1,21 @@
 from __future__ import annotations
 
+from datetime import timedelta
+from django.conf import settings
+from django.core import signing
+from django.http import HttpResponse, HttpResponseRedirect
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
+import os
+import json
+from urllib import parse as urllib_parse, request as urllib_request, error as urllib_error
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.utils import timezone
 
 from .filters import (
     EmailAuthenticationDomainFilter,
@@ -23,12 +31,12 @@ from .filters import (
 from .models import (
     BCCDropboxSetting,
     CustomEmailFieldPreference,
+    EmailProviderIntegration,
     EmailAuthenticationDomain,
     EmailComposeSetting,
     EmailCredibilityMetric,
     EmailInsightSetting,
     EmailParserInbox,
-    EmailProviderIntegration,
     EmailRelayServer,
     EmailSharingPermission,
     EmailSyncLog,
@@ -51,6 +59,9 @@ from .serializers import (
     BCCAddressAddSerializer,
     BCCAddressVerifySerializer,
     BCCDropboxSettingSerializer,
+    CRMEmailDetailSerializer,
+    CRMEmailSendSerializer,
+    CRMEmailSyncSerializer,
     CredibilityReportSerializer,
     CustomEmailFieldPreferenceSerializer,
     EmailAuthenticationDomainSerializer,
@@ -69,6 +80,7 @@ from .serializers import (
     OrganizationEmailAddressSerializer,
     ParserGenerateSerializer,
     ParserIngestSerializer,
+    PublicVisitorTrackingEventSerializer,
     SalesInboxFeedSerializer,
     SalesInboxSettingSerializer,
     SocialAccountSerializer,
@@ -93,6 +105,7 @@ from .services import (
     confirm_organization_email,
     connect_social_account,
     convert_visitor_event,
+    create_outgoing_crm_email,
     create_visitor_event,
     disconnect_social_account,
     ensure_portal_tracking_code,
@@ -101,13 +114,172 @@ from .services import (
     ingest_social_message,
     ingest_parser_message,
     process_bcc_payload,
+    resolve_visitor_portal_by_tracking_key,
     regenerate_bcc_dropbox,
     run_provider_sync,
+    sync_social_account,
     link_visitor_event_to_lead,
+    provider_supports_real_mail_sync,
     verify_bcc_address,
     visible_queryset,
 )
+from .utils import build_tracking_code
+from crm_backend.middleware import get_current_db_name, set_current_db_name
+from saas_admin.models import Company
+from saas_admin.services import configure_tenant_database_in_settings
 from leads.models import Lead
+from accounts.models import Account
+from contacts.models import Contact
+from deals.models import Deal
+from support.models import SupportCase
+
+
+TRACKER_SCRIPT_TEMPLATE = """
+(function () {
+  var portalKey = window.CRMVisitorPortal;
+  if (!portalKey) return;
+
+  var endpoint = "__COLLECT_URL__";
+  var sessionStorageKey = "crmVisitorSession:" + portalKey;
+  var sessionId = window.sessionStorage.getItem(sessionStorageKey);
+  if (!sessionId) {
+    sessionId = "visit-" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    window.sessionStorage.setItem(sessionStorageKey, sessionId);
+  }
+
+  function readVisitorIdentity() {
+    var identity = window.CRMVisitorIdentity || window.CRMVisitorData || {};
+    return {
+      visitor_name: identity.name || identity.visitor_name || "",
+      visitor_email: identity.email || identity.visitor_email || "",
+      identified_email: identity.identified_email || identity.email || "",
+      phone: identity.phone || "",
+    };
+  }
+
+  function buildPayload(eventType, secondsSpent) {
+    var identity = readVisitorIdentity();
+    return {
+      portal_key: portalKey,
+      session_id: sessionId,
+      event_type: eventType || "visit",
+      visitor_name: identity.visitor_name,
+      visitor_email: identity.visitor_email,
+      identified_email: identity.identified_email,
+      phone: identity.phone,
+      page_url: window.location.href,
+      source_url: document.referrer || window.location.href,
+      referrer: document.referrer || "",
+      page_history: [window.location.href],
+      time_spent_seconds: Math.max(0, Math.round(secondsSpent || 0)),
+      source_label: document.title || "Website Visitor",
+      source_reference: window.location.pathname || "/"
+    };
+  }
+
+  function transmit(eventType, secondsSpent) {
+    var payload = JSON.stringify(buildPayload(eventType, secondsSpent));
+    if (navigator.sendBeacon) {
+      var blob = new Blob([payload], { type: "application/json" });
+      navigator.sendBeacon(endpoint, blob);
+      return;
+    }
+    fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: payload,
+      keepalive: true,
+      credentials: "omit"
+    }).catch(function () {});
+  }
+
+  var startedAt = Date.now();
+  transmit("visit", 0);
+  window.addEventListener("beforeunload", function () {
+    var secondsSpent = (Date.now() - startedAt) / 1000;
+    transmit("page_exit", secondsSpent);
+  });
+})();
+""".strip()
+
+FACEBOOK_OAUTH_STATE_SALT = "integrations.facebook.social.oauth"
+
+
+def _frontend_base_url(request) -> str:
+    configured = os.getenv("FRONTEND_BASE_URL")
+    if configured:
+        return configured.rstrip("/")
+    origin = request.headers.get("Origin")
+    if origin:
+        return origin.rstrip("/")
+    return request.build_absolute_uri("/").rstrip("/")
+
+
+def _facebook_callback_url(request) -> str:
+    return request.build_absolute_uri("/api/integrations/social/facebook/callback")
+
+
+def _facebook_json(url: str) -> dict:
+    try:
+        with urllib_request.urlopen(url, timeout=20) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib_error.HTTPError as exc:
+        try:
+            payload = json.loads(exc.read().decode("utf-8"))
+            message = payload.get("error", {}).get("message")
+        except Exception:
+            message = None
+        raise ValueError(message or f"Facebook request failed with status {exc.code}.") from exc
+    except urllib_error.URLError as exc:
+        raise ValueError("Facebook request could not be completed.") from exc
+
+
+def _social_redirect_with_status(base_url: str, status_value: str, message: str | None = None) -> HttpResponseRedirect:
+    parsed = urllib_parse.urlparse(base_url)
+    params = urllib_parse.parse_qs(parsed.query)
+    params["social_oauth"] = [status_value]
+    if message:
+        params["social_message"] = [message]
+    query = urllib_parse.urlencode(params, doseq=True)
+    return HttpResponseRedirect(urllib_parse.urlunparse(parsed._replace(query=query)))
+
+
+def _activate_tenant_db(tenant_db: str | None) -> None:
+    if not tenant_db or tenant_db == "default":
+        set_current_db_name("default")
+        return
+    if Company.objects.filter(status="Active", db_name=tenant_db).exists():
+        configure_tenant_database_in_settings(tenant_db)
+        set_current_db_name(tenant_db)
+        return
+    set_current_db_name("default")
+
+
+def _auto_sync_email_providers_if_stale(request, *, max_age_seconds: int = 600) -> None:
+    threshold = timezone.now() - timedelta(seconds=max_age_seconds)
+    providers = visible_queryset(
+        EmailProviderIntegration.objects.filter(
+            is_active=True,
+            sync_enabled=True,
+            crm_sync_enabled=True,
+        ),
+        request.user,
+    )
+
+    for provider in providers:
+        if not provider_supports_real_mail_sync(provider):
+            continue
+        if provider.last_synced_at and provider.last_synced_at >= threshold:
+            continue
+        try:
+            run_provider_sync(
+                provider_integration=provider,
+                sync_type="incremental_sync",
+                triggered_by=request.user,
+            )
+        except Exception:
+            # Keep record pages responsive even if auto-sync fails.
+            continue
 
 
 class IntegrationBaseViewSet(viewsets.ModelViewSet):
@@ -125,6 +297,261 @@ class IntegrationBaseViewSet(viewsets.ModelViewSet):
         return queryset
 
 
+class VisitorTrackingScriptAPIView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        collect_url = request.build_absolute_uri("/api/integrations/visitors/collect")
+        content = TRACKER_SCRIPT_TEMPLATE.replace("__COLLECT_URL__", collect_url)
+        return HttpResponse(content, content_type="application/javascript")
+
+
+class PublicVisitorTrackingCollectAPIView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        serializer = PublicVisitorTrackingEventSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        portal = resolve_visitor_portal_by_tracking_key(serializer.validated_data["portal_key"])
+        if not portal:
+            return Response({"detail": "Invalid visitor portal key."}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            result = create_visitor_event(
+                payload={
+                    **serializer.validated_data,
+                    "portal": portal,
+                },
+                user=None,
+            )
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {
+                "event_id": result["visitor_event"].id,
+                "linked_lead": getattr(result["visitor_event"].linked_lead, "id", None),
+                "linked_contact": getattr(result["visitor_event"].linked_contact, "id", None),
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class FacebookSocialWebhookAPIView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        verify_token = request.query_params.get("hub.verify_token")
+        expected = os.getenv("FACEBOOK_WEBHOOK_VERIFY_TOKEN")
+        if expected and verify_token == expected:
+            return Response(request.query_params.get("hub.challenge", ""))
+        return Response({"detail": "Webhook verification failed."}, status=status.HTTP_403_FORBIDDEN)
+
+    def post(self, request):
+        processed = 0
+        for entry in request.data.get("entry", []):
+            for change in entry.get("changes", []):
+                value = change.get("value") or {}
+                sender = value.get("from") or {}
+                page_id = value.get("post_id") or entry.get("id")
+                account = SocialAccount.objects.filter(platform=SocialAccount.Platform.FACEBOOK, page_id=page_id).first()
+                if not account:
+                    continue
+                ingest_social_message(
+                    payload={
+                        "platform": SocialMessage.Platform.FACEBOOK,
+                        "brand": account.brand,
+                        "social_account": account,
+                        "external_message_id": value.get("comment_id") or value.get("post_id") or value.get("item"),
+                        "profile_handle": sender.get("id"),
+                        "sender_name": sender.get("name"),
+                        "message": value.get("message") or value.get("verb") or "Facebook webhook activity",
+                        "payload": value,
+                    },
+                    user=account.brand.created_by if account.brand else None,
+                )
+                processed += 1
+        return Response({"processed": processed}, status=status.HTTP_202_ACCEPTED)
+
+
+class XSocialWebhookAPIView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        processed = 0
+        for item in request.data.get("events", []) or request.data.get("data", []):
+            user_handle = item.get("username") or item.get("user", {}).get("username")
+            if not user_handle:
+                continue
+            account = SocialAccount.objects.filter(platform=SocialAccount.Platform.X, handle__iexact=f"@{user_handle}").first()
+            if not account:
+                account = SocialAccount.objects.filter(platform=SocialAccount.Platform.X, handle__iexact=user_handle).first()
+            if not account:
+                continue
+            ingest_social_message(
+                payload={
+                    "platform": SocialMessage.Platform.X,
+                    "brand": account.brand,
+                    "social_account": account,
+                    "external_message_id": item.get("id") or item.get("event_id"),
+                    "profile_handle": f"@{user_handle}",
+                    "sender_name": user_handle,
+                    "message": item.get("text") or item.get("message") or "X webhook activity",
+                    "payload": item,
+                },
+                user=account.brand.created_by if account.brand else None,
+            )
+            processed += 1
+        return Response({"processed": processed}, status=status.HTTP_202_ACCEPTED)
+
+
+class FacebookSocialOAuthStartAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk: int):
+        account = get_object_or_404(
+            SocialAccount.objects.select_related("brand"),
+            pk=pk,
+            platform=SocialAccount.Platform.FACEBOOK,
+        )
+        app_id = os.getenv("FACEBOOK_APP_ID")
+        if not app_id:
+            return Response(
+                {"detail": "FACEBOOK_APP_ID is not configured in the backend environment."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        frontend_url = f"{_frontend_base_url(request)}/integrations/social"
+        state = signing.dumps(
+            {
+                "account_id": account.id,
+                "tenant_db": get_current_db_name(),
+                "next": frontend_url,
+            },
+            salt=FACEBOOK_OAUTH_STATE_SALT,
+        )
+        auth_url = (
+            "https://www.facebook.com/v19.0/dialog/oauth?"
+            + urllib_parse.urlencode(
+                {
+                    "client_id": app_id,
+                    "redirect_uri": _facebook_callback_url(request),
+                    "state": state,
+                    "scope": "pages_show_list,pages_read_engagement,pages_manage_metadata",
+                    "response_type": "code",
+                }
+            )
+        )
+        return Response({"auth_url": auth_url})
+
+
+class FacebookSocialOAuthCallbackAPIView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        next_url = f"{_frontend_base_url(request)}/integrations/social"
+        state_token = request.query_params.get("state")
+        error_message = request.query_params.get("error_message") or request.query_params.get("error_description")
+        code = request.query_params.get("code")
+
+        try:
+            state = signing.loads(state_token or "", salt=FACEBOOK_OAUTH_STATE_SALT, max_age=900)
+            tenant_db = state.get("tenant_db")
+            next_url = state.get("next") or next_url
+            _activate_tenant_db(tenant_db)
+        except Exception:
+            return _social_redirect_with_status(
+                next_url,
+                "facebook_error",
+                "Facebook login session expired. Please try connecting again.",
+            )
+
+        if error_message:
+            return _social_redirect_with_status(next_url, "facebook_error", error_message)
+
+        if not code:
+            return _social_redirect_with_status(
+                next_url,
+                "facebook_error",
+                "Facebook did not return an authorization code.",
+            )
+
+        app_id = os.getenv("FACEBOOK_APP_ID")
+        app_secret = os.getenv("FACEBOOK_APP_SECRET")
+        if not app_id or not app_secret:
+            return _social_redirect_with_status(
+                next_url,
+                "facebook_error",
+                "Facebook app credentials are missing in backend environment.",
+            )
+
+        try:
+            token_payload = _facebook_json(
+                "https://graph.facebook.com/v19.0/oauth/access_token?"
+                + urllib_parse.urlencode(
+                    {
+                        "client_id": app_id,
+                        "client_secret": app_secret,
+                        "redirect_uri": _facebook_callback_url(request),
+                        "code": code,
+                    }
+                )
+            )
+            user_access_token = token_payload.get("access_token")
+            if not user_access_token:
+                raise ValueError("Facebook did not return an access token.")
+
+            account = SocialAccount.objects.get(pk=state["account_id"])
+            pages_payload = _facebook_json(
+                "https://graph.facebook.com/v19.0/me/accounts?"
+                + urllib_parse.urlencode(
+                    {
+                        "access_token": user_access_token,
+                        "fields": "id,name,access_token",
+                        "limit": 25,
+                    }
+                )
+            )
+            pages = pages_payload.get("data") or []
+            if not pages:
+                raise ValueError("No Facebook pages were returned for this account. Connect a page-enabled Facebook account.")
+
+            selected_page = next(
+                (page for page in pages if str(page.get("id") or "") == str(account.page_id or "")),
+                pages[0],
+            )
+            page_token = selected_page.get("access_token") or user_access_token
+            if not page_token:
+                raise ValueError("Facebook page access token is missing.")
+
+            account.access_token = page_token
+            account.account_name = account.account_name or selected_page.get("name")
+            account.page_id = str(selected_page.get("id") or account.page_id or "")
+            account.is_connected = True
+            account.connected_at = timezone.now()
+            account.save(
+                update_fields=[
+                    "access_token",
+                    "account_name",
+                    "page_id",
+                    "is_connected",
+                    "connected_at",
+                    "updated_at",
+                ]
+            )
+        except Exception as exc:
+            return _social_redirect_with_status(next_url, "facebook_error", str(exc))
+        finally:
+            set_current_db_name("default")
+
+        return _social_redirect_with_status(next_url, "facebook_success", "Facebook page connected successfully.")
+
+
 class EmailProviderIntegrationViewSet(IntegrationBaseViewSet):
     permission_classes = [IsAuthenticated, IsOwnerOrIntegrationAdmin]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -134,7 +561,7 @@ class EmailProviderIntegrationViewSet(IntegrationBaseViewSet):
     queryset = EmailProviderIntegration.objects.select_related("created_by")
 
     def get_queryset(self):
-        return self.sort_queryset(visible_queryset(self.queryset, self.request.user))
+        return self.sort_queryset(self.queryset)
 
     def get_serializer_class(self):
         if self.action == "list":
@@ -274,7 +701,17 @@ class SalesInboxSettingViewSet(IntegrationBaseViewSet):
 
     @action(detail=False, methods=["get"], url_path="feed")
     def feed(self, request):
+        _auto_sync_email_providers_if_stale(request)
         queryset = build_sales_inbox_queryset(request.user)
+        only_related = str(request.query_params.get("only_related", "")).lower() in {"1", "true", "yes"}
+        if only_related:
+            queryset = queryset.filter(
+                Q(lead__isnull=False)
+                | Q(contact__isnull=False)
+                | Q(account__isnull=False)
+                | Q(deal__isnull=False)
+                | Q(support_case__isnull=False)
+            )
         page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
@@ -300,10 +737,7 @@ class SyncedEmailMessageViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ["-received_at", "-created_at"]
 
     def get_queryset(self):
-        queryset = self.queryset
-        if not is_integration_admin(self.request.user):
-            queryset = queryset.filter(provider_integration__created_by=self.request.user)
-        return queryset
+        return self.queryset
 
 
 class EmailParserInboxViewSet(IntegrationBaseViewSet):
@@ -536,6 +970,21 @@ class SocialAccountViewSet(IntegrationBaseViewSet):
         account = disconnect_social_account(self.get_object())
         return Response(SocialAccountSerializer(account).data)
 
+    @action(detail=True, methods=["post"], url_path="sync")
+    def sync(self, request, pk=None):
+        account = self.get_object()
+        try:
+            messages = sync_social_account(account, triggered_by=request.user)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {
+                "message": "Social account sync completed successfully.",
+                "messages_synced": len(messages),
+                "last_synced_at": account.last_synced_at,
+            }
+        )
+
 
 class SocialPermissionSettingViewSet(IntegrationBaseViewSet):
     permission_classes = [IsAuthenticated, IsIntegrationAdminOrReadOnly]
@@ -648,7 +1097,12 @@ class VisitorTrackingSettingViewSet(IntegrationBaseViewSet):
     @action(detail=True, methods=["get"], url_path="tracking-code")
     def tracking_code(self, request, pk=None):
         setting = self.get_object()
-        return Response({"tracking_code": setting.tracking_code})
+        script_url = request.build_absolute_uri("/api/integrations/visitors/tracker.js")
+        tracking_code = build_tracking_code(setting.portal_id, setting.portal.portal_name, script_url=script_url)
+        if setting.tracking_code != tracking_code:
+            setting.tracking_code = tracking_code
+            setting.save(update_fields=["tracking_code", "updated_at"])
+        return Response({"tracking_code": tracking_code})
 
 
 class VisitorLeadEventViewSet(IntegrationBaseViewSet):
@@ -671,7 +1125,10 @@ class VisitorLeadEventViewSet(IntegrationBaseViewSet):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        result = create_visitor_event(payload=serializer.validated_data, user=request.user)
+        try:
+            result = create_visitor_event(payload=serializer.validated_data, user=request.user)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(
             {
                 **VisitorLeadEventSerializer(result["visitor_event"]).data,
@@ -724,13 +1181,111 @@ class IntegrationLeadSourceEventViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ["-created_at"]
 
 
-class RecordEmailListAPIView(APIView):
+def _email_record_filters(module: str, record_id: int) -> dict[str, int]:
+    module_map = {
+        "lead": {"lead_id": record_id},
+        "leads": {"lead_id": record_id},
+        "contact": {"contact_id": record_id},
+        "contacts": {"contact_id": record_id},
+        "account": {"account_id": record_id},
+        "accounts": {"account_id": record_id},
+        "deal": {"deal_id": record_id},
+        "deals": {"deal_id": record_id},
+        "case": {"support_case_id": record_id},
+        "cases": {"support_case_id": record_id},
+        "support_case": {"support_case_id": record_id},
+    }
+    filters_q = module_map.get((module or "").lower())
+    if not filters_q:
+        raise ValueError("Unsupported CRM module.")
+    return filters_q
+
+
+def _linked_record_kwargs(validated_data: dict[str, int]):
+    lead = Lead.objects.filter(pk=validated_data.get("lead_id")).first() if validated_data.get("lead_id") else None
+    contact = Contact.objects.filter(pk=validated_data.get("contact_id")).first() if validated_data.get("contact_id") else None
+    account = Account.objects.filter(pk=validated_data.get("account_id")).first() if validated_data.get("account_id") else None
+    deal = Deal.objects.filter(pk=validated_data.get("deal_id")).first() if validated_data.get("deal_id") else None
+    support_case = (
+        SupportCase.objects.filter(pk=validated_data.get("support_case_id")).first()
+        if validated_data.get("support_case_id")
+        else None
+    )
+    return {
+        "lead": lead,
+        "contact": contact,
+        "account": account,
+        "deal": deal,
+        "support_case": support_case,
+    }
+
+
+class CRMEmailProviderConnectAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
-    lookup_field = ""
+    def post(self, request):
+        serializer = EmailProviderIntegrationWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save(created_by=request.user)
+        return Response(EmailProviderIntegrationDetailSerializer(instance).data, status=status.HTTP_201_CREATED)
 
-    def get_queryset(self):
-        filter_key = {f"{self.lookup_field}_id": self.kwargs["pk"]}
+
+class CRMEmailProviderListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        queryset = visible_queryset(
+            EmailProviderIntegration.objects.select_related("created_by").all(),
+            request.user,
+        )
+        return Response(EmailProviderIntegrationListSerializer(queryset, many=True).data)
+
+
+class CRMEmailProviderDetailAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pk):
+        instance = get_object_or_404(visible_queryset(EmailProviderIntegration.objects.all(), request.user), pk=pk)
+        serializer = EmailProviderIntegrationWriteSerializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        updated = serializer.save()
+        return Response(EmailProviderIntegrationDetailSerializer(updated).data)
+
+
+class CRMEmailSyncAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = CRMEmailSyncSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        provider_id = serializer.validated_data.get("provider_account_id")
+        sync_type = serializer.validated_data.get("sync_type", EmailSyncLog.SyncType.INCREMENTAL_SYNC)
+
+        queryset = visible_queryset(EmailProviderIntegration.objects.filter(is_active=True), request.user)
+        if provider_id:
+            queryset = queryset.filter(pk=provider_id)
+        providers = list(queryset)
+        if not providers:
+            return Response({"detail": "No active provider found."}, status=status.HTTP_404_NOT_FOUND)
+
+        logs = []
+        for provider in providers:
+            logs.append(run_provider_sync(provider_integration=provider, sync_type=sync_type, triggered_by=request.user))
+        return Response(
+            {
+                "providers_synced": len(logs),
+                "messages_processed": sum(log.metadata.get("messages_processed", 0) for log in logs),
+                "logs": EmailSyncLogSerializer(logs, many=True).data,
+            }
+        )
+
+
+class CRMEmailInboxAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        mailbox_filter = (request.query_params.get("filter") or "all").lower()
+        search = (request.query_params.get("search") or "").strip()
         queryset = SyncedEmailMessage.objects.select_related(
             "provider_integration",
             "lead",
@@ -738,13 +1293,164 @@ class RecordEmailListAPIView(APIView):
             "account",
             "deal",
             "support_case",
-        ).filter(**filter_key)
-        if not is_integration_admin(self.request.user):
-            queryset = queryset.filter(provider_integration__created_by=self.request.user)
-        return queryset.order_by("-received_at", "-created_at")
+        ).prefetch_related("attachments")
+
+        filter_map = {
+            "incoming": Q(direction=SyncedEmailMessage.Direction.INCOMING),
+            "outgoing": Q(direction=SyncedEmailMessage.Direction.OUTGOING),
+            "unread": Q(is_read=False),
+            "linked_to_lead": Q(lead__isnull=False),
+            "linked_to_contact": Q(contact__isnull=False),
+            "linked_to_deal": Q(deal__isnull=False),
+            "linked_to_account": Q(account__isnull=False),
+        }
+        if mailbox_filter in filter_map:
+            queryset = queryset.filter(filter_map[mailbox_filter])
+        if search:
+            queryset = queryset.filter(
+                Q(subject__icontains=search)
+                | Q(from_email__icontains=search)
+                | Q(to_emails__icontains=search)
+                | Q(cc_emails__icontains=search)
+                | Q(bcc_emails__icontains=search)
+            )
+        queryset = queryset.order_by("-received_at", "-created_at")
+        return Response(CRMEmailDetailSerializer(queryset, many=True).data)
+
+
+class CRMEmailDetailAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        queryset = SyncedEmailMessage.objects.select_related(
+            "provider_integration",
+            "lead",
+            "contact",
+            "account",
+            "deal",
+            "support_case",
+        ).prefetch_related("attachments")
+        instance = get_object_or_404(queryset, pk=pk)
+        return Response(CRMEmailDetailSerializer(instance).data)
+
+    def patch(self, request, pk):
+        queryset = SyncedEmailMessage.objects.select_related(
+            "provider_integration",
+            "lead",
+            "contact",
+            "account",
+            "deal",
+            "support_case",
+        ).prefetch_related("attachments")
+        instance = get_object_or_404(queryset, pk=pk)
+
+        updated_fields = []
+        if "is_read" in request.data:
+            instance.is_read = bool(request.data.get("is_read"))
+            updated_fields.append("is_read")
+        if "is_starred" in request.data:
+            instance.is_starred = bool(request.data.get("is_starred"))
+            updated_fields.append("is_starred")
+
+        if updated_fields:
+            updated_fields.append("updated_at")
+            instance.save(update_fields=updated_fields)
+
+        return Response(CRMEmailDetailSerializer(instance).data)
+
+
+class CRMEmailSendAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = CRMEmailSendSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        provider = get_object_or_404(
+            visible_queryset(EmailProviderIntegration.objects.filter(is_active=True), request.user),
+            pk=serializer.validated_data["provider_account_id"],
+        )
+        linked_records = _linked_record_kwargs(serializer.validated_data)
+        try:
+            message = create_outgoing_crm_email(
+                provider_integration=provider,
+                subject=serializer.validated_data["subject"],
+                body=serializer.validated_data["body"],
+                to_emails=serializer.validated_data["to"],
+                cc_emails=serializer.validated_data.get("cc", []),
+                bcc_emails=serializer.validated_data.get("bcc", []),
+                reply_to=serializer.validated_data.get("reply_to"),
+                send_live=True,
+                owner=request.user,
+                **linked_records,
+            )
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(CRMEmailDetailSerializer(message).data, status=status.HTTP_201_CREATED)
+
+
+class CRMEmailRecordAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, module, record_id):
+        _auto_sync_email_providers_if_stale(request)
+        try:
+            filters_q = _email_record_filters(module, record_id)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        queryset = SyncedEmailMessage.objects.select_related(
+            "provider_integration",
+            "lead",
+            "contact",
+            "account",
+            "deal",
+            "support_case",
+        ).prefetch_related("attachments").filter(**filters_q)
+        if module in {"lead", "leads", "contact", "contacts", "account", "accounts", "deal", "deals"}:
+            queryset = queryset.filter(support_case__isnull=True)
+        queryset = queryset.order_by("-received_at", "-created_at")
+        return Response(CRMEmailDetailSerializer(queryset, many=True).data)
+
+
+class RecordEmailListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    lookup_field = ""
+    exclude_support_linked_messages = False
+    exclude_notification_senders = False
+
+    def filter_demo_messages(self, queryset):
+        # Hide generated project/demo inbox messages from CRM record views so
+        # users only see real synced emails for leads/contacts/accounts/deals.
+        queryset = queryset.exclude(
+            external_message_id__regex=r"^\d+-(starter-message|lead-\d+(?:-incoming)?|contact-\d+|case-\d+)$"
+        )
+        if self.exclude_notification_senders:
+            queryset = queryset.exclude(
+                from_email__iregex=r"(noreply|no-reply|donotreply|do-not-reply|notification|notifications|jobnotification|jobs2web|mailer-daemon|postmaster)"
+            )
+        return queryset
+
+    def get_base_queryset(self):
+        queryset = self.filter_demo_messages(SyncedEmailMessage.objects.select_related(
+            "provider_integration",
+            "lead",
+            "contact",
+            "account",
+            "deal",
+            "support_case",
+        ))
+        if self.exclude_support_linked_messages:
+            queryset = queryset.filter(support_case__isnull=True)
+        return queryset
+
+    def get_queryset(self):
+        filter_key = {f"{self.lookup_field}_id": self.kwargs["pk"]}
+        return self.get_base_queryset().filter(**filter_key).order_by("-received_at", "-created_at")
 
     def get(self, request, pk=None):
-        return Response(SalesInboxFeedSerializer(self.get_queryset(), many=True).data)
+        _auto_sync_email_providers_if_stale(request)
+        return Response(CRMEmailDetailSerializer(self.get_queryset(), many=True).data)
 
 
 class RecordSocialListAPIView(APIView):
@@ -791,18 +1497,26 @@ class ContactVisitorEventListAPIView(APIView):
 
 class LeadEmailListAPIView(RecordEmailListAPIView):
     lookup_field = "lead"
+    exclude_support_linked_messages = True
+    exclude_notification_senders = True
 
 
 class ContactEmailListAPIView(RecordEmailListAPIView):
     lookup_field = "contact"
+    exclude_support_linked_messages = True
+    exclude_notification_senders = True
 
 
 class AccountEmailListAPIView(RecordEmailListAPIView):
     lookup_field = "account"
+    exclude_support_linked_messages = True
+    exclude_notification_senders = True
 
 
 class DealEmailListAPIView(RecordEmailListAPIView):
     lookup_field = "deal"
+    exclude_support_linked_messages = True
+    exclude_notification_senders = True
 
 
 class CaseEmailListAPIView(RecordEmailListAPIView):

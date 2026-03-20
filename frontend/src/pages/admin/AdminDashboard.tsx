@@ -10,6 +10,8 @@ type OrgUser = {
   id: number;
   email: string;
   role: "admin" | "manager" | "employee";
+  team: string;
+  team_label?: string | null;
   is_active: boolean;
   manager: number | null;
   manager_email: string | null;
@@ -62,6 +64,9 @@ function UserRow({ user, onClick }: { user: OrgUser; onClick: () => void }) {
           {user.email[0]}
         </div>
         <span className="text-sm text-slate-700 truncate max-w-[200px]">{user.email}</span>
+        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+          {user.team_label || user.team || "General"}
+        </span>
       </div>
       <div className="flex items-center gap-2">
         <RoleBadge role={user.role} />

@@ -8,7 +8,10 @@ type Props = {
 
 export default function VisitorTrackingLanding({ hasPortals, onGetStarted }: Props) {
   return (
-    <CRMSectionCard title="Visitor Tracking">
+    <CRMSectionCard
+      title="Visitor Tracking"
+      subtitle="Track website activity, surface visitor events, and convert meaningful visits into CRM records."
+    >
       {hasPortals ? (
         <div className="grid gap-4 md:grid-cols-3">
           {[
@@ -24,7 +27,7 @@ export default function VisitorTrackingLanding({ hasPortals, onGetStarted }: Pro
         </div>
       ) : (
         <IntegrationEmptyState
-          title="Set up visitor tracking like SalesIQ"
+          title="Set up website visitor tracking"
           description="Create portals, configure lead conversion rules, and embed tracking code to turn website activity into CRM records."
           action={<button type="button" onClick={onGetStarted} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white">Get Started</button>}
         />
@@ -32,4 +35,3 @@ export default function VisitorTrackingLanding({ hasPortals, onGetStarted }: Pro
     </CRMSectionCard>
   );
 }
-

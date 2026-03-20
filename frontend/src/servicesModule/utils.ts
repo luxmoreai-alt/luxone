@@ -1,5 +1,9 @@
 import type { BusinessHours, BusinessHoursDayKey, JobSheetField } from "./types";
 
+function createJobSheetFieldKey() {
+  return `job-field-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
 export function formatCurrency(value: number) {
   return new Intl.NumberFormat(undefined, { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(
     Number.isFinite(value) ? value : 0
@@ -83,6 +87,7 @@ export function validateDayWindow(enabled: boolean, start: string, end: string) 
 
 export function buildEmptyJobSheetField(): JobSheetField {
   return {
+    clientKey: createJobSheetFieldKey(),
     fieldName: "",
     fieldLabel: "",
     fieldType: "text",

@@ -32,6 +32,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
     """Read-only serializer — used for list / retrieve."""
     manager_email = serializers.SerializerMethodField()
     organization_name = serializers.SerializerMethodField()
+    team_label = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -39,6 +40,8 @@ class UserDetailSerializer(serializers.ModelSerializer):
             "id",
             "email",
             "role",
+            "team",
+            "team_label",
             "is_active",
             "manager",
             "manager_email",
@@ -54,6 +57,9 @@ class UserDetailSerializer(serializers.ModelSerializer):
     def get_organization_name(self, obj):
         return obj.organization.name if obj.organization else None
 
+    def get_team_label(self, obj):
+        return obj.get_team_display() if hasattr(obj, "get_team_display") else None
+
 
 class UserCreateSerializer(serializers.Serializer):
     """
@@ -67,6 +73,11 @@ class UserCreateSerializer(serializers.Serializer):
     role = serializers.ChoiceField(
         choices=User.Role.choices,
         default=User.Role.EMPLOYEE,
+    )
+    team = serializers.ChoiceField(
+        choices=User.Team.choices,
+        default=User.Team.GENERAL,
+        required=False,
     )
     manager = serializers.PrimaryKeyRelatedField(
         queryset=User.objects.all(),
@@ -85,7 +96,7 @@ class UserUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["role", "manager", "is_active"]
+        fields = ["role", "team", "manager", "is_active"]
 
     def validate_manager(self, value):
         if value and value == self.instance:

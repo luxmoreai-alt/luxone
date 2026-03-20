@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import CRMSectionCard from "../../components/crm/CRMSectionCard";
-import { listDomainMappings } from "../api";
+import { listDomainMappings, verifyDomainMapping } from "../api";
 import type { DomainMapping } from "../types";
 import DomainMappingModal from "./DomainMappingModal";
 
@@ -10,6 +10,7 @@ export default function DomainMappingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
 
   const load = async () => {
     try {
@@ -27,6 +28,31 @@ export default function DomainMappingPage() {
     void load();
   }, []);
 
+  const verifiedCount = rows.filter((row) => row.verificationStatus === "verified").length;
+  const pendingCount = rows.filter((row) => row.verificationStatus === "pending").length;
+  const failedCount = rows.filter((row) => row.verificationStatus === "failed").length;
+
+  const handleVerify = async (id: string) => {
+    try {
+      setVerifyingId(id);
+      setError(null);
+      await verifyDomainMapping(id);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to verify domain mapping.");
+    } finally {
+      setVerifyingId(null);
+    }
+  };
+
+  const handleCopy = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch (err) {
+      setError(err instanceof Error ? `${label} could not be copied.` : `${label} could not be copied.`);
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-4">
@@ -36,6 +62,20 @@ export default function DomainMappingPage() {
             <p className="text-sm text-slate-500">Map custom domains for CRM, Sandbox, and Portal-facing service experiences.</p>
           </div>
           <button type="button" onClick={() => setOpen(true)} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white">Map Domain</button>
+        </div>
+        <div className="grid gap-3 md:grid-cols-3">
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="text-xs uppercase tracking-wide text-slate-500">Verified Domains</div>
+            <div className="mt-2 text-2xl font-semibold text-slate-900">{verifiedCount}</div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="text-xs uppercase tracking-wide text-slate-500">Pending Verification</div>
+            <div className="mt-2 text-2xl font-semibold text-slate-900">{pendingCount}</div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="text-xs uppercase tracking-wide text-slate-500">Failed Domains</div>
+            <div className="mt-2 text-2xl font-semibold text-slate-900">{failedCount}</div>
+          </div>
         </div>
         {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-600">{error}</div> : null}
         {loading ? <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Loading domain mappings...</div> : null}
@@ -48,7 +88,29 @@ export default function DomainMappingPage() {
         {!loading && rows.length ? (
           <div className="grid gap-4">
             {rows.map((row) => (
-              <CRMSectionCard key={row.id} title={row.domain}>
+              <CRMSectionCard
+                key={row.id}
+                title={row.domain}
+                action={
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void handleCopy(row.cnameTarget, "CNAME target")}
+                      className="rounded-md border border-slate-200 px-3 py-2 text-xs text-slate-700"
+                    >
+                      Copy CNAME
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleVerify(row.id)}
+                      disabled={verifyingId === row.id}
+                      className="rounded-md bg-blue-600 px-3 py-2 text-xs font-medium text-white disabled:opacity-60"
+                    >
+                      {verifyingId === row.id ? "Verifying..." : "Verify Now"}
+                    </button>
+                  </div>
+                }
+              >
                 <div className="grid gap-4 sm:grid-cols-4">
                   <div><p className="text-xs uppercase tracking-wide text-slate-500">Account</p><p className="mt-1 text-sm text-slate-800">{row.accountType.toUpperCase()}</p></div>
                   <div><p className="text-xs uppercase tracking-wide text-slate-500">CNAME Target</p><p className="mt-1 text-sm text-slate-800">{row.cnameTarget}</p></div>

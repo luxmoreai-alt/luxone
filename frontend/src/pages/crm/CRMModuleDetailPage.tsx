@@ -240,7 +240,11 @@ export default function CRMModuleDetailPage<T extends CRMRecord>({
         <div className="space-y-2">
           {data.emails.map((item) => (
             <div key={item.id} className="rounded-md border border-slate-200 p-3 text-sm text-slate-700">
-              {item.subject} • {item.status}
+              <div className="font-medium text-slate-800">{item.subject}</div>
+              <div className="mt-1 text-xs text-slate-500">
+                {[item.sentBy, item.status, item.sentAt].filter(Boolean).join(" | ")}
+              </div>
+              {item.previewText ? <div className="mt-2 line-clamp-2 text-sm text-slate-600">{item.previewText}</div> : null}
             </div>
           ))}
         </div>

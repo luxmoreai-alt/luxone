@@ -310,6 +310,7 @@ class ProductWriteSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True,
     )
+    product_code = serializers.CharField(read_only=True)
     vendor = serializers.PrimaryKeyRelatedField(
         queryset=_active_queryset(Vendor),
         required=False,

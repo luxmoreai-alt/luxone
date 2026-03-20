@@ -1,6 +1,6 @@
 import { apiRequest } from "../../api/client";
 import { integrationsApi } from "../../integrations/api";
-import { getLeadConnectedRecords, getLeadEmails } from "./leadsApi";
+import { getLeadConnectedRecords } from "./leadsApi";
 import type {
   Activity,
   AccountRecord,
@@ -50,7 +50,7 @@ type LinkedDataResult = {
   timeline: TimelineItem[];
 };
 
-const LINKED_DATA_CACHE_TTL_MS = 30_000;
+const LINKED_DATA_CACHE_TTL_MS = 120_000;
 const linkedDataCache = new Map<string, { expiresAt: number; value: unknown }>();
 
 type TimelineDto = {
@@ -182,6 +182,10 @@ function asNumber(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function stripHtmlPreview(value: unknown): string {
+  return asString(value).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
 function mapTimeline(parentId: string, item: TimelineDto): TimelineItem {
   return {
     id: asString(item.id),
@@ -268,25 +272,73 @@ function mapInvoice(parentId: string, item: InventoryInvoiceDto): Invoice {
 }
 
 function mapIntegrationEmail(parentId: string, item: SalesInboxFeedItem): EmailRecord {
+  const direction = asString(item.direction).toLowerCase();
+  const previewText = asString(item.preview_text).trim() || asString(item.body_text).trim() || stripHtmlPreview(item.body_html);
   return {
     id: asString(item.id),
     parentId,
     subject: asString(item.subject),
     sentAt: asString(item.sent_at || item.received_at),
     sentBy: asString(item.from_email),
-    status: item.status === "draft" ? "Draft" : "Sent",
+    status: item.status === "draft" ? "Draft" : direction === "incoming" ? "Received" : "Sent",
+    previewText,
   };
 }
 
+function excludeSupportCaseEmails(items: SalesInboxFeedItem[]) {
+  return items.filter((item) => !item.support_case_id);
+}
+
+async function loadRecordEmailsWithFallback(
+  filters: { lead?: string; contact?: string; account?: string; deal?: string },
+  primaryLoader: () => Promise<SalesInboxFeedItem[]>,
+  options?: { excludeSupportLinked?: boolean; disableFallback?: boolean }
+) {
+  const primaryItems = await primaryLoader().catch(() => []);
+  const filteredPrimaryItems = options?.excludeSupportLinked ? excludeSupportCaseEmails(primaryItems) : primaryItems;
+  if (filteredPrimaryItems.length || options?.disableFallback) {
+    return filteredPrimaryItems;
+  }
+  const fallbackItems = await integrationsApi.listSyncedEmailMessages(filters).catch(() => []);
+  return options?.excludeSupportLinked ? excludeSupportCaseEmails(fallbackItems) : fallbackItems;
+}
+
+function dedupeSalesInboxItems(items: SalesInboxFeedItem[]) {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = `${asString(item.id)}|${asString(item.subject)}|${asString(item.from_email)}|${asString(item.sent_at || item.received_at)}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
 function mapIntegrationSourceEvent(parentId: string, item: IntegrationLeadSourceEvent): ConnectedRecord {
+  const sourceType = asString(item.source_type).toLowerCase();
+  let status = asString(item.status);
+
+  if (sourceType === "email" && status.toLowerCase() === "processed") {
+    status = "Received";
+  } else if ((sourceType === "social" || sourceType.includes("message")) && status.toLowerCase() === "processed") {
+    status = "Linked";
+  } else if (sourceType.includes("visitor") && status.toLowerCase() === "processed") {
+    status = "Captured";
+  }
+
   return {
     id: asString(item.id),
     parentId,
     recordType: asString(item.source_type).replace(/_/g, " "),
     name: asString(item.source_label || item.source_reference),
     owner: asString(item.lead_name || item.contact_name || item.account_name || item.deal_name || item.support_case_name || "-"),
-    status: asString(item.status),
+    status,
   };
+}
+
+function filterOutEmailConnectedRecords(items: ConnectedRecord[]) {
+  return items.filter((item) => item.recordType.trim().toLowerCase() !== "email");
 }
 
 function mapSocialMessage(parentId: string, item: SocialMessage): ConnectedRecord {
@@ -390,10 +442,11 @@ export async function loadAccountLinkedData(account: AccountRecord, options?: { 
     fetchList<SupportSolutionDto>("/support/solutions", { account: account.id }).catch(() => []),
     apiRequest<TimelineDto[]>(`/accounts/${account.id}/timeline`).catch(() => []),
     apiRequest<AttachmentDto[]>(`/accounts/${account.id}/attachments`).catch(() => []),
-    integrationsApi.listSyncedEmailMessages({ account: account.id }).catch(() => []),
+    loadRecordEmailsWithFallback({ account: account.id }, () => integrationsApi.listAccountRecordEmails(account.id), { excludeSupportLinked: true, disableFallback: true }),
     integrationsApi.listLeadSourceEvents({ account: account.id }).catch(() => []),
     integrationsApi.listSocialMessages({ account: account.id }).catch(() => []),
   ]);
+  const mergedEmails = dedupeSalesInboxItems(excludeSupportCaseEmails(emails || []));
 
   const integrationConnectedRecords = [
     ...sourceEvents.map((item) => mapIntegrationSourceEvent(account.id, item)),
@@ -402,7 +455,9 @@ export async function loadAccountLinkedData(account: AccountRecord, options?: { 
 
   const serviceConnectedRecords = await fetchServiceConnectedRecords(account.id, "account", account.id).catch(() => []);
 
-  const dedupedConnectedRecords = [...integrationConnectedRecords, ...serviceConnectedRecords].filter((item, index, list) => {
+  const dedupedConnectedRecords = filterOutEmailConnectedRecords(
+    [...integrationConnectedRecords, ...serviceConnectedRecords]
+  ).filter((item, index, list) => {
     const key = `${item.recordType}|${item.name}|${item.status}`;
     return list.findIndex((entry) => `${entry.recordType}|${entry.name}|${entry.status}` === key) === index;
   });
@@ -423,7 +478,7 @@ export async function loadAccountLinkedData(account: AccountRecord, options?: { 
     closedActivities: [],
     meetings: [],
     products: [],
-    emails: emails.map((item) => mapIntegrationEmail(account.id, item)),
+    emails: mergedEmails.map((item) => mapIntegrationEmail(account.id, item)),
     attachments: attachments.map((item) => mapAttachment(account.id, item)),
     connectedRecords: dedupedConnectedRecords,
     cases: cases.map((item) => mapCase(account.id, item)),
@@ -441,7 +496,7 @@ export async function loadAccountLinkedData(account: AccountRecord, options?: { 
     invoices: invoices.map((item) => mapInvoice(account.id, item)),
     timeline: [
       ...timeline.map((item) => mapTimeline(account.id, item)),
-      ...emails.map((item) =>
+      ...mergedEmails.map((item) =>
         mapIntegrationTimeline(account.id, {
           id: `email-${item.id}`,
           type: "Email",
@@ -483,12 +538,13 @@ export async function loadLeadLinkedData(lead: LeadRecord, options?: { forceRefr
   if (cached) return cached;
 
   const [emails, connectedRecords, socialMessages, visitorEvents, serviceConnectedRecords] = await Promise.all([
-    getLeadEmails(lead.id).catch(() => []),
+    loadRecordEmailsWithFallback({ lead: lead.id }, () => integrationsApi.listLeadRecordEmails(lead.id), { excludeSupportLinked: true, disableFallback: true }),
     getLeadConnectedRecords(lead.id).catch(() => []),
     integrationsApi.listSocialMessages({ lead: lead.id }).catch(() => []),
     integrationsApi.listVisitorEvents({ lead: lead.id }).catch(() => []),
     fetchServiceConnectedRecords(lead.id, "lead", lead.id).catch(() => []),
   ]);
+  const mergedEmails = dedupeSalesInboxItems(excludeSupportCaseEmails(emails || []));
 
   const result = {
     notes: [] as Note[],
@@ -497,10 +553,10 @@ export async function loadLeadLinkedData(lead: LeadRecord, options?: { forceRefr
     closedActivities: [],
     meetings: [],
     products: [],
-    emails,
+    emails: mergedEmails.map((item) => mapIntegrationEmail(lead.id, item)),
     attachments: [] as Attachment[],
     connectedRecords: [
-      ...connectedRecords,
+      ...filterOutEmailConnectedRecords(connectedRecords),
       ...socialMessages.map((item) => mapSocialMessage(lead.id, item)),
       ...visitorEvents.map((item) => mapVisitorEvent(lead.id, item)),
       ...serviceConnectedRecords,
@@ -514,14 +570,14 @@ export async function loadLeadLinkedData(lead: LeadRecord, options?: { forceRefr
     purchaseOrders: [] as PurchaseOrder[],
     invoices: [] as Invoice[],
     timeline: [
-      ...emails.map((item) => ({
+      ...mergedEmails.map((item) => ({
         id: `email-${item.id}`,
         parentId: lead.id,
         type: "Email" as const,
         title: item.subject,
-        detail: `From ${item.sentBy}`,
-        at: item.sentAt,
-        by: item.sentBy,
+        detail: `From ${item.from_email}`,
+        at: item.sent_at || item.received_at,
+        by: item.from_email,
       })),
       ...socialMessages.map((item) =>
         mapIntegrationTimeline(lead.id, {
@@ -563,12 +619,13 @@ export async function loadContactLinkedData(contactId: string, options?: { force
     fetchList<SupportCaseDto>("/support/cases", { related_contact: contactId }).catch(() => []),
     fetchList<SupportSolutionDto>("/support/solutions", { contact: contactId }).catch(() => []),
     apiRequest<TimelineDto[]>(`/contacts/${contactId}/timeline`).catch(() => []),
-    integrationsApi.listSyncedEmailMessages({ contact: contactId }).catch(() => []),
+    loadRecordEmailsWithFallback({ contact: contactId }, () => integrationsApi.listContactRecordEmails(contactId), { excludeSupportLinked: true, disableFallback: true }),
     integrationsApi.listLeadSourceEvents({ contact: contactId }).catch(() => []),
     integrationsApi.listSocialMessages({ contact: contactId }).catch(() => []),
     integrationsApi.listVisitorEvents({ contact: contactId }).catch(() => []),
     fetchServiceConnectedRecords(contactId, "contact", contactId).catch(() => []),
   ]);
+  const mergedEmails = dedupeSalesInboxItems(excludeSupportCaseEmails(emails || []));
 
   const result = {
     notes: [] as Note[],
@@ -586,10 +643,10 @@ export async function loadContactLinkedData(contactId: string, options?: { force
     closedActivities: [],
     meetings: [],
     products: [],
-    emails: emails.map((item) => mapIntegrationEmail(contactId, item)),
+    emails: mergedEmails.map((item) => mapIntegrationEmail(contactId, item)),
     attachments: [] as Attachment[],
     connectedRecords: [
-      ...sourceEvents.map((item) => mapIntegrationSourceEvent(contactId, item)),
+      ...filterOutEmailConnectedRecords(sourceEvents.map((item) => mapIntegrationSourceEvent(contactId, item))),
       ...socialMessages.map((item) => mapSocialMessage(contactId, item)),
       ...visitorEvents.map((item) => mapVisitorEvent(contactId, item)),
       ...serviceConnectedRecords,
@@ -604,7 +661,7 @@ export async function loadContactLinkedData(contactId: string, options?: { force
     invoices: invoices.map((item) => mapInvoice(contactId, item)),
     timeline: [
       ...timeline.map((item) => mapTimeline(contactId, item)),
-      ...emails.map((item) =>
+      ...mergedEmails.map((item) =>
         mapIntegrationTimeline(contactId, {
           id: `email-${item.id}`,
           type: "Email",
@@ -653,12 +710,13 @@ export async function loadDealLinkedData(deal: Deal, options?: { forceRefresh?: 
     fetchList<SupportSolutionDto>("/support/solutions", { deal: deal.id }).catch(() => []),
     apiRequest<TimelineDto[]>(`/deals/${deal.id}/timeline`).catch(() => []),
     apiRequest<Array<{ id: number | string; note?: string; created_at?: string; created_by?: string }>>(`/deals/${deal.id}/notes`).catch(() => []),
-    integrationsApi.listSyncedEmailMessages({ deal: deal.id }).catch(() => []),
+    loadRecordEmailsWithFallback({ deal: deal.id }, () => integrationsApi.listDealRecordEmails(deal.id), { excludeSupportLinked: true, disableFallback: true }),
     integrationsApi.listLeadSourceEvents({ deal: deal.id }).catch(() => []),
     integrationsApi.listSocialMessages({ deal: deal.id }).catch(() => []),
     fetchServiceConnectedRecords(deal.id, "deal", deal.id).catch(() => []),
     apiRequest<Array<{ id: number | string; product: number | string; product_name?: string; quantity?: number | string; unit_price?: number | string; discount?: number | string; total_price?: number | string }>>(`/deals/${deal.id}/products`).catch(() => []),
   ]);
+  const mergedEmails = dedupeSalesInboxItems(excludeSupportCaseEmails(emails || []));
 
   const result = {
     notes: notes.map((item) => ({
@@ -684,10 +742,10 @@ export async function loadDealLinkedData(deal: Deal, options?: { forceRefresh?: 
       amount: asNumber(item.unit_price),
       total: asNumber(item.total_price),
     })),
-    emails: emails.map((item) => mapIntegrationEmail(deal.id, item)),
+    emails: mergedEmails.map((item) => mapIntegrationEmail(deal.id, item)),
     attachments: [] as Attachment[],
     connectedRecords: [
-      ...sourceEvents.map((item) => mapIntegrationSourceEvent(deal.id, item)),
+      ...filterOutEmailConnectedRecords(sourceEvents.map((item) => mapIntegrationSourceEvent(deal.id, item))),
       ...socialMessages.map((item) => mapSocialMessage(deal.id, item)),
       ...serviceConnectedRecords,
     ],
@@ -701,7 +759,7 @@ export async function loadDealLinkedData(deal: Deal, options?: { forceRefresh?: 
     invoices: invoices.map((item) => mapInvoice(deal.id, item)),
     timeline: [
       ...timeline.map((item) => mapTimeline(deal.id, item)),
-      ...emails.map((item) =>
+      ...mergedEmails.map((item) =>
         mapIntegrationTimeline(deal.id, {
           id: `email-${item.id}`,
           type: "Email",

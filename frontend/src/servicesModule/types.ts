@@ -60,6 +60,8 @@ export type TeamMember = {
   id: string;
   email: string;
   label: string;
+  team: string;
+  teamLabel: string;
 };
 
 export type ServiceMember = {
@@ -81,6 +83,7 @@ export type ServiceRecord = CRMRecord & {
   locationType: string;
   location: string;
   status: string;
+  deliveryTeam: string;
   availableDaysMode: string;
   availableTimeMode: string;
   businessHours: string;
@@ -103,6 +106,7 @@ export type ServiceFormData = {
   locationType: string;
   location: string;
   status: string;
+  deliveryTeam: string;
   availableDaysMode: string;
   availableTimeMode: string;
   businessHoursId: string;
@@ -118,7 +122,14 @@ export type LookupOption = {
   subtitle?: string;
   email?: string;
   phone?: string;
+  accountId?: string;
+  contactId?: string;
+  dealId?: string;
+  quoteId?: string;
+  salesOrderId?: string;
 };
+
+export type ServicesLookupType = AppointmentEntityType | "sales-order" | "invoice";
 
 export type AppointmentRecord = CRMRecord & {
   id: string;
@@ -138,9 +149,22 @@ export type AppointmentRecord = CRMRecord & {
   appointmentEndTime: string;
   assignedMemberId: string;
   assignedMemberEmail: string;
+  productId: string;
+  productName: string;
+  salesOrderId: string;
+  salesOrderSubject: string;
+  invoiceId: string;
+  invoiceSubject: string;
+  customerAssetName: string;
+  productSerialNumber: string;
+  coverageType: string;
+  coverageStatus: string;
   location: string;
   status: string;
   notes: string;
+  completionNotes: string;
+  completionProofUrl: string;
+  completedAt: string;
   publicBookingUrl?: string;
   createdAt: string;
   updatedAt: string;
@@ -155,13 +179,23 @@ export type AppointmentFormData = {
   appointmentStartTime: string;
   appointmentEndTime: string;
   assignedMemberId: string;
+  productId: string;
+  salesOrderId: string;
+  invoiceId: string;
+  customerAssetName: string;
+  productSerialNumber: string;
+  coverageType: string;
+  coverageStatus: string;
   location: string;
   status: string;
   notes: string;
+  completionNotes: string;
+  completionProofUrl: string;
 };
 
 export type JobSheetField = {
   id?: string;
+  clientKey?: string;
   fieldName: string;
   fieldLabel: string;
   fieldType: "text" | "date" | "textarea";
@@ -230,4 +264,15 @@ export type Holiday = {
   name: string;
   date: string;
   description: string;
+};
+
+export type AppointmentSummary = {
+  totalAppointments: number;
+  todayAppointments: number;
+  activePipeline: number;
+  completedAppointments: number;
+  coveredAppointments: number;
+  byStatus: Array<{ status: string; count: number }>;
+  byCoverage: Array<{ coverageType: string; count: number }>;
+  topWorkload: Array<{ email: string; count: number }>;
 };

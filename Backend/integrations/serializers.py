@@ -1,9 +1,11 @@
 from __future__ import annotations
+import html
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import validate_email
 from django.db import transaction
+from django.utils.html import strip_tags
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -11,12 +13,14 @@ from .models import (
     BCCDropboxSetting,
     BCCDropboxVerifiedAddress,
     CustomEmailFieldPreference,
+    EmailAttachment,
     EmailAuthenticationDomain,
     EmailComposeSetting,
     EmailCredibilityMetric,
     EmailInsightSetting,
     EmailParserInbox,
     EmailProviderIntegration,
+    EmailRecordLink,
     EmailRelayServer,
     EmailSharingPermission,
     EmailSyncLog,
@@ -72,6 +76,7 @@ class EmailProviderIntegrationListSerializer(serializers.ModelSerializer):
             "instant_notification_enabled",
             "enable_crm_sync",
             "crm_sync_enabled",
+            "last_synced_at",
             "created_by",
             "created_by_email",
             "created_at",
@@ -91,6 +96,12 @@ class EmailProviderIntegrationDetailSerializer(EmailProviderIntegrationListSeria
             "has_access_token",
             "has_refresh_token",
             "token_expiry",
+            "imap_host",
+            "imap_port",
+            "smtp_host",
+            "smtp_port",
+            "smtp_use_tls",
+            "smtp_use_ssl",
         ]
 
     def get_has_access_token(self, obj):
@@ -114,6 +125,12 @@ class EmailProviderIntegrationWriteSerializer(serializers.ModelSerializer):
             "access_token",
             "refresh_token",
             "token_expiry",
+            "imap_host",
+            "imap_port",
+            "smtp_host",
+            "smtp_port",
+            "smtp_use_tls",
+            "smtp_use_ssl",
             "sync_enabled",
             "sales_inbox_enabled",
             "instant_notification_enabled",
@@ -308,6 +325,8 @@ class SalesInboxSettingSerializer(serializers.ModelSerializer):
 
 
 class SalesInboxFeedSerializer(serializers.ModelSerializer):
+    sent_by_email = serializers.EmailField(source="from_email", read_only=True)
+    preview_text = serializers.SerializerMethodField()
     lead_id = serializers.IntegerField(source="lead.id", read_only=True, allow_null=True)
     lead_name = serializers.SerializerMethodField()
     contact_id = serializers.IntegerField(source="contact.id", read_only=True, allow_null=True)
@@ -324,7 +343,9 @@ class SalesInboxFeedSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "subject",
+            "sent_by_email",
             "from_email",
+            "preview_text",
             "direction",
             "status",
             "received_at",
@@ -359,6 +380,110 @@ class SalesInboxFeedSerializer(serializers.ModelSerializer):
 
     def get_support_case_name(self, obj):
         return record_display_name(obj.support_case)
+
+    def get_preview_text(self, obj):
+        preview_source = obj.body_text or strip_tags(obj.body_html or "")
+        preview = html.unescape((preview_source or "").strip())
+        preview = " ".join(preview.split())
+        return preview[:160]
+
+
+class EmailAttachmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EmailAttachment
+        fields = [
+            "id",
+            "file_name",
+            "file_type",
+            "file_size",
+            "file_url",
+            "created_at",
+        ]
+
+
+class EmailRecordLinkSerializer(serializers.ModelSerializer):
+    lead_name = serializers.SerializerMethodField()
+    contact_name = serializers.SerializerMethodField()
+    account_name = serializers.SerializerMethodField()
+    deal_name = serializers.SerializerMethodField()
+    support_case_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = EmailRecordLink
+        fields = [
+            "id",
+            "lead",
+            "lead_name",
+            "contact",
+            "contact_name",
+            "account",
+            "account_name",
+            "deal",
+            "deal_name",
+            "support_case",
+            "support_case_name",
+            "created_at",
+        ]
+
+    def get_lead_name(self, obj):
+        return record_display_name(obj.lead)
+
+    def get_contact_name(self, obj):
+        return record_display_name(obj.contact)
+
+    def get_account_name(self, obj):
+        return record_display_name(obj.account)
+
+    def get_deal_name(self, obj):
+        return record_display_name(obj.deal)
+
+    def get_support_case_name(self, obj):
+        return record_display_name(obj.support_case)
+
+
+class CRMEmailDetailSerializer(SalesInboxFeedSerializer):
+    provider_account_id = serializers.IntegerField(source="provider_integration_id", read_only=True)
+    provider_email = serializers.EmailField(source="provider_integration.email_address", read_only=True)
+    body_text = serializers.CharField(read_only=True, allow_null=True)
+    body_html = serializers.CharField(read_only=True, allow_null=True)
+    to_emails = serializers.ListField(child=serializers.EmailField(), read_only=True)
+    cc_emails = serializers.ListField(child=serializers.EmailField(), read_only=True)
+    bcc_emails = serializers.ListField(child=serializers.EmailField(), read_only=True)
+    attachments = EmailAttachmentSerializer(many=True, read_only=True)
+    record_link = EmailRecordLinkSerializer(read_only=True)
+
+    class Meta(SalesInboxFeedSerializer.Meta):
+        fields = SalesInboxFeedSerializer.Meta.fields + [
+            "provider_account_id",
+            "provider_email",
+            "body_text",
+            "body_html",
+            "to_emails",
+            "cc_emails",
+            "bcc_emails",
+            "attachments",
+            "record_link",
+        ]
+
+
+class CRMEmailSendSerializer(serializers.Serializer):
+    provider_account_id = serializers.IntegerField()
+    to = serializers.ListField(child=serializers.EmailField(), allow_empty=False)
+    cc = serializers.ListField(child=serializers.EmailField(), required=False, allow_empty=True)
+    bcc = serializers.ListField(child=serializers.EmailField(), required=False, allow_empty=True)
+    subject = serializers.CharField(max_length=255)
+    body = serializers.CharField()
+    reply_to = serializers.EmailField(required=False, allow_null=True)
+    lead_id = serializers.IntegerField(required=False)
+    contact_id = serializers.IntegerField(required=False)
+    account_id = serializers.IntegerField(required=False)
+    deal_id = serializers.IntegerField(required=False)
+    support_case_id = serializers.IntegerField(required=False)
+
+
+class CRMEmailSyncSerializer(serializers.Serializer):
+    provider_account_id = serializers.IntegerField(required=False)
+    sync_type = serializers.ChoiceField(choices=EmailSyncLog.SyncType.choices, required=False)
 
 
 class EmailParserInboxSerializer(serializers.ModelSerializer):
@@ -589,6 +714,7 @@ class SocialAccountSerializer(serializers.ModelSerializer):
             "refresh_token",
             "is_connected",
             "connected_at",
+            "last_synced_at",
             "is_active",
             "created_at",
             "updated_at",
@@ -875,7 +1001,19 @@ class IntegrationLeadSourceEventSerializer(serializers.ModelSerializer):
         return record_display_name(obj.support_case)
 
     def get_source_label(self, obj):
-        return obj.payload.get("source_label") or obj.source_reference
+        payload = obj.payload or {}
+        if obj.source_type == IntegrationLeadSourceEvent.SourceType.EMAIL:
+            subject = payload.get("subject")
+            from_email = payload.get("from_email")
+            direction = payload.get("direction")
+            if subject and from_email:
+                suffix = "sent" if direction == "outgoing" else "received"
+                return f"{subject} ({from_email}, {suffix})"
+            if subject:
+                return subject
+            if from_email:
+                return from_email
+        return payload.get("source_label") or obj.source_reference
 
 
 class EmailSyncLogSerializer(serializers.ModelSerializer):
@@ -919,3 +1057,26 @@ class CredibilityReportSerializer(serializers.Serializer):
     spam_complaints = serializers.IntegerField()
     average_score = serializers.IntegerField()
     active_relays = serializers.ListField()
+
+
+class PublicVisitorTrackingEventSerializer(serializers.Serializer):
+    portal_key = serializers.CharField(max_length=64)
+    session_id = serializers.CharField(required=False, allow_blank=True)
+    visitor_name = serializers.CharField(required=False, allow_blank=True)
+    visitor_email = serializers.EmailField(required=False, allow_null=True)
+    identified_email = serializers.EmailField(required=False, allow_null=True)
+    page_url = serializers.URLField(required=False, allow_blank=True)
+    source_url = serializers.URLField(required=False, allow_blank=True)
+    referrer = serializers.URLField(required=False, allow_blank=True)
+    page_history = serializers.ListField(child=serializers.CharField(), required=False)
+    time_spent_seconds = serializers.IntegerField(required=False, min_value=0)
+    event_type = serializers.CharField(required=False, allow_blank=True)
+    source_label = serializers.CharField(required=False, allow_blank=True)
+    source_reference = serializers.CharField(required=False, allow_blank=True)
+    phone = serializers.CharField(required=False, allow_blank=True)
+
+    def validate_visitor_email(self, value):
+        return normalize_email(value)
+
+    def validate_identified_email(self, value):
+        return normalize_email(value)

@@ -30,6 +30,9 @@ export default function JobSheetFormPage() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(Boolean(id));
   const [error, setError] = useState<string | null>(null);
+  const filteredAppointments = form.serviceId
+    ? appointments.filter((item) => item.serviceId === form.serviceId)
+    : appointments;
 
   useEffect(() => {
     const load = async () => {
@@ -57,6 +60,14 @@ export default function JobSheetFormPage() {
     };
     void load();
   }, [id]);
+
+  useEffect(() => {
+    if (!form.appointmentId) return;
+    const selectedAppointment = appointments.find((item) => item.id === form.appointmentId);
+    if (selectedAppointment && form.serviceId && selectedAppointment.serviceId !== form.serviceId) {
+      setForm((prev) => ({ ...prev, appointmentId: "" }));
+    }
+  }, [appointments, form.appointmentId, form.serviceId]);
 
   const handleSubmit = async () => {
     if (!form.serviceId) return setError("Service is required.");
@@ -107,7 +118,24 @@ export default function JobSheetFormPage() {
                 </div>
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-slate-700">Service</label>
-                  <select className={inputClass} value={form.serviceId} onChange={(e) => setForm({ ...form, serviceId: e.target.value })}>
+                  <select
+                    className={inputClass}
+                    value={form.serviceId}
+                    onChange={(e) =>
+                      setForm((prev) => {
+                        const nextServiceId = e.target.value;
+                        const currentAppointment = appointments.find((item) => item.id === prev.appointmentId);
+                        return {
+                          ...prev,
+                          serviceId: nextServiceId,
+                          appointmentId:
+                            currentAppointment && currentAppointment.serviceId === nextServiceId
+                              ? prev.appointmentId
+                              : "",
+                        };
+                      })
+                    }
+                  >
                     <option value="">Select service</option>
                     {services.map((item) => <option key={item.id} value={item.id}>{item.serviceName}</option>)}
                   </select>
@@ -116,7 +144,7 @@ export default function JobSheetFormPage() {
                   <label className="mb-1.5 block text-sm font-medium text-slate-700">Appointment</label>
                   <select className={inputClass} value={form.appointmentId} onChange={(e) => setForm({ ...form, appointmentId: e.target.value })}>
                     <option value="">Select appointment</option>
-                    {appointments.map((item) => <option key={item.id} value={item.id}>{item.appointmentNumber} • {item.appointmentForDisplay}</option>)}
+                    {filteredAppointments.map((item) => <option key={item.id} value={item.id}>{item.appointmentNumber} • {item.appointmentForDisplay}</option>)}
                   </select>
                 </div>
               </div>
@@ -129,7 +157,7 @@ export default function JobSheetFormPage() {
               </div>
               <div className="space-y-4">
                 {form.fields.map((field, index) => (
-                  <div key={`${field.fieldName}-${index}`} className="grid gap-3 rounded-lg border border-slate-200 p-4 md:grid-cols-4">
+                  <div key={field.clientKey || field.id || `job-field-${index}`} className="grid gap-3 rounded-lg border border-slate-200 p-4 md:grid-cols-4">
                     <input className={inputClass} placeholder="Field Name" value={field.fieldName} onChange={(e) => setForm((prev) => ({ ...prev, fields: prev.fields.map((item, itemIndex) => itemIndex === index ? { ...item, fieldName: e.target.value } : item) }))} />
                     <input className={inputClass} placeholder="Field Label" value={field.fieldLabel} onChange={(e) => setForm((prev) => ({ ...prev, fields: prev.fields.map((item, itemIndex) => itemIndex === index ? { ...item, fieldLabel: e.target.value } : item) }))} />
                     <select className={inputClass} value={field.fieldType} onChange={(e) => setForm((prev) => ({ ...prev, fields: prev.fields.map((item, itemIndex) => itemIndex === index ? { ...item, fieldType: e.target.value as any } : item) }))}>

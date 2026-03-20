@@ -9,7 +9,7 @@ from rest_framework import serializers
 from accounts.models import Account
 from contacts.models import Contact
 from deals.models import Deal
-from inventory.models import Product
+from inventory.models import Invoice, Product, SalesOrder
 from leads.models import Lead
 from saas_admin.models import Company
 from support.models import SupportCase
@@ -29,7 +29,9 @@ from .models import (
     ServicesModuleSettings,
 )
 from .services import (
+    build_service_operational_summary,
     get_appointment_public_booking_url,
+    get_first_product_for_document,
     get_business_hours_payload,
     get_fiscal_year_context,
     get_linked_record,
@@ -118,12 +120,19 @@ class ServicesModuleSettingsSerializer(serializers.ModelSerializer):
 class ServiceUserLookupSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     email = serializers.EmailField()
+    team = serializers.CharField()
+    team_label = serializers.SerializerMethodField()
     label = serializers.SerializerMethodField()
 
     def get_label(self, obj):
         if hasattr(obj, "email"):
             return obj.email
         return obj.get("email")
+
+    def get_team_label(self, obj):
+        if hasattr(obj, "get_team_display"):
+            return obj.get_team_display()
+        return obj.get("team")
 
 
 class BusinessHoursSerializer(serializers.ModelSerializer):
@@ -219,6 +228,7 @@ class ServiceListSerializer(serializers.ModelSerializer):
             "location_type",
             "location",
             "status",
+            "delivery_team",
             "available_days_mode",
             "available_time_mode",
             "business_hours",
@@ -269,6 +279,7 @@ class ServiceWriteSerializer(serializers.ModelSerializer):
             "location_type",
             "location",
             "status",
+            "delivery_team",
             "available_days_mode",
             "available_time_mode",
             "business_hours",
@@ -335,6 +346,7 @@ class ServiceDetailSerializer(ServiceWriteSerializer):
             "business_hours_details",
             "location_behavior",
             "public_booking_url",
+            "delivery_team",
         ]
 
     def get_members(self, obj):
@@ -373,6 +385,21 @@ class AppointmentSerializer(serializers.ModelSerializer):
         allow_null=True,
         required=False,
     )
+    product = serializers.PrimaryKeyRelatedField(
+        queryset=_active_queryset(Product),
+        allow_null=True,
+        required=False,
+    )
+    sales_order = serializers.PrimaryKeyRelatedField(
+        queryset=_active_queryset(SalesOrder),
+        allow_null=True,
+        required=False,
+    )
+    invoice = serializers.PrimaryKeyRelatedField(
+        queryset=_active_queryset(Invoice),
+        allow_null=True,
+        required=False,
+    )
     service_name = serializers.SerializerMethodField()
     service_duration_minutes = serializers.SerializerMethodField()
     business_hours_name = serializers.SerializerMethodField()
@@ -382,6 +409,9 @@ class AppointmentSerializer(serializers.ModelSerializer):
     assigned_member_email = serializers.SerializerMethodField()
     appointment_for_display = serializers.SerializerMethodField()
     public_booking_url = serializers.SerializerMethodField()
+    product_name = serializers.SerializerMethodField()
+    sales_order_subject = serializers.SerializerMethodField()
+    invoice_subject = serializers.SerializerMethodField()
 
     class Meta:
         model = ServiceAppointment
@@ -404,9 +434,22 @@ class AppointmentSerializer(serializers.ModelSerializer):
             "appointment_end_time",
             "assigned_member",
             "assigned_member_email",
+            "product",
+            "product_name",
+            "sales_order",
+            "sales_order_subject",
+            "invoice",
+            "invoice_subject",
+            "customer_asset_name",
+            "product_serial_number",
+            "coverage_type",
+            "coverage_status",
             "location",
             "status",
             "notes",
+            "completion_notes",
+            "completion_proof_url",
+            "completed_at",
             "public_booking_url",
             "created_by",
             "updated_by",
@@ -422,6 +465,9 @@ class AppointmentSerializer(serializers.ModelSerializer):
             "business_hours_details",
             "location_type",
             "assigned_member_email",
+            "product_name",
+            "sales_order_subject",
+            "invoice_subject",
             "appointment_for_display",
             "public_booking_url",
             "created_by",
@@ -439,6 +485,15 @@ class AppointmentSerializer(serializers.ModelSerializer):
         appointment_for_type = attrs.get("appointment_for_type", getattr(instance, "appointment_for_type", None))
         appointment_for_id = attrs.get("appointment_for_id", getattr(instance, "appointment_for_id", None))
         assigned_member = attrs.get("assigned_member", getattr(instance, "assigned_member", None))
+        product = attrs.get("product", getattr(instance, "product", None))
+        sales_order = attrs.get("sales_order", getattr(instance, "sales_order", None))
+        invoice = attrs.get("invoice", getattr(instance, "invoice", None))
+        status_value = attrs.get("status", getattr(instance, "status", ServiceAppointment.Status.SCHEDULED))
+        coverage_type = attrs.get("coverage_type", getattr(instance, "coverage_type", ServiceAppointment.CoverageType.NONE))
+        coverage_status = attrs.get(
+            "coverage_status",
+            getattr(instance, "coverage_status", ServiceAppointment.CoverageStatus.NOT_APPLICABLE),
+        )
 
         if not service:
             raise serializers.ValidationError({"service": "Service is required."})
@@ -479,12 +534,119 @@ class AppointmentSerializer(serializers.ModelSerializer):
             if model and not _record_exists(model, appointment_for_id):
                 raise serializers.ValidationError({"appointment_for_id": "Appointment target not found."})
 
+        if invoice and sales_order and invoice.sales_order_id and invoice.sales_order_id != sales_order.id:
+            raise serializers.ValidationError({"invoice": "Selected invoice does not belong to the selected sales order."})
+
+        if invoice and not sales_order and invoice.sales_order_id:
+            attrs["sales_order"] = invoice.sales_order
+            sales_order = invoice.sales_order
+
+        if invoice and not appointment_for_id:
+            if invoice.contact_id:
+                attrs["appointment_for_type"] = ServiceAppointment.AppointmentForType.CONTACT
+                attrs["appointment_for_id"] = invoice.contact_id
+            elif invoice.account_id:
+                attrs["appointment_for_type"] = ServiceAppointment.AppointmentForType.ACCOUNT
+                attrs["appointment_for_id"] = invoice.account_id
+            elif invoice.deal_id:
+                attrs["appointment_for_type"] = ServiceAppointment.AppointmentForType.DEAL
+                attrs["appointment_for_id"] = invoice.deal_id
+            appointment_for_type = attrs.get("appointment_for_type", appointment_for_type)
+            appointment_for_id = attrs.get("appointment_for_id", appointment_for_id)
+
+        if sales_order and not appointment_for_id:
+            if sales_order.contact_id:
+                attrs["appointment_for_type"] = ServiceAppointment.AppointmentForType.CONTACT
+                attrs["appointment_for_id"] = sales_order.contact_id
+            elif sales_order.account_id:
+                attrs["appointment_for_type"] = ServiceAppointment.AppointmentForType.ACCOUNT
+                attrs["appointment_for_id"] = sales_order.account_id
+            elif sales_order.deal_id:
+                attrs["appointment_for_type"] = ServiceAppointment.AppointmentForType.DEAL
+                attrs["appointment_for_id"] = sales_order.deal_id
+            appointment_for_type = attrs.get("appointment_for_type", appointment_for_type)
+            appointment_for_id = attrs.get("appointment_for_id", appointment_for_id)
+
+        if not product:
+            inferred_product = get_first_product_for_document(sales_order=sales_order, invoice=invoice)
+            if inferred_product:
+                attrs["product"] = inferred_product
+                product = inferred_product
+
+        if product and not attrs.get("customer_asset_name") and not getattr(instance, "customer_asset_name", None):
+            attrs["customer_asset_name"] = product.product_name
+
+        if product and coverage_type == ServiceAppointment.CoverageType.NONE:
+            today = appointment_date or timezone.localdate()
+            if product.support_expiry_date:
+                attrs["coverage_type"] = ServiceAppointment.CoverageType.WARRANTY
+                attrs["coverage_status"] = (
+                    ServiceAppointment.CoverageStatus.ACTIVE
+                    if product.support_expiry_date >= today
+                    else ServiceAppointment.CoverageStatus.EXPIRED
+                )
+                coverage_type = attrs["coverage_type"]
+                coverage_status = attrs["coverage_status"]
+
+        if product and appointment_for_type == ServiceAppointment.AppointmentForType.PRODUCT and appointment_for_id:
+            if product.id != appointment_for_id:
+                raise serializers.ValidationError({"product": "Selected product must match the linked product record."})
+
+        if product and appointment_for_type != ServiceAppointment.AppointmentForType.PRODUCT and not appointment_for_id:
+            attrs["appointment_for_type"] = ServiceAppointment.AppointmentForType.PRODUCT
+            attrs["appointment_for_id"] = product.id
+
+        if coverage_type == ServiceAppointment.CoverageType.NONE:
+            attrs["coverage_status"] = ServiceAppointment.CoverageStatus.NOT_APPLICABLE
+        elif coverage_status == ServiceAppointment.CoverageStatus.NOT_APPLICABLE:
+            raise serializers.ValidationError(
+                {"coverage_status": "Choose an active, expired, or pending status for warranty/AMC/paid services."}
+            )
+
         if assigned_member:
             assignment_exists = service.member_assignments.filter(member=assigned_member, is_active=True).exists()
-            if service.member_assignments.filter(is_active=True).exists() and not assignment_exists:
+            active_assignments = service.member_assignments.filter(is_active=True)
+            if active_assignments.exists() and not assignment_exists:
                 raise serializers.ValidationError(
                     {"assigned_member": "Assigned member must be a member of the selected service."}
                 )
+            if not active_assignments.exists() and assigned_member.team != service.delivery_team:
+                raise serializers.ValidationError(
+                    {"assigned_member": "Assigned member must belong to the selected service delivery team."}
+                )
+
+        if status_value in {
+            ServiceAppointment.Status.IN_PROGRESS,
+            ServiceAppointment.Status.COMPLETED,
+            ServiceAppointment.Status.CLOSED,
+        } and not assigned_member:
+            raise serializers.ValidationError(
+                {"assigned_member": "Assigned member is required before moving this service into execution or closure."}
+            )
+
+        completion_notes = (
+            attrs.get("completion_notes", getattr(instance, "completion_notes", "")) or ""
+        ).strip()
+        if status_value in {
+            ServiceAppointment.Status.COMPLETED,
+            ServiceAppointment.Status.CLOSED,
+        } and not completion_notes:
+            raise serializers.ValidationError(
+                {"completion_notes": "Completion notes are required when marking a service as completed or closed."}
+            )
+        if "completion_notes" in attrs:
+            attrs["completion_notes"] = completion_notes or None
+
+        if status_value in {
+            ServiceAppointment.Status.COMPLETED,
+            ServiceAppointment.Status.CLOSED,
+        }:
+            attrs["completed_at"] = attrs.get("completed_at") or getattr(instance, "completed_at", None) or timezone.now()
+        elif "completed_at" not in attrs and instance and instance.status not in {
+            ServiceAppointment.Status.COMPLETED,
+            ServiceAppointment.Status.CLOSED,
+        }:
+            attrs["completed_at"] = None
 
         return attrs
 
@@ -510,6 +672,15 @@ class AppointmentSerializer(serializers.ModelSerializer):
 
     def get_assigned_member_email(self, obj):
         return getattr(obj.assigned_member, "email", None)
+
+    def get_product_name(self, obj):
+        return getattr(obj.product, "product_name", None)
+
+    def get_sales_order_subject(self, obj):
+        return getattr(obj.sales_order, "subject", None)
+
+    def get_invoice_subject(self, obj):
+        return getattr(obj.invoice, "subject", None)
 
     def get_appointment_for_display(self, obj):
         model_map = {

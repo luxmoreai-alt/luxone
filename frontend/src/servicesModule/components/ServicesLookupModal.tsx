@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import CRMModalBase from "../../components/crm/CRMModalBase";
 import { listLookupOptions } from "../api";
-import type { AppointmentEntityType, LookupOption } from "../types";
+import type { LookupOption, ServicesLookupType } from "../types";
 
 type Props = {
   open: boolean;
-  type: AppointmentEntityType;
+  type: ServicesLookupType;
   onClose: () => void;
   onSelect: (option: LookupOption) => void;
 };

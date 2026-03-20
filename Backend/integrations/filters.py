@@ -1,4 +1,5 @@
 import django_filters
+from django.db.models import Q
 
 from .models import (
     EmailAuthenticationDomain,
@@ -76,6 +77,18 @@ class IntegrationLeadSourceEventFilter(django_filters.FilterSet):
 class SyncedEmailMessageFilter(django_filters.FilterSet):
     received_at_after = django_filters.IsoDateTimeFilter(field_name="received_at", lookup_expr="gte")
     received_at_before = django_filters.IsoDateTimeFilter(field_name="received_at", lookup_expr="lte")
+    participant_email = django_filters.CharFilter(method="filter_participant_email")
+
+    def filter_participant_email(self, queryset, name, value):
+        normalized = (value or "").strip().lower()
+        if not normalized:
+            return queryset
+        return queryset.filter(
+            Q(from_email__iexact=normalized)
+            | Q(to_emails__contains=[normalized])
+            | Q(cc_emails__contains=[normalized])
+            | Q(bcc_emails__contains=[normalized])
+        )
 
     class Meta:
         model = SyncedEmailMessage
@@ -92,6 +105,7 @@ class SyncedEmailMessageFilter(django_filters.FilterSet):
             "is_starred",
             "received_at_after",
             "received_at_before",
+            "participant_email",
         ]
 
 

@@ -34,6 +34,15 @@ class User(AbstractBaseUser, PermissionsMixin):
         MANAGER = "manager", "Manager"
         EMPLOYEE = "employee", "Employee"
 
+    class Team(models.TextChoices):
+        SALES = "sales", "Sales"
+        SUPPORT = "support", "Support"
+        SERVICE = "service", "Service"
+        TECHNICAL = "technical", "Technical"
+        CUSTOMER_SUCCESS = "customer_success", "Customer Success"
+        OPERATIONS = "operations", "Operations"
+        GENERAL = "general", "General"
+
     email = models.EmailField(unique=True)
     is_admin = models.BooleanField(default=False)
     is_staff = models.BooleanField(default=False)
@@ -53,6 +62,12 @@ class User(AbstractBaseUser, PermissionsMixin):
         max_length=20,
         choices=Role.choices,
         default=Role.EMPLOYEE,
+    )
+    team = models.CharField(
+        max_length=30,
+        choices=Team.choices,
+        default=Team.GENERAL,
+        db_index=True,
     )
     manager = models.ForeignKey(
         "self",

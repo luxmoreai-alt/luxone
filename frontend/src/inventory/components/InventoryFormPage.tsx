@@ -416,7 +416,7 @@ export default function InventoryFormPage({ moduleKey }: Props) {
               {moduleKey === "products" && (
                 <>
                   <Field label="Product Name"><input className={inputClass} value={anyForm.productName} onChange={(e) => setForm({ ...anyForm, productName: e.target.value })} /></Field>
-                  <Field label="Product Code"><input className={inputClass} value={anyForm.productCode} onChange={(e) => setForm({ ...anyForm, productCode: e.target.value })} /></Field>
+                  <Field label="Product Code"><input className={`${inputClass} bg-slate-50 text-slate-500`} value={anyForm.productCode || "Will be auto-generated as PRD0001"} readOnly /></Field>
                   <Field label="Vendor"><InventoryLookupField lookup="vendors" value={anyForm.vendor || ""} displayValue={anyForm.vendorLabel || ""} onChange={(option) => setForm({ ...anyForm, vendor: option?.id || "", vendorLabel: option?.label || "" })} /></Field>
                   <Field label="Manufacturer"><input className={inputClass} value={anyForm.manufacturer || ""} onChange={(e) => setForm({ ...anyForm, manufacturer: e.target.value })} /></Field>
                   <Field label="Product Category"><input className={inputClass} value={anyForm.productCategory || ""} onChange={(e) => setForm({ ...anyForm, productCategory: e.target.value })} /></Field>

@@ -247,13 +247,14 @@ export async function scheduleAccountMeeting(
 
 export async function sendAccountEmail(
   id: string,
-  payload: { subject: string; body: string }
+  payload: { subject: string; body: string; to?: string }
 ): Promise<void> {
   await apiRequest(endpoint(`/accounts/${id}/send-email`), {
     method: "POST",
     body: JSON.stringify({
       subject: payload.subject,
       body: payload.body,
+      to_email: payload.to ?? "",
     }),
   });
 }
