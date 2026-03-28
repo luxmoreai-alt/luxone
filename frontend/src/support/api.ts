@@ -14,6 +14,7 @@ import type {
   SupportModuleKey,
 } from "./types";
 import { buildInitials, formatSupportDate, mapTimelineItems } from "./utils";
+import { buildFlowTimeline } from "../lib/shared/timelineFlow";
 
 type Paginated<T> = {
   count: number;
@@ -226,6 +227,11 @@ export async function getCaseDetail(id: string): Promise<CaseDetailData> {
     const key = `${item.recordType}|${item.name}|${item.status}`;
     return list.findIndex((entry) => `${entry.recordType}|${entry.name}|${entry.status}` === key) === index;
   });
+  const notes = (detail.notes || []).map((item: any) => mapNote(id, item));
+  const attachments = (detail.attachments || []).map((item: any) => mapAttachment(id, item));
+  const openActivities = (detail.open_activities || []).map((item: any) => mapActivity(id, item));
+  const closedActivities = (detail.closed_activities || []).map((item: any) => mapActivity(id, item));
+
   return {
     id: asString(detail.id),
     caseNumber: asString(detail.case_number),
@@ -262,37 +268,34 @@ export async function getCaseDetail(id: string): Promise<CaseDetailData> {
     ],
     solutionInformation: [{ label: "Solution", value: asString(detail.solution_text) || "-" }],
     commentInformation: [{ label: "Comments", value: String(asNumber(detail.no_of_comments)) }],
-    timeline: [
-      ...mapTimelineItems(detail.timeline || []),
-      ...integrationEmails.map((item: any) =>
-        mapIntegrationTimeline(id, {
-          id: `integration-email-${asString(item.id)}`,
-          type: "Email",
-          title: asString(item.subject) || "Email",
-          detail: `From ${asString(item.from_email)}`,
-          at: asString(item.sent_at || item.received_at || item.created_at),
-          by: asString(item.from_email),
-        })
-      ),
-      ...socialMessages.map((item: any) =>
-        mapIntegrationTimeline(id, {
-          id: `social-${asString(item.id)}`,
-          type: "Update",
-          title: `${asString(item.platform)} message`,
-          detail: asString(item.message),
-          at: asString(item.created_at_source || item.created_at),
-          by: asString(item.sender_name || item.sender_email),
-        })
-      ),
-    ],
+    timeline: buildFlowTimeline({
+      existing: [
+        ...mapTimelineItems(detail.timeline || []),
+        ...socialMessages.map((item: any) =>
+          mapIntegrationTimeline(id, {
+            id: `social-${asString(item.id)}`,
+            type: "Update",
+            title: `${asString(item.platform)} message`,
+            detail: asString(item.message),
+            at: asString(item.created_at_source || item.created_at),
+            by: asString(item.sender_name || item.sender_email),
+          })
+        ),
+      ],
+      notes,
+      attachments,
+      openActivities,
+      closedActivities,
+      emails: relatedEmails,
+    }),
     related: {
-      notes: (detail.notes || []).map((item: any) => mapNote(id, item)),
+      notes,
       comments: (detail.comments || []).map(mapComment),
-      attachments: (detail.attachments || []).map((item: any) => mapAttachment(id, item)),
+      attachments,
       emails: relatedEmails,
       connectedRecords: relatedConnectedRecords,
-      openActivities: (detail.open_activities || []).map((item: any) => mapActivity(id, item)),
-      closedActivities: (detail.closed_activities || []).map((item: any) => mapActivity(id, item)),
+      openActivities,
+      closedActivities,
       links: [],
     },
   };
@@ -304,6 +307,8 @@ export async function getCaseSnapshot(id: string) {
 
 export async function getSolutionDetail(id: string): Promise<SolutionDetailData> {
   const detail = await apiRequest<any>(`${modulePathMap.solutions}/${id}`);
+  const notes = (detail.notes || []).map((item: any) => mapNote(id, item));
+  const attachments = (detail.attachments || []).map((item: any) => mapAttachment(id, item));
   return {
     id: asString(detail.id),
     solutionNumber: asString(detail.solution_number),
@@ -329,14 +334,19 @@ export async function getSolutionDetail(id: string): Promise<SolutionDetailData>
     ],
     descriptionInformation: [
       { label: "Question", value: asString(detail.question) || "-" },
-      { label: "Answer", value: asString(detail.answer) || "-" },
+      { label: "Solution Answer", value: asString(detail.answer) || "-" },
+      { label: "Steps to Resolve", value: asString(detail.resolution_steps) || "-" },
     ],
     commentInformation: [{ label: "Comments", value: String(asNumber(detail.no_of_comments)) }],
-    timeline: mapTimelineItems(detail.timeline || []),
+    timeline: buildFlowTimeline({
+      existing: mapTimelineItems(detail.timeline || []),
+      notes,
+      attachments,
+    }),
     related: {
-      notes: (detail.notes || []).map((item: any) => mapNote(id, item)),
+      notes,
       comments: (detail.comments || []).map(mapComment),
-      attachments: (detail.attachments || []).map((item: any) => mapAttachment(id, item)),
+      attachments,
       emails: [],
       connectedRecords: (detail.linked_records || []).map((item: any) => mapConnectedRecord(id, item)),
       openActivities: [],
@@ -344,6 +354,14 @@ export async function getSolutionDetail(id: string): Promise<SolutionDetailData>
       links: [],
     },
   };
+}
+
+export async function findExistingSolutionByCase(caseId: string) {
+  const payload = await apiRequest<any[] | { results?: any[] }>(modulePathMap.solutions, {
+    query: { source_case: caseId, page_size: "1" },
+  });
+  const first = Array.isArray(payload) ? payload[0] : payload.results?.[0];
+  return first ? { id: asString(first.id) } : null;
 }
 
 function casePayload(values: CaseFormData) {
@@ -378,6 +396,7 @@ function solutionPayload(values: SolutionFormData) {
     status: values.status,
     question: values.question,
     answer: values.answer,
+    resolution_steps: values.resolutionSteps,
     owner: values.owner ? Number(values.owner) : undefined,
     source_case: values.sourceCase ? Number(values.sourceCase) : undefined,
     product: values.product ? Number(values.product) : undefined,

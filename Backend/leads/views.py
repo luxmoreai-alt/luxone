@@ -3,6 +3,7 @@ from django.core.validators import EmailValidator
 from django.db import models as django_models
 from django.db import transaction
 from django.db.models import Prefetch
+from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
@@ -21,6 +22,7 @@ from integrations.services import (
     get_lead_emails,
     get_user_default_email_provider,
 )
+from integrations.models import IntegrationLeadSourceEvent
 from notes.models import LeadNote
 from notes.serializers import LeadNoteSerializer
 
@@ -98,7 +100,54 @@ class LeadViewSet(viewsets.ModelViewSet):
         if owner_id and getattr(user, "role", "employee") in ("admin", "manager"):
             qs = qs.filter(owner_id=owner_id)
 
-        return qs
+        if self.action == "list":
+            qs = qs.annotate(
+                email_source_event_count=django_models.Count(
+                    "integration_source_events",
+                    filter=django_models.Q(
+                        integration_source_events__source_type=IntegrationLeadSourceEvent.SourceType.EMAIL
+                    ),
+                    distinct=True,
+                ),
+                non_email_source_event_count=django_models.Count(
+                    "integration_source_events",
+                    filter=~django_models.Q(
+                        integration_source_events__source_type=IntegrationLeadSourceEvent.SourceType.EMAIL
+                    ),
+                    distinct=True,
+                ),
+                note_count=django_models.Count("notes", distinct=True),
+                activity_count=django_models.Count("activities", distinct=True),
+            ).exclude(
+                django_models.Q(lead_source="Integration")
+                & django_models.Q(lead_status="New")
+                & django_models.Q(email_source_event_count__gt=0)
+                & django_models.Q(non_email_source_event_count=0)
+                & django_models.Q(note_count=0)
+                & django_models.Q(activity_count=0)
+                & django_models.Q(converted_account__isnull=True)
+                & django_models.Q(converted_contact__isnull=True)
+                & django_models.Q(converted_deal__isnull=True)
+                & django_models.Q(annual_revenue__isnull=True)
+                & django_models.Q(employee_count__isnull=True)
+                & (django_models.Q(title__isnull=True) | django_models.Q(title=""))
+                & (django_models.Q(phone__isnull=True) | django_models.Q(phone=""))
+                & (django_models.Q(mobile__isnull=True) | django_models.Q(mobile=""))
+                & (django_models.Q(website__isnull=True) | django_models.Q(website=""))
+                & (django_models.Q(industry__isnull=True) | django_models.Q(industry=""))
+                & (django_models.Q(rating__isnull=True) | django_models.Q(rating=""))
+                & (django_models.Q(street__isnull=True) | django_models.Q(street=""))
+                & (django_models.Q(city__isnull=True) | django_models.Q(city=""))
+                & (django_models.Q(state__isnull=True) | django_models.Q(state=""))
+                & (django_models.Q(country__isnull=True) | django_models.Q(country=""))
+                & (django_models.Q(zip_code__isnull=True) | django_models.Q(zip_code=""))
+                & (django_models.Q(skype_id__isnull=True) | django_models.Q(skype_id=""))
+                & (django_models.Q(secondary_email__isnull=True) | django_models.Q(secondary_email=""))
+                & (django_models.Q(description__isnull=True) | django_models.Q(description=""))
+                & django_models.Q(tags=[])
+            )
+
+        return qs.order_by("-created_at", "-id")
 
     def get_serializer_class(self):
         if self.action == "list":

@@ -7,7 +7,7 @@ from .models import (
 
 def get_project_queryset():
     return Project.objects.prefetch_related(
-        'tasks', 'phases', 'issues', 'members', 'files', 'notes', 'time_logs'
+        'projectdesk_tasks', 'projectdesk_meetings', 'phases', 'issues', 'members', 'files', 'notes', 'time_logs'
     )
 
 

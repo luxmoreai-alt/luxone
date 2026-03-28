@@ -394,7 +394,7 @@ class SupportSolutionWriteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SupportSolution
-        fields = ["solution_title", "status", "question", "answer", "owner", "source_case", "product"]
+        fields = ["solution_title", "status", "question", "answer", "resolution_steps", "owner", "source_case", "product"]
 
     def validate_solution_title(self, value):
         value = (value or "").strip()
@@ -414,9 +414,14 @@ class SupportSolutionWriteSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Answer is required.")
         return value
 
+    def validate_resolution_steps(self, value):
+        value = (value or "").strip()
+        return value or None
+
 
 class SupportSolutionDetailSerializer(SupportSolutionListSerializer):
     answer = serializers.CharField(read_only=True)
+    resolution_steps = serializers.CharField(read_only=True)
     notes = SupportNoteSerializer(many=True, read_only=True)
     comments = SupportCommentSerializer(many=True, read_only=True)
     attachments = SupportAttachmentSerializer(many=True, read_only=True)
@@ -427,6 +432,7 @@ class SupportSolutionDetailSerializer(SupportSolutionListSerializer):
     class Meta(SupportSolutionListSerializer.Meta):
         fields = SupportSolutionListSerializer.Meta.fields + [
             "answer",
+            "resolution_steps",
             "created_by",
             "updated_by",
             "notes",

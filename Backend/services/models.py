@@ -303,6 +303,7 @@ class ServiceAppointment(BaseModel):
     notes = models.TextField(blank=True, null=True)
     completion_notes = models.TextField(blank=True, null=True)
     completion_proof_url = models.URLField(max_length=500, blank=True, null=True)
+    completion_proof_file = models.FileField(upload_to="services/appointments/", blank=True, null=True)
     completed_at = models.DateTimeField(blank=True, null=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

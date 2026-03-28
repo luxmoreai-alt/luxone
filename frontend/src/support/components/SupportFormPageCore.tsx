@@ -71,6 +71,7 @@ const emptySolutionForm: SolutionFormData = {
   status: "Draft",
   question: "",
   answer: "",
+  resolutionSteps: "",
   owner: "",
   ownerLabel: "",
   sourceCase: "",
@@ -106,6 +107,9 @@ export default function SupportFormPageCore({ moduleKey }: Props) {
             ...prev,
             solutionNumber: detail.solutionNumber,
             solutionTitle: detail.solutionTitle,
+            resolutionSteps: detail.descriptionInformation?.find((field: any) => field.label === "Steps to Resolve")?.value === "-"
+              ? ""
+              : detail.descriptionInformation?.find((field: any) => field.label === "Steps to Resolve")?.value || "",
           }));
         }
       } catch (err) {
@@ -191,6 +195,7 @@ export default function SupportFormPageCore({ moduleKey }: Props) {
           product: prev.product || String(detail.product || ""),
           productLabel: prev.productLabel || String(detail.product_name || ""),
           question: prev.question || String(detail.subject || ""),
+          answer: prev.answer || String(detail.solution_text || ""),
           solutionTitle:
             prev.solutionTitle ||
             (detail.subject
@@ -249,14 +254,62 @@ export default function SupportFormPageCore({ moduleKey }: Props) {
     });
   }, [moduleKey, solutionForm.productLabel, solutionForm.question, solutionForm.sourceCaseNumber]);
 
+  const hydrateLeadContext = async (dealId?: string, fallbackLeadName?: string) => {
+    if (!dealId && !fallbackLeadName) {
+      return { leadName: "", leadSource: "" };
+    }
+
+    let leadName = fallbackLeadName || "";
+    let leadSource = "";
+    let leadId = "";
+
+    if (dealId) {
+      try {
+        const detail = await apiRequest<any>(`/deals/${dealId}`);
+        leadName = String(detail.lead_name || leadName || "");
+        leadId = String(detail.lead || "");
+      } catch {
+        // Keep fallback values when deal enrichment fails.
+      }
+    }
+
+    if (leadId) {
+      try {
+        const leadDetail = await apiRequest<any>(`/leads/${leadId}`);
+        leadName = String(leadDetail.lead_name || leadName || "");
+        leadSource = String(leadDetail.lead_source || "");
+      } catch {
+        // Leave lead source empty if lead fetch fails.
+      }
+    }
+
+    if (!leadSource && leadName) {
+      try {
+        const payload = await apiRequest<any[] | { results?: any[] }>("/leads", {
+          query: { search: leadName, page_size: "1" },
+        });
+        const firstLead = Array.isArray(payload) ? payload[0] : payload.results?.[0];
+        if (firstLead) {
+          leadSource = String(firstLead.lead_source || "");
+          leadName = String(firstLead.lead_name || leadName || "");
+        }
+      } catch {
+        // Do not block case entry if search-based enrichment fails.
+      }
+    }
+
+    return { leadName, leadSource };
+  };
+
   const handleContactSelect = (option: SupportLookupOption | null) => {
     if (!option) {
-      setCaseForm((prev) => ({ ...prev, relatedContact: "", relatedContactLabel: "" }));
+      setCaseForm((prev) => ({ ...prev, relatedContact: "", relatedContactLabel: "", leadName: "", leadSource: "" }));
       return;
     }
     void (async () => {
       let linkedDealId = "";
       let linkedDealName = "";
+      let linkedLeadName = "";
       try {
         const deals = await apiRequest<any[] | { results?: any[] }>("/deals", {
           query: { contact: option.id, page_size: "1" },
@@ -264,9 +317,12 @@ export default function SupportFormPageCore({ moduleKey }: Props) {
         const firstDeal = Array.isArray(deals) ? deals[0] : deals.results?.[0];
         linkedDealId = firstDeal ? String(firstDeal.id || "") : "";
         linkedDealName = firstDeal ? String(firstDeal.deal_name || firstDeal.name || "") : "";
+        linkedLeadName = firstDeal ? String(firstDeal.lead_name || "") : "";
       } catch {
         // Keep manual deal selection when linked-deal lookup fails.
       }
+
+      const leadContext = await hydrateLeadContext(linkedDealId, linkedLeadName);
 
       setCaseForm((prev) => ({
         ...prev,
@@ -280,7 +336,29 @@ export default function SupportFormPageCore({ moduleKey }: Props) {
         dealLabel: prev.dealLabel || linkedDealName,
         reportedBy: prev.reportedBy || option.label,
         company: prev.company || option.accountName || prev.company,
+        leadName: prev.leadName || leadContext.leadName,
+        leadSource: prev.leadSource || leadContext.leadSource,
         subject: prev.subject || (prev.productLabel ? `${prev.productLabel} Issue - ${option.label}` : `Support Issue - ${option.label}`),
+      }));
+    })();
+  };
+
+  const handleDealSelect = (option: SupportLookupOption | null) => {
+    if (!option) {
+      setCaseForm((prev) => ({ ...prev, deal: "", dealLabel: "", leadName: "", leadSource: "" }));
+      return;
+    }
+
+    void (async () => {
+      const leadContext = await hydrateLeadContext(option.id, option.name || option.label);
+      setCaseForm((prev) => ({
+        ...prev,
+        deal: option.id,
+        dealLabel: option.label,
+        leadName: leadContext.leadName || prev.leadName,
+        leadSource: leadContext.leadSource || prev.leadSource,
+        account: prev.account || option.accountId || prev.account,
+        accountLabel: prev.accountLabel || option.accountName || prev.accountLabel,
       }));
     })();
   };
@@ -346,6 +424,12 @@ export default function SupportFormPageCore({ moduleKey }: Props) {
         </div>
 
         {error ? <div className="rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div> : null}
+        <div className="rounded-xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-sm text-slate-700">
+          <span className="font-medium text-slate-900">Quick tip:</span>{" "}
+          {moduleKey === "cases"
+            ? "Pick the contact, account, or deal first so the case can auto-fill customer context, lead details, and a cleaner subject line."
+            : "Link the source case or product first so the solution title, answer context, and issue history stay connected."}
+        </div>
 
         {moduleKey === "cases" ? (
           <div className="space-y-4">
@@ -363,13 +447,19 @@ export default function SupportFormPageCore({ moduleKey }: Props) {
                 <Field label="Subject" required><input className={inputClass} value={caseForm.subject} onChange={(e) => setCaseForm({ ...caseForm, subject: e.target.value })} /></Field>
                 <Field label="Account Name"><CaseLookupField label="Account" lookup="accounts" value={caseForm.account} displayValue={caseForm.accountLabel} onChange={(option) => setCaseForm({ ...caseForm, account: option?.id || "", accountLabel: option?.label || "" })} /></Field>
                 <Field label="Reported By"><input className={inputClass} value={caseForm.reportedBy} onChange={(e) => setCaseForm({ ...caseForm, reportedBy: e.target.value })} /></Field>
-                <Field label="Deal Name"><CaseLookupField label="Deal" lookup="deals" value={caseForm.deal} displayValue={caseForm.dealLabel} onChange={(option) => setCaseForm({ ...caseForm, deal: option?.id || "", dealLabel: option?.label || "" })} /></Field>
+                <Field label="Deal Name"><CaseLookupField label="Deal" lookup="deals" value={caseForm.deal} displayValue={caseForm.dealLabel} onChange={handleDealSelect} /></Field>
                 <Field label="Email"><input className={inputClass} value={caseForm.email} onChange={(e) => setCaseForm({ ...caseForm, email: e.target.value })} /></Field>
                 <Field label="Phone"><input className={inputClass} value={caseForm.phone} onChange={(e) => setCaseForm({ ...caseForm, phone: e.target.value })} /></Field>
                 <Field label="Company"><input className={inputClass} value={caseForm.company} onChange={(e) => setCaseForm({ ...caseForm, company: e.target.value })} /></Field>
-                <Field label="Lead Name"><input className={inputClass} value={caseForm.leadName} onChange={(e) => setCaseForm({ ...caseForm, leadName: e.target.value })} /></Field>
+                <div>
+                  <Field label="Lead Name"><input className={inputClass} value={caseForm.leadName} onChange={(e) => setCaseForm({ ...caseForm, leadName: e.target.value })} /></Field>
+                  <p className="mt-1 text-xs text-slate-500">Auto-filled from the selected deal or related contact when a linked lead exists.</p>
+                </div>
                 <Field label="Country"><input className={inputClass} value={caseForm.country} onChange={(e) => setCaseForm({ ...caseForm, country: e.target.value })} /></Field>
-                <Field label="Lead Source"><input className={inputClass} value={caseForm.leadSource} onChange={(e) => setCaseForm({ ...caseForm, leadSource: e.target.value })} /></Field>
+                <div>
+                  <Field label="Lead Source"><input className={inputClass} value={caseForm.leadSource} onChange={(e) => setCaseForm({ ...caseForm, leadSource: e.target.value })} /></Field>
+                  <p className="mt-1 text-xs text-slate-500">Filled from the linked lead when the CRM can resolve it.</p>
+                </div>
               </div>
             </div>
             <div className="rounded-xl border border-slate-200 bg-white p-5">
@@ -399,7 +489,8 @@ export default function SupportFormPageCore({ moduleKey }: Props) {
             <div className="rounded-xl border border-slate-200 bg-white p-5">
               <div className="grid gap-4">
                 <Field label="Question" required><textarea className={textareaClass} value={solutionForm.question} onChange={(e) => setSolutionForm({ ...solutionForm, question: e.target.value })} /></Field>
-                <Field label="Answer" required><textarea className={textareaClass} value={solutionForm.answer} onChange={(e) => setSolutionForm({ ...solutionForm, answer: e.target.value })} /></Field>
+                <Field label="Solution Answer" required><textarea className={textareaClass} value={solutionForm.answer} onChange={(e) => setSolutionForm({ ...solutionForm, answer: e.target.value })} /></Field>
+                <Field label="Steps to Resolve"><textarea className={textareaClass} value={solutionForm.resolutionSteps} onChange={(e) => setSolutionForm({ ...solutionForm, resolutionSteps: e.target.value })} placeholder="Step 1...\nStep 2...\nStep 3..." /></Field>
               </div>
             </div>
           </div>

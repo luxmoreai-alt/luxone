@@ -46,10 +46,22 @@ export default function ServiceDetailPage() {
   if (loading) return <DashboardLayout><div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Loading service...</div></DashboardLayout>;
   if (error || !service) return <DashboardLayout><div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-600">{error || "Service not found."}</div></DashboardLayout>;
 
+  const latestAppointment = [...appointments].sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+  const latestJobSheet = [...jobSheets].sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+
   return (
     <DashboardLayout>
       <div className="space-y-4">
-        <CRMDetailHeader title={service.serviceName} subtitle={service.status} avatar={service.serviceName.slice(0, 2).toUpperCase()} actions={["Edit"]} onBack={() => navigate("/services/catalog")} />
+        <CRMDetailHeader
+          title={service.serviceName}
+          subtitle={service.status}
+          avatar={service.serviceName.slice(0, 2).toUpperCase()}
+          actions={["Edit"]}
+          onBack={() => navigate("/services/catalog")}
+          onActionClick={(action) => {
+            if (action === "Edit") navigate(`/services/catalog/${service.id}/edit`);
+          }}
+        />
 
         <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="space-y-4">
@@ -96,6 +108,46 @@ export default function ServiceDetailPage() {
               </div>
             </CRMSectionCard>
 
+            <CRMSectionCard title="Service Flow">
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-xs uppercase tracking-wide text-slate-500">Step 1</div>
+                  <div className="mt-2 text-sm font-semibold text-slate-900">Service Catalog</div>
+                  <div className="mt-1 text-sm text-slate-600">{service.serviceName}</div>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-xs uppercase tracking-wide text-slate-500">Step 2</div>
+                  <div className="mt-2 text-sm font-semibold text-slate-900">Appointment</div>
+                  <div className="mt-1 text-sm text-slate-600">
+                    {latestAppointment ? latestAppointment.appointmentForDisplay || latestAppointment.appointmentNumber : "No appointment yet"}
+                  </div>
+                  {latestAppointment ? (
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/services/appointments/${latestAppointment.id}`)}
+                      className="mt-2 text-xs font-medium text-blue-600"
+                    >
+                      Open Appointment
+                    </button>
+                  ) : null}
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-xs uppercase tracking-wide text-slate-500">Step 3</div>
+                  <div className="mt-2 text-sm font-semibold text-slate-900">Job Sheet</div>
+                  <div className="mt-1 text-sm text-slate-600">{latestJobSheet ? latestJobSheet.title : "No job sheet yet"}</div>
+                  {latestJobSheet ? (
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/services/job-sheets/${latestJobSheet.id}`)}
+                      className="mt-2 text-xs font-medium text-blue-600"
+                    >
+                      Open Job Sheet
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </CRMSectionCard>
+
             <CRMSectionCard title="Appointments" action={<button type="button" onClick={() => navigate(`/services/appointments/create?service=${service.id}`)} className="text-xs font-medium text-blue-600">New Appointment</button>}>
               <div className="space-y-2">
                 {appointments.length ? appointments.map((item) => (
@@ -118,7 +170,7 @@ export default function ServiceDetailPage() {
                 setService((current) => (current ? { ...current, members: nextMembers, membersCount: nextMembers.length } : current));
               }}
             />
-            <CRMSectionCard title="Job Sheets" action={<button type="button" onClick={() => navigate("/services/job-sheets/create")} className="text-xs font-medium text-blue-600">New Job Sheet</button>}>
+            <CRMSectionCard title="Job Sheets" action={<button type="button" onClick={() => navigate(`/services/job-sheets/create?service=${service.id}`)} className="text-xs font-medium text-blue-600">New Job Sheet</button>}>
               <div className="space-y-2">
                 {jobSheets.length ? jobSheets.map((sheet) => (
                   <button key={sheet.id} type="button" onClick={() => navigate(`/services/job-sheets/${sheet.id}`)} className="block w-full rounded-lg border border-slate-200 p-3 text-left hover:bg-slate-50">

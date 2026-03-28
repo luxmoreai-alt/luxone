@@ -5,7 +5,7 @@ import CRMRelatedList from "../../components/crm/CRMRelatedList";
 import CRMSectionCard from "../../components/crm/CRMSectionCard";
 import CRMTabs from "../../components/crm/CRMTabs";
 import DashboardLayout from "../../components/layout/DashboardLayout";
-import { addSupportComment, getCaseDetail, getSolutionDetail } from "../api";
+import { addSupportComment, findExistingSolutionByCase, getCaseDetail, getSolutionDetail } from "../api";
 import { supportModuleMeta } from "../config";
 import type { SupportModuleKey } from "../types";
 import CaseAttachmentsPanel from "./CaseAttachmentsPanel";
@@ -72,8 +72,28 @@ export default function SupportDetailPageCore({ moduleKey }: Props) {
           title={payload.subject || payload.solutionTitle}
           subtitle={payload.subtitle}
           avatar={payload.avatar}
-          actions={["Edit"]}
+          actions={moduleKey === "cases" ? ["Convert to Solution", "Edit"] : ["Edit"]}
           onBack={() => navigate(meta.baseRoute)}
+          onActionClick={async (action) => {
+            if (action === "Edit") {
+              navigate(`${meta.baseRoute}/${payload.id}/edit`);
+              return;
+            }
+            if (action === "Convert to Solution" && moduleKey === "cases") {
+              const existing = await findExistingSolutionByCase(String(payload.id)).catch(() => null);
+              if (existing?.id) {
+                navigate(`/support/solutions/${existing.id}`);
+                return;
+              }
+              const query = new URLSearchParams({
+                caseId: String(payload.id),
+                caseNumber: String(payload.caseNumber || ""),
+                productId: String(payload.productId || ""),
+                productName: String(payload.productName || ""),
+              });
+              navigate(`/support/solutions/create?${query.toString()}`);
+            }
+          }}
         />
 
         <CRMTabs activeTab={activeTab} onChange={setActiveTab} />

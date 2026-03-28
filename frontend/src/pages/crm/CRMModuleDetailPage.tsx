@@ -71,6 +71,12 @@ export default function CRMModuleDetailPage<T extends CRMRecord>({
   const [activeTab, setActiveTab] = useState<"overview" | "timeline">("overview");
   const [activeRelatedItem, setActiveRelatedItem] = useState(config.relatedListItems[0] || "");
 
+  const renderPrimarySecondary = (primary: string, secondary?: string) => {
+    const cleanPrimary = String(primary || "").trim() || "Unnamed";
+    const cleanSecondary = String(secondary || "").trim();
+    return cleanSecondary ? `${cleanPrimary} • ${cleanSecondary}` : cleanPrimary;
+  };
+
   const record = useMemo(() => rows.find((row) => row.id === id) ?? rows[0], [id, rows]);
 
   const sectionIdMap = useMemo(() => {
@@ -326,11 +332,20 @@ export default function CRMModuleDetailPage<T extends CRMRecord>({
           {serviceRecords.map((item) => (
             <div key={item.id} className="rounded-md border border-slate-200 p-3 text-sm text-slate-700">
               <div className="font-medium text-slate-800">
-                {item.recordType}: {item.name}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (item.route) navigate(item.route);
+                  }}
+                  className="text-left text-blue-600 hover:underline"
+                >
+                  {item.recordType}: {item.name}
+                </button>
               </div>
               <div className="mt-1 text-xs text-slate-500">
                 {[item.owner, item.status].filter(Boolean).join(" | ") || "Linked service record"}
               </div>
+              {item.meta ? <div className="mt-1 text-xs text-slate-400">{item.meta}</div> : null}
             </div>
           ))}
         </div>
@@ -402,7 +417,7 @@ export default function CRMModuleDetailPage<T extends CRMRecord>({
         <div className="space-y-2">
           {data.quotes.map((item) => (
             <div key={item.id} className="rounded-md border border-slate-200 p-3 text-sm text-slate-700">
-              {item.quoteName} • {item.status}
+              {renderPrimarySecondary(item.quoteName, item.status)}
             </div>
           ))}
         </div>
@@ -416,7 +431,7 @@ export default function CRMModuleDetailPage<T extends CRMRecord>({
         <div className="space-y-2">
           {data.salesOrders.map((item) => (
             <div key={item.id} className="rounded-md border border-slate-200 p-3 text-sm text-slate-700">
-              {item.orderNumber} • {item.status}
+              {renderPrimarySecondary(item.orderNumber, item.status)}
             </div>
           ))}
         </div>
@@ -430,7 +445,7 @@ export default function CRMModuleDetailPage<T extends CRMRecord>({
         <div className="space-y-2">
           {data.purchaseOrders.map((item) => (
             <div key={item.id} className="rounded-md border border-slate-200 p-3 text-sm text-slate-700">
-              {item.poNumber} • {item.status}
+              {renderPrimarySecondary(item.poNumber, item.status)}
             </div>
           ))}
         </div>
@@ -444,7 +459,7 @@ export default function CRMModuleDetailPage<T extends CRMRecord>({
         <div className="space-y-2">
           {data.invoices.map((item) => (
             <div key={item.id} className="rounded-md border border-slate-200 p-3 text-sm text-slate-700">
-              {item.invoiceNumber} • {item.status}
+              {renderPrimarySecondary(item.invoiceNumber, item.status)}
             </div>
           ))}
         </div>

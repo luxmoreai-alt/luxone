@@ -1,7 +1,8 @@
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
+import { preloadRoutes } from "../../lib/routePreload";
 
 const InsideLayoutContext = createContext(false);
 
@@ -10,6 +11,27 @@ export function DashboardLayoutRoute() {
     if (typeof window === "undefined") return true;
     return window.innerWidth >= 768;
   });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const warmCommonRoutes = () => {
+      preloadRoutes(["/home", "/reports", "/analytics", "/my-requests", "/leads", "/deals", "/tasks", "/meetings"]);
+    };
+
+    const idleWindow = window as Window & {
+      requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+
+    if (typeof idleWindow.requestIdleCallback === "function") {
+      const idleId = idleWindow.requestIdleCallback(() => warmCommonRoutes(), { timeout: 1200 });
+      return () => idleWindow.cancelIdleCallback?.(idleId);
+    }
+
+    const timeoutId = window.setTimeout(warmCommonRoutes, 300);
+    return () => window.clearTimeout(timeoutId);
+  }, []);
 
   return (
     <InsideLayoutContext.Provider value={true}>

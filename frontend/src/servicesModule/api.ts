@@ -166,6 +166,8 @@ function mapAppointment(item: any): AppointmentRecord {
     notes: asString(item.notes),
     completionNotes: asString(item.completion_notes),
     completionProofUrl: asString(item.completion_proof_url),
+    completionProofFileUrl: asString(item.completion_proof_file_url),
+    completionProofFileName: asString(item.completion_proof_file_name),
     completedAt: asString(item.completed_at),
     publicBookingUrl: asString(item.public_booking_url),
     createdAt: asString(item.created_at),
@@ -291,28 +293,30 @@ function buildServicePayload(values: ServiceFormData) {
 }
 
 function buildAppointmentPayload(values: AppointmentFormData) {
-  return {
-    service: Number(values.serviceId),
-    appointment_for_type: values.appointmentForType,
-    appointment_for_id: values.appointmentForId ? Number(values.appointmentForId) : undefined,
-    appointment_for_label: values.appointmentForType === "other" ? values.appointmentForLabel || undefined : undefined,
-    appointment_date: values.appointmentDate,
-    appointment_start_time: values.appointmentStartTime,
-    appointment_end_time: values.appointmentEndTime || undefined,
-    assigned_member: values.assignedMemberId ? Number(values.assignedMemberId) : undefined,
-    product: values.productId ? Number(values.productId) : undefined,
-    sales_order: values.salesOrderId ? Number(values.salesOrderId) : undefined,
-    invoice: values.invoiceId ? Number(values.invoiceId) : undefined,
-    customer_asset_name: values.customerAssetName || undefined,
-    product_serial_number: values.productSerialNumber || undefined,
-    coverage_type: values.coverageType,
-    coverage_status: values.coverageStatus,
-    location: values.location || undefined,
-    status: values.status,
-    notes: values.notes || undefined,
-    completion_notes: values.completionNotes || undefined,
-    completion_proof_url: values.completionProofUrl || undefined,
-  };
+  const formData = new FormData();
+  if (values.serviceId) formData.append("service", values.serviceId);
+  formData.append("appointment_for_type", values.appointmentForType);
+  if (values.appointmentForId) formData.append("appointment_for_id", values.appointmentForId);
+  if (values.appointmentForType === "other" && values.appointmentForLabel) formData.append("appointment_for_label", values.appointmentForLabel);
+  formData.append("appointment_date", values.appointmentDate);
+  formData.append("appointment_start_time", values.appointmentStartTime);
+  if (values.appointmentEndTime) formData.append("appointment_end_time", values.appointmentEndTime);
+  if (values.assignedMemberId) formData.append("assigned_member", values.assignedMemberId);
+  if (values.productId) formData.append("product", values.productId);
+  if (values.salesOrderId) formData.append("sales_order", values.salesOrderId);
+  if (values.invoiceId) formData.append("invoice", values.invoiceId);
+  if (values.customerAssetName) formData.append("customer_asset_name", values.customerAssetName);
+  if (values.productSerialNumber) formData.append("product_serial_number", values.productSerialNumber);
+  formData.append("coverage_type", values.coverageType);
+  formData.append("coverage_status", values.coverageStatus);
+  if (values.location) formData.append("location", values.location);
+  formData.append("status", values.status);
+  if (values.notes) formData.append("notes", values.notes);
+  if (values.completionNotes) formData.append("completion_notes", values.completionNotes);
+  if (values.completionProofUrl) formData.append("completion_proof_url", values.completionProofUrl);
+  if (values.completionProofFile) formData.append("completion_proof_file", values.completionProofFile);
+  if (values.clearCompletionProofFile) formData.append("clear_completion_proof_file", "true");
+  return formData;
 }
 
 function buildJobSheetPayload(values: JobSheetFormData) {
@@ -460,7 +464,7 @@ export async function getAppointment(id: string) {
 
 export async function createAppointment(values: AppointmentFormData) {
   return mapAppointment(
-    await apiRequest<any>("/services/appointments/", { method: "POST", body: JSON.stringify(buildAppointmentPayload(values)) })
+    await apiRequest<any>("/services/appointments/", { method: "POST", body: buildAppointmentPayload(values) })
   );
 }
 
@@ -468,7 +472,7 @@ export async function updateAppointment(id: string, values: AppointmentFormData)
   return mapAppointment(
     await apiRequest<any>(`/services/appointments/${id}/`, {
       method: "PATCH",
-      body: JSON.stringify(buildAppointmentPayload(values)),
+      body: buildAppointmentPayload(values),
     })
   );
 }
@@ -636,4 +640,43 @@ export async function listLookupOptions(type: ServicesLookupType, q = "") {
         phone: asString(item.phone),
       }) as LookupOption
   );
+}
+
+export async function getLookupOptionById(type: ServicesLookupType, id: string) {
+  const value = asString(id);
+  if (!value) return null;
+
+  if (type === "sales-order") {
+    const item = await apiRequest<any>(`/inventory/sales-orders/${value}`);
+    return {
+      id: value,
+      label: asString(item.subject) || `Sales Order #${value}`,
+      accountId: asString(item.account),
+      contactId: asString(item.contact),
+      dealId: asString(item.deal),
+    } as LookupOption;
+  }
+
+  if (type === "invoice") {
+    const item = await apiRequest<any>(`/inventory/invoices/${value}`);
+    return {
+      id: value,
+      label: asString(item.subject) || `Invoice #${value}`,
+      accountId: asString(item.account),
+      contactId: asString(item.contact),
+      dealId: asString(item.deal),
+      salesOrderId: asString(item.sales_order),
+    } as LookupOption;
+  }
+
+  if (type === "product") {
+    const item = await apiRequest<any>(`/inventory/products/${value}`);
+    return {
+      id: value,
+      label: asString(item.product_name) || `Product #${value}`,
+      subtitle: asString(item.product_code),
+    } as LookupOption;
+  }
+
+  return null;
 }

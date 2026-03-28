@@ -7,7 +7,7 @@ from contacts.models import Contact
 from deals.models import Deal, DealStage
 from deals.services import ensure_default_stages
 
-from .models import InventoryLinkedRecord, PriceBook, Product, Quote
+from .models import InventoryLinkedRecord, PriceBook, Product, Quote, Vendor
 
 
 class InventoryLinkingTests(APITestCase):
@@ -20,7 +20,11 @@ class InventoryLinkingTests(APITestCase):
         self.client.force_authenticate(self.user)
         ensure_default_stages()
         self.stage = DealStage.objects.get(stage_name="Qualification")
-        self.account = Account.objects.create(account_name="Zora", account_owner=self.user)
+        self.account = Account.objects.create(
+            account_name="Zora",
+            account_number="ACC-1001",
+            account_owner=self.user,
+        )
         self.contact = Contact.objects.create(
             first_name="Boomika",
             last_name="M",
@@ -151,6 +155,7 @@ class InventoryLinkingTests(APITestCase):
         self.assertEqual(sales_order_response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(sales_order_response.data["account_name"], "Zora")
         self.assertEqual(sales_order_response.data["contact_name"], "Boomika M")
+        self.assertEqual(sales_order_response.data["customer_no"], "ACC-1001")
 
         invoice_response = self.client.post(
             "/api/invoices",
@@ -165,6 +170,112 @@ class InventoryLinkingTests(APITestCase):
         self.assertEqual(invoice_response.data["account_name"], "Zora")
         self.assertEqual(invoice_response.data["contact_name"], "Boomika M")
         self.assertEqual(len(invoice_response.data["items"]), 1)
+
+    def test_sales_order_customer_number_defaults_from_account(self):
+        response = self.client.post(
+            "/api/sales-orders",
+            {
+                "subject": "Zora Sales Order",
+                "account": self.account.pk,
+                "contact": self.contact.pk,
+                "deal": self.deal.pk,
+                "status": "Created",
+                "items": [
+                    {
+                        "product": self.product.pk,
+                        "quantity": "1",
+                        "list_price": "50000.00",
+                        "discount": "0",
+                        "tax": "2500.00",
+                    }
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["customer_no"], "ACC-1001")
+
+    def test_purchase_order_po_number_auto_generates(self):
+        vendor = Vendor.objects.create(vendor_name="Zora Supplier Pvt Ltd")
+        response = self.client.post(
+            "/api/purchase-orders",
+            {
+                "subject": "Zora Purchase Order",
+                "vendor": vendor.pk,
+                "status": "Draft",
+                "items": [
+                    {
+                        "product": self.product.pk,
+                        "quantity": "1",
+                        "list_price": "50000.00",
+                        "discount": "0",
+                        "tax": "2500.00",
+                    }
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(str(response.data["po_number"]).startswith("PO"))
+
+    def test_inventory_documents_apply_default_statuses_when_blank(self):
+        sales_order_response = self.client.post(
+            "/api/sales-orders",
+            {
+                "subject": "Default Sales Order",
+                "account": self.account.pk,
+                "contact": self.contact.pk,
+                "deal": self.deal.pk,
+                "items": [
+                    {
+                        "product": self.product.pk,
+                        "quantity": "1",
+                        "list_price": "50000.00",
+                        "discount": "0",
+                        "tax": "2500.00",
+                    }
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(sales_order_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(sales_order_response.data["status"], "Created")
+
+        vendor = Vendor.objects.create(vendor_name="Default Vendor")
+        purchase_order_response = self.client.post(
+            "/api/purchase-orders",
+            {
+                "subject": "Default Purchase Order",
+                "vendor": vendor.pk,
+                "items": [
+                    {
+                        "product": self.product.pk,
+                        "quantity": "1",
+                        "list_price": "50000.00",
+                        "discount": "0",
+                        "tax": "2500.00",
+                    }
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(purchase_order_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(purchase_order_response.data["status"], "Draft")
+
+        invoice_response = self.client.post(
+            "/api/invoices",
+            {
+                "subject": "Default Invoice",
+                "sales_order": sales_order_response.data["id"],
+            },
+            format="json",
+        )
+        self.assertEqual(invoice_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(invoice_response.data["status"], "Draft")
+        self.assertTrue(invoice_response.data["invoice_date"])
+        self.assertTrue(invoice_response.data["due_date"])
 
     def test_product_related_quote_endpoint_returns_linked_quotes(self):
         quote = Quote.objects.create(

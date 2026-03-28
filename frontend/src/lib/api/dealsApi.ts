@@ -186,8 +186,11 @@ function toBackendPayload(
   return body;
 }
 
-export async function getDeals(): Promise<DealRecord[]> {
-  const data = await apiRequest<BackendDeal[] | Paginated<BackendDeal>>("/deals");
+export async function getDeals(options?: { pageSize?: number; cacheTtlMs?: number }): Promise<DealRecord[]> {
+  const data = await apiRequest<BackendDeal[] | Paginated<BackendDeal>>("/deals", {
+    query: options?.pageSize ? { page_size: options.pageSize } : undefined,
+    cacheTtlMs: options?.cacheTtlMs,
+  });
   return toList(data).map(normalizeDeal);
 }
 

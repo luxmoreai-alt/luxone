@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import CRMSectionCard from "../../components/crm/CRMSectionCard";
-import { listDomainMappings, verifyDomainMapping } from "../api";
+import { listDomainMappings, listServices, verifyDomainMapping } from "../api";
 import type { DomainMapping } from "../types";
 import DomainMappingModal from "./DomainMappingModal";
 
@@ -11,12 +11,15 @@ export default function DomainMappingPage() {
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [publishedServices, setPublishedServices] = useState(0);
 
   const load = async () => {
     try {
       setLoading(true);
       setError(null);
-      setRows(await listDomainMappings());
+      const [domainRows, services] = await Promise.all([listDomainMappings(), listServices()]);
+      setRows(domainRows);
+      setPublishedServices(services.filter((service) => Boolean(service.publicBookingUrl)).length);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load domain mappings.");
     } finally {
@@ -75,6 +78,11 @@ export default function DomainMappingPage() {
           <div className="rounded-xl border border-slate-200 bg-white p-4">
             <div className="text-xs uppercase tracking-wide text-slate-500">Failed Domains</div>
             <div className="mt-2 text-2xl font-semibold text-slate-900">{failedCount}</div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4 md:col-span-3">
+            <div className="text-xs uppercase tracking-wide text-slate-500">Public Booking Usage</div>
+            <div className="mt-2 text-2xl font-semibold text-slate-900">{publishedServices}</div>
+            <div className="mt-1 text-sm text-slate-500">service{publishedServices === 1 ? "" : "s"} currently expose a booking URL through mapped/company domains.</div>
           </div>
         </div>
         {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-600">{error}</div> : null}

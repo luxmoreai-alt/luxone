@@ -517,8 +517,24 @@ def get_job_sheet(pk: int) -> ServiceJobSheet:
 
 def create_or_update_job_sheet(serializer, user):
     if serializer.instance:
-        return serializer.save(updated_by=user)
-    return serializer.save(created_by=user, updated_by=user)
+        job_sheet = serializer.save(updated_by=user)
+    else:
+        job_sheet = serializer.save(created_by=user, updated_by=user)
+
+    appointment = getattr(job_sheet, "appointment", None)
+    if appointment:
+        next_status = None
+        if job_sheet.status == "completed":
+            next_status = ServiceAppointment.Status.COMPLETED
+        elif job_sheet.status in {"submitted", "in_progress"}:
+            next_status = ServiceAppointment.Status.IN_PROGRESS
+
+        if next_status and appointment.status != next_status:
+            appointment.status = next_status
+            appointment.updated_by = user
+            appointment.save(update_fields=["status", "updated_by", "updated_at"])
+
+    return job_sheet
 
 
 def get_company_details():

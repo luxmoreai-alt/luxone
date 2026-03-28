@@ -130,6 +130,7 @@ class SupportSolution(BaseModel):
     status = models.CharField(max_length=100, blank=True, null=True, db_index=True)
     question = models.TextField()
     answer = models.TextField()
+    resolution_steps = models.TextField(blank=True, null=True)
     source_case = models.ForeignKey(
         "support.SupportCase",
         on_delete=models.SET_NULL,

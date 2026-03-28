@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   BadgeDollarSign,
@@ -36,6 +36,7 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
+import { preloadRouteResources } from "../../lib/routePreload";
 
 type SidebarProps = {
   sidebarOpen: boolean;
@@ -166,10 +167,9 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
   const { user, isAdmin, isManager, canAccess } = useAuth();
   const userDepartment = user?.department ?? "";
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>(initialOpenMenus);
-
-  // Filter workspace items by module access
-  const visibleWorkspaceItems = workspaceItems.filter(
-    (item) => !item.module || canAccess(item.module)
+  const visibleWorkspaceItems = useMemo(
+    () => workspaceItems.filter((item) => !item.module || canAccess(item.module)),
+    [canAccess]
   );
 
   useEffect(() => {
@@ -184,8 +184,44 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
 
+  const visibleSidebarPaths = useMemo(() => {
+    const paths = primaryItems
+      .map((item) => item.path)
+      .filter((path): path is string => Boolean(path));
+
+    if (isAdmin || isManager) {
+      paths.push("/team");
+    }
+
+    visibleWorkspaceItems.forEach((item) => {
+      if (item.path) {
+        paths.push(item.path);
+      }
+
+      item.children
+        ?.filter((child) => !child.excludeDepartments?.includes(userDepartment))
+        .forEach((child) => {
+          paths.push(child.path);
+        });
+    });
+
+    return [...new Set(paths)];
+  }, [isAdmin, isManager, userDepartment, visibleWorkspaceItems]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || visibleSidebarPaths.length === 0) return;
+
+    const preloadVisibleSidebarRoutes = () => {
+      visibleSidebarPaths.forEach((path) => preloadRouteResources(path));
+    };
+
+    const timeoutId = window.setTimeout(preloadVisibleSidebarRoutes, 50);
+    return () => window.clearTimeout(timeoutId);
+  }, [visibleSidebarPaths]);
+
   const handleNavigate = (path?: string) => {
     if (!path) return;
+    preloadRouteResources(path);
     navigate(path);
     if (typeof window !== "undefined" && window.innerWidth < 768) {
       setSidebarOpen(false);
@@ -266,6 +302,8 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
                       key={item.label}
                       type="button"
                       onClick={() => handleNavigate(item.path)}
+                      onMouseEnter={() => preloadRouteResources(item.path)}
+                      onFocus={() => preloadRouteResources(item.path)}
                       title={!sidebarOpen ? item.label : undefined}
                       className={[
                         "flex w-full items-center rounded-lg text-left text-[14px] transition",
@@ -285,6 +323,8 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
                   <button
                     type="button"
                     onClick={() => handleNavigate("/team")}
+                    onMouseEnter={() => preloadRouteResources("/team")}
+                    onFocus={() => preloadRouteResources("/team")}
                     title={!sidebarOpen ? "My Team" : undefined}
                     className={[
                       "flex w-full items-center rounded-lg text-left text-[14px] transition",
@@ -368,6 +408,8 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
                                   key={child.label}
                                   type="button"
                                   onClick={() => handleNavigate(child.path)}
+                                  onMouseEnter={() => preloadRouteResources(child.path)}
+                                  onFocus={() => preloadRouteResources(child.path)}
                                   className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] transition ${
                                     location.pathname === child.path || location.pathname.startsWith(`${child.path}/`)
                                       ? "bg-white/12 font-semibold text-white"
@@ -398,6 +440,8 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
                         type="button"
                         title={item.label}
                         onClick={() => handleNavigate(fallbackPath)}
+                        onMouseEnter={() => preloadRouteResources(fallbackPath)}
+                        onFocus={() => preloadRouteResources(fallbackPath)}
                         className="flex w-full items-center justify-center rounded-lg px-2 py-2.5 transition hover:bg-white/8"
                       >
                         <Icon size={17} />

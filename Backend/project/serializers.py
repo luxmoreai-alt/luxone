@@ -3,6 +3,7 @@ from .models import (
     Project, ProjectTask, ProjectPhase, ProjectIssue,
     ProjectMember, ProjectFile, ProjectNote, ProjectTimeLog,
 )
+from projectdesk.serializers import ProjectDeskMeetingSerializer, ProjectDeskTaskSerializer
 
 
 class ProjectTaskSerializer(serializers.ModelSerializer):
@@ -10,7 +11,7 @@ class ProjectTaskSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ProjectTask
-        fields = ['id', 'title', 'owner', 'due_date', 'status', 'priority']
+        fields = ['id', 'title', 'description', 'owner', 'assigned_by', 'due_date', 'status', 'priority']
 
 
 class ProjectPhaseSerializer(serializers.ModelSerializer):
@@ -69,14 +70,16 @@ class ProjectListSerializer(serializers.ModelSerializer):
         model = Project
         fields = [
             'id', 'project_code', 'name', 'account_name', 'contact_name',
-            'deal_name', 'owner', 'status', 'priority', 'progress',
+            'deal_name', 'source_module', 'source_record_id', 'source_record_label',
+            'owner', 'status', 'priority', 'progress',
             'start_date', 'due_date', 'description', 'team_count',
             'estimated_hours', 'logged_hours',
         ]
 
 
 class ProjectDetailSerializer(serializers.ModelSerializer):
-    tasks = ProjectTaskSerializer(many=True, read_only=True)
+    tasks = ProjectDeskTaskSerializer(source="projectdesk_tasks", many=True, read_only=True)
+    meetings = ProjectDeskMeetingSerializer(source="projectdesk_meetings", many=True, read_only=True)
     phases = ProjectPhaseSerializer(many=True, read_only=True)
     issues = ProjectIssueSerializer(many=True, read_only=True)
     members = ProjectMemberSerializer(many=True, read_only=True)
@@ -92,10 +95,11 @@ class ProjectDetailSerializer(serializers.ModelSerializer):
         model = Project
         fields = [
             'id', 'project_code', 'name', 'account_name', 'contact_name',
-            'deal_name', 'owner', 'status', 'priority', 'progress',
+            'deal_name', 'source_module', 'source_record_id', 'source_record_label',
+            'owner', 'status', 'priority', 'progress',
             'start_date', 'due_date', 'description', 'team_count',
             'estimated_hours', 'logged_hours',
-            'tasks', 'phases', 'issues', 'members', 'files', 'notes', 'time_logs',
+            'tasks', 'meetings', 'phases', 'issues', 'members', 'files', 'notes', 'time_logs',
         ]
 
 
@@ -103,14 +107,15 @@ class ProjectCreateUpdateSerializer(serializers.ModelSerializer):
     start_date = serializers.DateField(required=False, allow_null=True)
     due_date = serializers.DateField(required=False, allow_null=True)
     estimated_hours = serializers.DecimalField(
-        max_digits=8, decimal_places=2, required=False, allow_null=True
+        max_digits=8, decimal_places=2, required=False, allow_null=True, default=0
     )
 
     class Meta:
         model = Project
         fields = [
             'project_code', 'name', 'account_name', 'contact_name',
-            'deal_name', 'owner', 'status', 'priority', 'progress',
+            'deal_name', 'source_module', 'source_record_id', 'source_record_label',
+            'owner', 'status', 'priority', 'progress',
             'start_date', 'due_date', 'description', 'estimated_hours',
         ]
 
@@ -118,3 +123,6 @@ class ProjectCreateUpdateSerializer(serializers.ModelSerializer):
         if value < 0 or value > 100:
             raise serializers.ValidationError("Progress must be between 0 and 100.")
         return value
+
+    def validate_estimated_hours(self, value):
+        return 0 if value is None else value

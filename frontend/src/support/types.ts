@@ -97,6 +97,7 @@ export type SolutionFormData = {
   status: string;
   question: string;
   answer: string;
+  resolutionSteps: string;
   owner: string;
   ownerLabel: string;
   sourceCase: string;

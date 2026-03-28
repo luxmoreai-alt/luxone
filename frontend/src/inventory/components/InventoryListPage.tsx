@@ -176,6 +176,30 @@ export default function InventoryListPage({ moduleKey }: InventoryListPageProps)
                   if (actionKey === "convert-to-invoice") {
                     const response = await convertSalesOrderToInvoice(row.id);
                     navigate(`/invoices/${response.id}`);
+                    return;
+                  }
+                  if (actionKey === "create-service-appointment") {
+                    const query =
+                      moduleKey === "sales-orders"
+                        ? `?salesOrder=${encodeURIComponent(row.id)}`
+                        : `?invoice=${encodeURIComponent(row.id)}`;
+                    navigate(`/services/appointments/create${query}`);
+                    return;
+                  }
+                  if (actionKey === "create-project") {
+                    const inventoryRow = row as any;
+                    const params = new URLSearchParams({
+                      sourceModule: moduleKey,
+                      sourceId: row.id,
+                      sourceLabel: String(inventoryRow.subject || inventoryRow.name || meta.singular),
+                      name: String(inventoryRow.subject || meta.singular),
+                      accountName: String(inventoryRow.accountName || ""),
+                      contactName: String(inventoryRow.contactName || ""),
+                      dealName: String(inventoryRow.dealName || ""),
+                      owner: String(inventoryRow.owner || ""),
+                      dueDate: String(inventoryRow.dueDate || ""),
+                    });
+                    navigate(`/projects/create?${params.toString()}`);
                   }
                 }}
                 onSortColumn={(columnKey, direction) => setSortState({ key: columnKey, direction })}

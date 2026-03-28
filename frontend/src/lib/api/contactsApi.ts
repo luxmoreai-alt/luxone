@@ -247,13 +247,17 @@ function validateCreateContactPayload(payload: Partial<CreateContactPayload>) {
   }
 }
 
-export async function getContacts(): Promise<ContactRecord[]> {
+export async function getContacts(options?: { pageSize?: number; maxPages?: number; cacheTtlMs?: number }): Promise<ContactRecord[]> {
   const contacts: BackendContact[] = [];
-  let nextUrl: string | null = endpoint("/contacts");
+  const pageSize = options?.pageSize ?? 100;
+  const maxPages = options?.maxPages ?? Number.POSITIVE_INFINITY;
+  let pagesLoaded = 0;
+  let nextUrl: string | null = `${endpoint("/contacts")}?page_size=${pageSize}`;
 
-  while (nextUrl) {
+  while (nextUrl && pagesLoaded < maxPages) {
     const data: BackendContact[] | Paginated<BackendContact> = await apiRequest<BackendContact[] | Paginated<BackendContact>>(
-      normalizeApiPath(nextUrl)
+      normalizeApiPath(nextUrl),
+      { cacheTtlMs: options?.cacheTtlMs }
     );
 
     if (Array.isArray(data)) {
@@ -263,6 +267,8 @@ export async function getContacts(): Promise<ContactRecord[]> {
       contacts.push(...data.results);
       nextUrl = data.next;
     }
+
+    pagesLoaded += 1;
   }
 
   return contacts.map(normalizeContact);
@@ -390,6 +396,19 @@ export async function logContactCall(
     body: JSON.stringify({
       call_summary: payload.call_summary,
       call_outcome: payload.call_outcome ?? "",
+    }),
+  });
+}
+
+export async function scheduleContactMeeting(
+  id: string,
+  payload: { meeting_subject: string; agenda?: string }
+): Promise<void> {
+  await apiRequest(endpoint(`/contacts/${id}/schedule-meeting`), {
+    method: "POST",
+    body: JSON.stringify({
+      meeting_subject: payload.meeting_subject,
+      agenda: payload.agenda ?? "",
     }),
   });
 }

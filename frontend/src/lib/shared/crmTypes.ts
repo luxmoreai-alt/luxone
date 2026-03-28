@@ -39,6 +39,7 @@ export type LeadRecord = {
   state: string;
   zipCode: string;
   country: string;
+  skypeId?: string;
   description: string;
   createdBy: string;
   createdAt: string;
@@ -342,6 +343,7 @@ export type Product = {
   discount?: number;
   amount: number;
   total?: number;
+  createdAt?: string;
 };
 
 export type Case = {
@@ -351,6 +353,7 @@ export type Case = {
   subject: string;
   status: string;
   priority: string;
+  createdAt?: string;
 };
 
 export type Solution = {
@@ -359,6 +362,7 @@ export type Solution = {
   solutionNumber: string;
   solutionTitle: string;
   status: string;
+  createdAt?: string;
 };
 
 export type Quote = {
@@ -367,6 +371,7 @@ export type Quote = {
   quoteName: string;
   amount: number;
   status: string;
+  createdAt?: string;
 };
 
 export type SalesOrder = {
@@ -375,6 +380,7 @@ export type SalesOrder = {
   orderNumber: string;
   amount: number;
   status: string;
+  createdAt?: string;
 };
 
 export type PurchaseOrder = {
@@ -383,6 +389,7 @@ export type PurchaseOrder = {
   poNumber: string;
   amount: number;
   status: string;
+  createdAt?: string;
 };
 
 export type Invoice = {
@@ -391,6 +398,7 @@ export type Invoice = {
   invoiceNumber: string;
   amount: number;
   status: string;
+  createdAt?: string;
 };
 
 export type EmailRecord = {
@@ -419,6 +427,8 @@ export type ConnectedRecord = {
   name: string;
   owner: string;
   status: string;
+  route?: string;
+  meta?: string;
 };
 
 export type TimelineItem = {

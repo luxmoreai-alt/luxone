@@ -28,6 +28,9 @@ class TaskViewSet(ModelViewSet):
         if user_id and getattr(user, "role", "employee") in ("admin", "manager"):
             from django.db import models as dm
             qs = qs.filter(dm.Q(owner_id=user_id) | dm.Q(assigned_to_id=user_id))
+        contact_id = self.request.query_params.get("contact")
+        if contact_id:
+            qs = qs.filter(contact_id=contact_id)
         return qs
 
     def _validate_assignment(self, assigner, assigned_to):
@@ -95,10 +98,60 @@ class MeetingViewSet(ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Meeting.objects.select_related("organizer", "lead", "contact", "account", "deal")
+        from django.db.models import Q
+        qs = Meeting.objects.select_related("organizer", "lead", "contact", "account", "deal")
+        contact_id = self.request.query_params.get("contact")
+        if contact_id:
+            try:
+                from contacts.models import Contact
+                contact = Contact.objects.get(pk=contact_id)
+                qs = qs.filter(
+                    Q(contact_id=contact_id) |
+                    Q(participants__contains=[{"email": contact.email}])
+                )
+            except Exception:
+                qs = qs.filter(contact_id=contact_id)
+        return qs
 
     def perform_create(self, serializer):
-        serializer.save(organizer=self.request.user)
+        meeting = serializer.save(organizer=self.request.user)
+        self._send_meeting_link_emails(meeting)
+
+    def perform_update(self, serializer):
+        meeting = serializer.save()
+        self._send_meeting_link_emails(meeting)
+
+    def _send_meeting_link_emails(self, meeting):
+        if meeting.meeting_venue != "Online" or not meeting.meeting_link:
+            return
+        participants = meeting.participants or []
+        recipient_emails = [
+            p["email"] for p in participants if isinstance(p, dict) and p.get("email")
+        ]
+        if not recipient_emails:
+            return
+        from django.core.mail import send_mail
+        from django.conf import settings
+        subject = f"Meeting Invitation: {meeting.title}"
+        start = meeting.start_date.strftime("%d %b %Y, %I:%M %p") if meeting.start_date else ""
+        message = (
+            f"You have been invited to an online meeting.\n\n"
+            f"Title: {meeting.title}\n"
+            f"Date & Time: {start}\n"
+            f"Host: {meeting.host}\n"
+            f"Join Link: {meeting.meeting_link}\n\n"
+            f"Please join using the link above at the scheduled time."
+        )
+        try:
+            send_mail(
+                subject,
+                message,
+                settings.DEFAULT_FROM_EMAIL,
+                recipient_emails,
+                fail_silently=True,
+            )
+        except Exception:
+            pass
 
 
 class CallViewSet(ModelViewSet):

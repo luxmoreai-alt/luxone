@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import CRMSectionCard from "../../components/crm/CRMSectionCard";
-import { getCompanyDetails, getServicesSetupStatus, listDomainMappings, listTeamMembers, updateCompanyDetails } from "../api";
+import { getCompanyDetails, getServicesSetupStatus, listAppointments, listDomainMappings, listJobSheets, listServices, listTeamMembers, updateCompanyDetails } from "../api";
 import type { CompanyDetails, DomainMapping, ServiceSettings, TeamMember } from "../types";
 
 const inputClass = "h-[38px] w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-blue-500";
@@ -16,20 +16,29 @@ export default function CompanyDetailsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
+  const [usageSummary, setUsageSummary] = useState({ services: 0, appointments: 0, jobSheets: 0 });
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [companyDetails, setupStatus, domainMappings, members] = await Promise.all([
+        const [companyDetails, setupStatus, domainMappings, members, services, appointments, jobSheets] = await Promise.all([
           getCompanyDetails(),
           getServicesSetupStatus(),
           listDomainMappings(),
           listTeamMembers(),
+          listServices(),
+          listAppointments(),
+          listJobSheets(),
         ]);
         setForm(companyDetails);
         setSettings(setupStatus);
         setDomains(domainMappings);
         setTeamMembers(members);
+        setUsageSummary({
+          services: services.length,
+          appointments: appointments.length,
+          jobSheets: jobSheets.length,
+        });
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unable to load company details.");
       } finally {
@@ -89,6 +98,24 @@ export default function CompanyDetailsPage() {
               <div><p className="text-xs uppercase tracking-wide text-slate-500">Service Team</p><p className="mt-1 text-slate-800">{teamMembers.length} active team member{teamMembers.length === 1 ? "" : "s"}</p></div>
             </div>
           </CRMSectionCard>
+        </div>
+        <div className="grid gap-3 md:grid-cols-4">
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="text-xs uppercase tracking-wide text-slate-500">Catalog Services</div>
+            <div className="mt-2 text-2xl font-semibold text-slate-900">{usageSummary.services}</div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="text-xs uppercase tracking-wide text-slate-500">Appointments</div>
+            <div className="mt-2 text-2xl font-semibold text-slate-900">{usageSummary.appointments}</div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="text-xs uppercase tracking-wide text-slate-500">Job Sheets</div>
+            <div className="mt-2 text-2xl font-semibold text-slate-900">{usageSummary.jobSheets}</div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="text-xs uppercase tracking-wide text-slate-500">Mapped Domains</div>
+            <div className="mt-2 text-2xl font-semibold text-slate-900">{domains.length}</div>
+          </div>
         </div>
       </div>
     </DashboardLayout>

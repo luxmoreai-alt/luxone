@@ -6,6 +6,9 @@ import { getContactById, getContactDeals, getContactNotes } from "../../lib/api/
 import { loadContactLinkedData } from "../../lib/api/linkedRecordsApi";
 import type { ContactRecord, Deal, Note } from "../../lib/shared/crmTypes";
 import CRMModuleDetailPage from "../crm/CRMModuleDetailPage";
+import { apiRequest } from "../../api/client";
+
+const DEAL_STAGES = ["Qualification", "Needs Analysis", "Value Proposition", "Identify Decision Makers", "Perception Analysis", "Proposal/Price Quote", "Negotiation/Review", "Closed Won", "Closed Lost"];
 
 export default function ContactDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -17,6 +20,11 @@ export default function ContactDetailPage() {
   const [linkedData, setLinkedData] = useState<any | null>(null);
   const [loading, setLoading] = useState(!((location.state as { record?: ContactRecord } | null)?.record));
   const [error, setError] = useState<string | null>(null);
+
+  const [convertModal, setConvertModal] = useState(false);
+  const [convertForm, setConvertForm] = useState({ dealName: "", stage: "Qualification", amount: "", closingDate: "" });
+  const [convertError, setConvertError] = useState<string | null>(null);
+  const [converting, setConverting] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -46,7 +54,7 @@ export default function ContactDetailPage() {
         setNotes(notesData);
         setDeals(dealsData);
 
-        const related = await loadContactLinkedData(id).catch(() => null);
+        const related = await loadContactLinkedData(id, { forceRefresh: true }).catch(() => null);
         setLinkedData({
           ...related,
           deals: related?.deals?.length ? related.deals : dealsData,
@@ -60,6 +68,37 @@ export default function ContactDetailPage() {
 
     void load();
   }, [id]);
+
+  const openConvertModal = () => {
+    if (!contact) return;
+    const fullName = [contact.firstName, contact.lastName].filter(Boolean).join(" ").trim() || "New Deal";
+    setConvertForm({ dealName: `Deal with ${fullName}`, stage: "Qualification", amount: "", closingDate: "" });
+    setConvertError(null);
+    setConvertModal(true);
+  };
+
+  const handleConvertToDeal = async () => {
+    if (!convertForm.dealName.trim()) { setConvertError("Deal name is required."); return; }
+    setConverting(true);
+    setConvertError(null);
+    try {
+      const body: Record<string, unknown> = {
+        deal_name: convertForm.dealName.trim(),
+        stage: convertForm.stage,
+        contact: Number(id),
+      };
+      if (convertForm.amount) body.amount = convertForm.amount;
+      if (convertForm.closingDate) body.closing_date = convertForm.closingDate;
+      if (contact?.accountId) body.account = Number(contact.accountId);
+      const deal = await apiRequest<{ id: number | string }>("/deals", { method: "POST", body: JSON.stringify(body) });
+      setConvertModal(false);
+      navigate(`/deals/${deal.id}`);
+    } catch (err) {
+      setConvertError(err instanceof Error ? err.message : "Failed to create deal.");
+    } finally {
+      setConverting(false);
+    }
+  };
 
   if (loading) return <div className="p-6 text-sm text-slate-600">Loading contact...</div>;
   if (error || !contact) return <div className="p-6 text-sm text-rose-600">{error ?? "Contact not found."}</div>;
@@ -120,11 +159,84 @@ export default function ContactDetailPage() {
         }}
         onAction={(action) => {
           if (action === "Edit") navigate(`/contacts/${id}/edit`);
+          if (action === "Convert to Deal") openConvertModal();
         }}
         onNavigate={(type, navId) => {
           navigate(`/${type}s/${navId}`);
         }}
       />
+
+      {convertModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
+            <h2 className="mb-4 text-lg font-semibold text-slate-900">Convert to Deal</h2>
+
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Deal Name <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={convertForm.dealName}
+                  onChange={(e) => setConvertForm((f) => ({ ...f, dealName: e.target.value }))}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Stage</label>
+                <select
+                  value={convertForm.stage}
+                  onChange={(e) => setConvertForm((f) => ({ ...f, stage: e.target.value }))}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                >
+                  {DEAL_STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Amount</label>
+                <input
+                  type="number"
+                  placeholder="0.00"
+                  value={convertForm.amount}
+                  onChange={(e) => setConvertForm((f) => ({ ...f, amount: e.target.value }))}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Closing Date</label>
+                <input
+                  type="date"
+                  value={convertForm.closingDate}
+                  onChange={(e) => setConvertForm((f) => ({ ...f, closingDate: e.target.value }))}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+
+              {convertError && <p className="text-sm text-red-600">{convertError}</p>}
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConvertModal(false)}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConvertToDeal}
+                disabled={converting}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {converting ? "Creating..." : "Create Deal"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

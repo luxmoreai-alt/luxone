@@ -24,6 +24,7 @@ from base64 import b64encode
 
 from django.db import transaction
 from django.db.models import Case, Count, IntegerField, Q, Value, When
+from django.contrib.auth import get_user_model
 from django.utils.dateparse import parse_datetime
 from django.utils import timezone
 
@@ -44,6 +45,7 @@ from .models import (
     EmailRelayServer,
     EmailSyncLog,
     IntegrationLeadSourceEvent,
+    OrganizationEmailAddress,
     SocialAccount,
     SocialLeadAutomationRule,
     SocialMessage,
@@ -533,16 +535,15 @@ def validate_visitor_event_origin(*, portal: VisitorTrackingPortal, payload: dic
     allowed_hosts = _portal_allowed_hosts(portal)
     if not allowed_hosts:
         return
-    for field in ("page_url", "source_url"):
-        raw_value = payload.get(field)
-        if not raw_value:
-            continue
-        candidate = urlparse(raw_value)
-        host = (candidate.netloc or "").lower().strip()
-        if host.startswith("www."):
-            host = host[4:]
-        if host and host not in allowed_hosts:
-            raise ValueError("Visitor event origin does not match the configured portal domain.")
+    raw_value = payload.get("page_url")
+    if not raw_value:
+        return
+    candidate = urlparse(raw_value)
+    host = (candidate.netloc or "").lower().strip()
+    if host.startswith("www."):
+        host = host[4:]
+    if host and host not in allowed_hosts:
+        raise ValueError("Visitor event origin does not match the configured portal domain.")
 
 
 @dataclass
@@ -949,6 +950,128 @@ def is_notification_sender(email: str | None) -> bool:
     )
     haystack = f"{local_part} {domain}".lower()
     return any(marker in haystack for marker in markers)
+
+
+def is_junk_lead_candidate(
+    *,
+    from_email: str | None,
+    from_name: str | None,
+    subject: str | None,
+    body_text: str | None,
+    body_html: str | None,
+) -> bool:
+    if is_notification_sender(from_email):
+        return True
+
+    content = " ".join(
+        filter(
+            None,
+            [
+                from_name,
+                subject,
+                body_text,
+                body_html,
+            ],
+        )
+    ).lower()
+    if not content:
+        return False
+
+    junk_markers = (
+        "job",
+        "jobs",
+        "career",
+        "careers",
+        "opening",
+        "openings",
+        "vacancy",
+        "vacancies",
+        "referral",
+        "referrals",
+        "internship",
+        "internships",
+        "internshala",
+        "candidate",
+        "developer news",
+        "newsletter",
+        "unsubscribe",
+        "view web version",
+        "top mncs",
+    )
+    return any(marker in content for marker in junk_markers)
+
+
+def is_internal_sender(email: str | None) -> bool:
+    normalized_email = normalize_email(email)
+    if not normalized_email:
+        return False
+
+    if EmailProviderIntegration.objects.filter(email_address__iexact=normalized_email, is_active=True).exists():
+        return True
+    if OrganizationEmailAddress.objects.filter(email_address__iexact=normalized_email, is_active=True).exists():
+        return True
+    return get_user_model().objects.filter(email__iexact=normalized_email, is_active=True).exists()
+
+
+def is_relevant_outside_mail(payload: dict[str, Any]) -> bool:
+    intent = classify_email_intent(
+        subject=payload.get("subject"),
+        body_text=payload.get("body_text"),
+        body_html=payload.get("body_html"),
+    )
+    if intent in {"sales", "support"}:
+        return True
+
+    content = " ".join(
+        filter(
+            None,
+            [
+                payload.get("from_name"),
+                payload.get("subject"),
+                payload.get("body_text"),
+                payload.get("body_html"),
+            ],
+        )
+    ).lower()
+    if not content:
+        return False
+
+    business_markers = (
+        "lead",
+        "crm",
+        "software",
+        "license",
+        "licenses",
+        "subscription",
+        "renewal",
+        "proposal",
+        "quotation",
+        "quote",
+        "pricing",
+        "demo",
+        "implementation",
+        "onboarding",
+    )
+    return any(marker in content for marker in business_markers)
+
+
+def should_auto_create_placeholder_lead(payload: dict[str, Any]) -> bool:
+    if (payload.get("direction") or SyncedEmailMessage.Direction.INCOMING) != SyncedEmailMessage.Direction.INCOMING:
+        return False
+
+    if is_internal_sender(payload.get("from_email")):
+        return False
+
+    if is_junk_lead_candidate(
+        from_email=payload.get("from_email"),
+        from_name=payload.get("from_name"),
+        subject=payload.get("subject"),
+        body_text=payload.get("body_text"),
+        body_html=payload.get("body_html"),
+    ):
+        return False
+
+    return is_relevant_outside_mail(payload)
 
 
 def match_message_to_lead(message: dict[str, Any]) -> Lead | None:
@@ -1439,11 +1562,7 @@ def create_synced_email_message(
     owner=None,
 ) -> SyncedEmailMessage:
     match = _expand_related_crm_records(_match_synced_email_records(payload))
-    if (
-        (payload.get("direction") or SyncedEmailMessage.Direction.INCOMING) == SyncedEmailMessage.Direction.INCOMING
-        and not _has_crm_match(match)
-        and not is_notification_sender(payload.get("from_email"))
-    ):
+    if not _has_crm_match(match) and should_auto_create_placeholder_lead(payload):
         placeholder_lead = get_or_create_placeholder_lead(
             email=payload.get("from_email"),
             name=payload.get("from_name") or payload.get("subject"),
@@ -1536,11 +1655,7 @@ def reconcile_synced_email_links(*, queryset=None) -> dict[str, int]:
         }
         match = _match_synced_email_records(payload)
         match = _expand_related_crm_records(match)
-        if (
-            message.direction == SyncedEmailMessage.Direction.INCOMING
-            and not _has_crm_match(match)
-            and not is_notification_sender(message.from_email)
-        ):
+        if not _has_crm_match(match) and should_auto_create_placeholder_lead(payload):
             match = MatchedCRMRecord(
                 lead=get_or_create_placeholder_lead(
                     email=message.from_email,

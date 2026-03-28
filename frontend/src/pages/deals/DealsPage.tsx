@@ -3,11 +3,13 @@ import CRMModuleListPage from "../crm/CRMModuleListPage";
 import { dealModuleConfig } from "../../components/modules/deals/dealsConfig";
 import { deleteDeal, getDeals } from "../../lib/api/dealsApi";
 import type { Deal } from "../../lib/shared/crmTypes";
+import DealsPipelinePanel from "./DealsPipelinePanel";
 
 export default function DealsPage() {
   const [rows, setRows] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"pipeline" | "list">("pipeline");
 
   const loadDeals = useCallback(async () => {
     try {
@@ -56,6 +58,64 @@ export default function DealsPage() {
       showNotes={false}
       showActivity={false}
       onDeleteRow={handleDeleteRow}
+      hideFilterSidebar={viewMode === "pipeline"}
+      hideTable={viewMode === "pipeline"}
+      renderTopContent={({ processedRows, loading: listLoading }) => (
+        <div className="mb-4 space-y-4">
+          <DealsViewToggle viewMode={viewMode} onChange={setViewMode} />
+          {viewMode === "pipeline" ? (
+            <DealsPipelinePanel deals={processedRows} loading={listLoading} />
+          ) : (
+            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500 shadow-sm">
+              List view is focused on filters, sorting, bulk actions, and deal management.
+            </div>
+          )}
+        </div>
+      )}
     />
+  );
+}
+
+function DealsViewToggle({
+  viewMode,
+  onChange,
+}: {
+  viewMode: "pipeline" | "list";
+  onChange: (mode: "pipeline" | "list") => void;
+}) {
+  return (
+    <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      <div>
+        <h2 className="text-base font-semibold text-slate-900">Deals Workspace</h2>
+        <p className="text-sm text-slate-500">
+          Use pipeline view for stage movement and list view for full record management.
+        </p>
+      </div>
+
+      <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+        <button
+          type="button"
+          onClick={() => onChange("pipeline")}
+          className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
+            viewMode === "pipeline"
+              ? "bg-blue-600 text-white shadow-sm"
+              : "text-slate-600 hover:bg-white"
+          }`}
+        >
+          Pipeline View
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange("list")}
+          className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
+            viewMode === "list"
+              ? "bg-blue-600 text-white shadow-sm"
+              : "text-slate-600 hover:bg-white"
+          }`}
+        >
+          List View
+        </button>
+      </div>
+    </div>
   );
 }

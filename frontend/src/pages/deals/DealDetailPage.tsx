@@ -80,7 +80,7 @@ export default function DealDetailPage() {
         setError(null);
         setLoading(false);
 
-        const related = await loadDealLinkedData(normalized).catch(() => null);
+        const related = await loadDealLinkedData(normalized, { forceRefresh: true }).catch(() => null);
         setLinkedData(related);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unable to load deal.");

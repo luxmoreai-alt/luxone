@@ -2,10 +2,12 @@ import { useEffect, useState, type KeyboardEvent, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { apiRequest } from "../../api/client";
+import { NoteModal } from "../../components/crm/CRMActionModals";
 import { leadModuleConfig } from "../../components/modules/leads/leadsMockData";
 import { loadLeadLinkedData } from "../../lib/api/linkedRecordsApi";
-import { getLeadById, getLeadNotes, getLeadTimeline } from "../../lib/api/leadsApi";
+import { addLeadNote, getLeadById, getLeadNotes, getLeadTimeline } from "../../lib/api/leadsApi";
 import type { LeadRecord, Note, TimelineItem } from "../../lib/shared/crmTypes";
+import { buildFlowTimeline } from "../../lib/shared/timelineFlow";
 import CRMModuleDetailPage from "../crm/CRMModuleDetailPage";
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
@@ -289,7 +291,7 @@ function DeleteModal({ leadId, onClose, onDeleted }: { leadId: string; onClose: 
   );
 }
 
-type ActiveModal = "send-email" | "convert" | "add-tags" | "delete" | null;
+type ActiveModal = "send-email" | "convert" | "add-tags" | "delete" | "note" | null;
 
 export default function LeadDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -323,7 +325,7 @@ export default function LeadDetailPage() {
         const [notesData, timelineData, related] = await Promise.all([
           getLeadNotes(id).catch(() => []),
           getLeadTimeline(id).catch(() => []),
-          loadLeadLinkedData(leadData).catch(() => null),
+          loadLeadLinkedData(leadData, { forceRefresh: true }).catch(() => null),
         ]);
         setNotes(notesData);
         setTimeline(timelineData);
@@ -374,11 +376,40 @@ export default function LeadDetailPage() {
   const leadEmail = lead.email ?? "";
   const leadTags = lead.tags ?? [];
 
+  const handleSaveNote = async (note: string) => {
+    if (!id) {
+      throw new Error("Lead not found.");
+    }
+    await addLeadNote(id, note);
+    const refreshedNotes = await getLeadNotes(id);
+    setNotes(refreshedNotes);
+  };
+
   return (
     <>
       <CRMModuleDetailPage
         config={leadModuleConfig}
         rows={[lead]}
+        sectionActions={{
+          "notes-section": (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveModal("note")}
+                className="rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition hover:bg-blue-100"
+              >
+                Add Note
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate(`/leads/import-notes?leadId=${id}`)}
+                className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
+              >
+                Import Notes
+              </button>
+            </div>
+          ),
+        }}
         onAction={handleAction}
         onNavigate={(type, navId) => navigate(`/${type}s/${navId}`)}
         data={{
@@ -399,9 +430,9 @@ export default function LeadDetailPage() {
           salesOrders: linkedData?.salesOrders || [],
           purchaseOrders: linkedData?.purchaseOrders || [],
           invoices: linkedData?.invoices || [],
-          timeline: [...timeline, ...(linkedData?.timeline || [])],
-        }}
-      />
+            timeline: buildFlowTimeline({ existing: [...timeline, ...(linkedData?.timeline || [])] }),
+          }}
+        />
 
       {convertedLinks && (
         <div className="fixed bottom-6 right-6 z-50 w-80 rounded-xl border border-green-200 bg-green-50 p-4 shadow-xl">
@@ -467,6 +498,13 @@ export default function LeadDetailPage() {
       {activeModal === "delete" && (
         <DeleteModal leadId={id!} onClose={() => setActiveModal(null)} onDeleted={() => navigate("/leads")} />
       )}
+
+      <NoteModal
+        open={activeModal === "note"}
+        onClose={() => setActiveModal(null)}
+        recordName={lead.leadName}
+        onSave={handleSaveNote}
+      />
     </>
   );
 }

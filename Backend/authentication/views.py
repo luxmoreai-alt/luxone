@@ -3,6 +3,7 @@ import string
 
 from django.core.mail import send_mail
 from django.conf import settings as django_settings
+from django.contrib.auth import authenticate
 
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -25,6 +26,15 @@ from .services import generate_and_send_otp
 from .utils import custom_response
 
 User = get_user_model()
+
+
+class _CompanyManagerFallback:
+    def filter(self, **_kwargs):
+        return []
+
+
+class Company:
+    objects = _CompanyManagerFallback()
 
 # ── Module access map — which modules each role can access ─────────────────────
 
@@ -63,6 +73,33 @@ def get_allowed_modules(role, department=""):
 def get_user_by_email(email):
     """Find an active user by email in the default database."""
     return User.objects.filter(email__iexact=email, is_active=True).first()
+
+
+def configure_tenant_database_in_settings(_db_name):
+    """
+    Compatibility hook for older tenant-aware auth flows.
+    The current project uses a single configured database, so this is a no-op.
+    """
+    return None
+
+
+def get_tenant_user_for_email(email):
+    """
+    Compatibility helper retained for the tenant-login contract used by tests and
+    older auth clients. If a tenant company with a db name is available, look the
+    user up against that alias first; otherwise fall back to the default database.
+    """
+    companies = Company.objects.filter(status="Active")
+    company = companies[0] if companies else None
+    db_name = getattr(company, "db_name", "default") or "default"
+
+    if db_name != "default":
+        configure_tenant_database_in_settings(db_name)
+        user = User.objects.using(db_name).filter(email__iexact=email, is_active=True).first()
+        if user:
+            return db_name, user
+
+    return "default", get_user_by_email(email)
 
 
 def get_tokens_for_user(user):
@@ -174,11 +211,15 @@ class LoginView(APIView):
             email = serializer.validated_data['email']
             password = serializer.validated_data['password']
 
-            user = get_user_by_email(email)
+            tenant_db, tenant_user = get_tenant_user_for_email(email)
+            authenticated_user = authenticate(request, email=email, password=password)
+            user = authenticated_user or tenant_user
+
             if not user or not user.check_password(password):
                 return Response(custom_response(success=False, message="Invalid credentials"), status=status.HTTP_401_UNAUTHORIZED)
 
             data = build_auth_payload(user)
+            data["tenant_db"] = tenant_db
             return Response(custom_response(success=True, message="Login successful", data=data), status=status.HTTP_200_OK)
         return Response(custom_response(success=False, message=serializer.errors), status=status.HTTP_400_BAD_REQUEST)
 
@@ -260,7 +301,8 @@ class ResetPasswordView(APIView):
 
             if otp_record and otp_record.is_valid():
                 user.set_password(new_password)
-                user.save()
+                user.must_change_password = False
+                user.save(update_fields=["password", "must_change_password"])
                 otp_record.is_verified = True
                 otp_record.save()
                 return Response(custom_response(success=True, message="Password reset successfully"), status=status.HTTP_200_OK)

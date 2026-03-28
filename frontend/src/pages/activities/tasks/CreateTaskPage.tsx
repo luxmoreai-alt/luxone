@@ -418,33 +418,6 @@ export default function CreateTaskPage() {
                 )}
               </div>
 
-              <div className="flex items-center gap-3">
-                <input
-                  id="reminder"
-                  name="reminder"
-                  type="checkbox"
-                  checked={formData.reminder}
-                  onChange={handleChange}
-                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                />
-                <label htmlFor="reminder" className="text-sm font-medium text-slate-700">
-                  Reminder
-                </label>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <input
-                  id="repeat"
-                  name="repeat"
-                  type="checkbox"
-                  checked={formData.repeat}
-                  onChange={handleChange}
-                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                />
-                <label htmlFor="repeat" className="text-sm font-medium text-slate-700">
-                  Repeat task
-                </label>
-              </div>
             </div>
           </div>
         </div>

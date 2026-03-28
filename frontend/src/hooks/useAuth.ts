@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getStoredUser } from "../lib/api/authApi";
 import type { UserRole, AuthUser } from "../lib/api/authApi";
 
@@ -16,6 +16,10 @@ export function useAuth() {
   const user = getStoredUser();
   const role: UserRole = (user?.role as UserRole) ?? "employee";
   const allowedModules: string[] = user?.allowed_modules ?? [];
+  const canAccess = useCallback(
+    (module: string) => role === "admin" || role === "sub_admin" || allowedModules.includes(module),
+    [allowedModules, role]
+  );
 
   return {
     user,
@@ -28,8 +32,7 @@ export function useAuth() {
     isEmployee: !["admin", "sub_admin", "manager", "team_lead"].includes(role),
     // Module access
     allowedModules,
-    canAccess: (module: string) =>
-      role === "admin" || role === "sub_admin" || allowedModules.includes(module),
+    canAccess,
     mustChangePassword: user?.must_change_password ?? false,
   };
 }

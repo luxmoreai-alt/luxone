@@ -50,6 +50,9 @@ class Project(models.Model):
     account_name = models.CharField(max_length=255, blank=True)
     contact_name = models.CharField(max_length=255, blank=True)
     deal_name = models.CharField(max_length=255, blank=True)
+    source_module = models.CharField(max_length=50, blank=True)
+    source_record_id = models.PositiveIntegerField(null=True, blank=True)
+    source_record_label = models.CharField(max_length=255, blank=True)
     owner = models.CharField(max_length=255, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Planning')
     priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='Medium')
@@ -67,6 +70,7 @@ class Project(models.Model):
             models.Index(fields=['status']),
             models.Index(fields=['priority']),
             models.Index(fields=['owner']),
+            models.Index(fields=['source_module', 'source_record_id']),
             models.Index(fields=['created_at']),
         ]
 
@@ -86,7 +90,9 @@ class Project(models.Model):
 class ProjectTask(models.Model):
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='tasks')
     title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
     owner = models.CharField(max_length=255, blank=True)
+    assigned_by = models.CharField(max_length=255, blank=True)
     due_date = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=TASK_STATUS_CHOICES, default='Not Started')
     priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='Medium')

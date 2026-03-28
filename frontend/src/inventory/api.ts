@@ -19,6 +19,7 @@ import type {
   InventoryListRecord,
   InventoryModuleKey,
   InventoryRelatedData,
+  InventoryRelatedListItem,
   LookupOption,
   PriceBookFormValues,
   PriceBookImportState,
@@ -29,6 +30,7 @@ import type {
   VendorFormValues,
   InvoiceFormValues,
 } from "./types";
+import { buildFlowTimeline } from "../lib/shared/timelineFlow";
 
 type Paginated<T> = {
   count: number;
@@ -76,40 +78,126 @@ function asNumber(value: unknown): number {
 }
 
 function mapTimelineFromRelated(
+  parentId: string,
   notes: Note[],
   openActivities: Activity[],
   closedActivities: Activity[],
-  emails: EmailRecord[]
+  emails: EmailRecord[],
+  related?: Pick<
+    InventoryRelatedData,
+    "attachments" | "products" | "quotes" | "salesOrders" | "purchaseOrders" | "invoices" | "services" | "cases" | "solutions"
+  >
 ): TimelineItem[] {
-  return [
-    ...notes.map((note) => ({
-      id: `note-${note.id}`,
-      parentId: note.parentId,
-      type: "Note" as const,
-      title: note.title,
-      detail: note.content,
-      at: note.createdAt,
-      by: note.createdBy,
-    })),
-    ...[...openActivities, ...closedActivities].map((item) => ({
-      id: `activity-${item.id}`,
-      parentId: item.parentId,
-      type: item.type === "Call" ? ("Call" as const) : ("Task" as const),
-      title: item.subject,
-      detail: item.status,
-      at: item.dueAt,
-      by: "",
-    })),
-    ...emails.map((item) => ({
-      id: `email-${item.id}`,
-      parentId: item.parentId,
-      type: "Email" as const,
-      title: item.subject,
-      detail: item.status,
-      at: item.sentAt,
-      by: item.sentBy,
-    })),
-  ].sort((a, b) => b.at.localeCompare(a.at));
+  const mapRelatedFlow = (items: InventoryRelatedListItem[] | undefined, title: string, parentId: string) =>
+    (items || [])
+      .filter((item) => item.createdAt)
+      .map((item) => ({
+        id: `related-${title}-${item.id}`,
+        parentId,
+        type: "Update" as const,
+        title,
+        detail: [item.label, item.meta].filter(Boolean).join(" • "),
+        at: item.createdAt || "",
+        by: "",
+      }));
+
+  return buildFlowTimeline({
+    notes,
+    openActivities,
+    closedActivities,
+    emails,
+    attachments: related?.attachments,
+    existing: [
+      ...mapRelatedFlow(related?.products, "Product linked", parentId),
+      ...mapRelatedFlow(related?.quotes, "Quote created", parentId),
+      ...mapRelatedFlow(related?.salesOrders, "Sales order created", parentId),
+      ...mapRelatedFlow(related?.purchaseOrders, "Purchase order created", parentId),
+      ...mapRelatedFlow(related?.invoices, "Invoice created", parentId),
+      ...mapRelatedFlow(related?.services, "Service scheduled", parentId),
+      ...mapRelatedFlow(related?.cases, "Case created", parentId),
+      ...mapRelatedFlow(related?.solutions, "Solution created", parentId),
+    ],
+  });
+}
+
+async function getRelatedServices(moduleKey: InventoryModuleKey, id: string): Promise<InventoryRelatedListItem[]> {
+  if (moduleKey !== "products" && moduleKey !== "sales-orders" && moduleKey !== "invoices") {
+    return [];
+  }
+
+  const query: Record<string, string> = {};
+  if (moduleKey === "products") query.product = id;
+  if (moduleKey === "sales-orders") query.sales_order = id;
+  if (moduleKey === "invoices") query.invoice = id;
+
+  try {
+    let appointments = toList(await apiRequest<any[] | Paginated<any>>("/services/appointments/", { query }));
+
+    if (moduleKey === "invoices") {
+      const invoiceDetail = await apiRequest<any>(`${INVENTORY_ENDPOINTS.invoices}/${id}`);
+      const sourceSalesOrderId = asString(invoiceDetail.sales_order);
+      if (sourceSalesOrderId) {
+        const salesOrderAppointments = toList(
+          await apiRequest<any[] | Paginated<any>>("/services/appointments/", {
+            query: { sales_order: sourceSalesOrderId },
+          })
+        ).map((item) => ({
+          ...item,
+          _inferredFromSalesOrder: !asString(item.invoice),
+        }));
+
+        appointments = dedupeBy(
+          [...appointments, ...salesOrderAppointments],
+          (item) => asString(item.id)
+        );
+      }
+    }
+
+    const appointmentIds = appointments.map((item) => asString(item.id)).filter(Boolean);
+    const allJobSheets = appointmentIds.length
+      ? toList(await apiRequest<any[] | Paginated<any>>("/services/job-sheets/"))
+      : [];
+    const jobSheets = allJobSheets.filter((item) => appointmentIds.includes(asString(item.appointment)));
+
+    return [
+      ...appointments.map((item) => ({
+        id: asString(item.id),
+        route: `/services/appointments/${asString(item.id)}`,
+        kind: "appointment" as const,
+        label:
+          asString(item.appointment_number) ||
+          asString(item.service_name) ||
+          "Service Appointment",
+        meta: [
+        "Appointment",
+        asString(item.service_name),
+        asString(item.status),
+        asString(item.appointment_for_display),
+        item._inferredFromSalesOrder ? "From Sales Order" : "",
+        asString(item.sales_order_subject || item.invoice_subject),
+        asString(item.appointment_date),
+        ]
+        .filter(Boolean)
+        .join(" - "),
+      createdAt: asString(item.created_at),
+      })),
+      ...jobSheets.map((item) => ({
+        id: `job-sheet-${asString(item.id)}`,
+        route: `/services/job-sheets/${asString(item.id)}`,
+        kind: "job-sheet" as const,
+        label: asString(item.title) || "Job Sheet",
+        meta: [
+          "Job Sheet",
+          asString(item.service_name),
+          asString(item.status).replace(/_/g, " "),
+          asString(item.appointment) ? `Appointment ${asString(item.appointment)}` : "",
+        ].filter(Boolean).join(" - "),
+        createdAt: asString(item.created_at),
+      })),
+    ];
+  } catch {
+    return [];
+  }
 }
 
 function mapNote(parentId: string, item: any): Note {
@@ -386,13 +474,22 @@ function normalizeConfigurators(items: any[]): InventoryListRecord[] {
   }));
 }
 
-export async function getInventoryList(moduleKey: InventoryModuleKey): Promise<InventoryListRecord[]> {
+export async function getInventoryList(
+  moduleKey: InventoryModuleKey,
+  options?: { pageSize?: number; cacheTtlMs?: number }
+): Promise<InventoryListRecord[]> {
   if (moduleKey === "configurator") {
-    const data = await apiRequest<any[] | Paginated<any>>("/inventory/configurator");
+    const data = await apiRequest<any[] | Paginated<any>>("/inventory/configurator", {
+      query: options?.pageSize ? { page_size: options.pageSize } : undefined,
+      cacheTtlMs: options?.cacheTtlMs,
+    });
     return normalizeConfigurators(toList(data));
   }
 
-  const data = await apiRequest<any[] | Paginated<any>>(INVENTORY_ENDPOINTS[moduleKey]);
+  const data = await apiRequest<any[] | Paginated<any>>(INVENTORY_ENDPOINTS[moduleKey], {
+    query: options?.pageSize ? { page_size: options.pageSize } : undefined,
+    cacheTtlMs: options?.cacheTtlMs,
+  });
   const items = toList(data);
   if (moduleKey === "products") return normalizeProducts(items);
   if (moduleKey === "vendors") return normalizeVendors(items);
@@ -472,6 +569,7 @@ export async function getInventoryDetail(
     invoices,
     cases,
     solutions,
+    services,
     integrationEmails,
     integrationSourceEvents,
   ] = await Promise.all([
@@ -481,51 +579,61 @@ export async function getInventoryDetail(
     getRelatedList(`${basePath}/${id}/attachments`, (item) => mapAttachment(id, item)),
     getRelatedList(`${basePath}/${id}/emails`, (item) => mapEmail(id, item)),
     getRelatedList(`${basePath}/${id}/related-records`, (item) => mapConnectedRecord(id, item)),
-    getRelatedList(`${basePath}/${id}/products`, (item) => ({
-      id: asString(item.id),
-      label: asString(item.product_name || item.productName || item.vendor_name || item.vendorName),
-      meta: asString(item.product_code || item.phone),
-    })),
-    getRelatedList(`${basePath}/${id}/vendors`, (item) => ({
-      id: asString(item.id),
-      label: asString(item.vendor_name || item.name),
-      meta: asString(item.email || item.phone),
-    })),
-    getRelatedList(`${basePath}/${id}/price-books`, (item) => ({
-      id: asString(item.id),
-      label: asString(item.name),
-      meta: asString(item.pricing_model),
-    })),
-    getRelatedList(`${basePath}/${id}/quotes`, (item) => ({
-      id: asString(item.id),
-      label: asString(item.subject),
-      meta: asString(item.quote_stage || item.price_book_name),
-    })),
-    getRelatedList(`${basePath}/${id}/sales-orders`, (item) => ({
-      id: asString(item.id),
-      label: asString(item.subject),
-      meta: asString(item.status),
-    })),
-    getRelatedList(`${basePath}/${id}/purchase-orders`, (item) => ({
-      id: asString(item.id),
-      label: asString(item.subject),
-      meta: asString(item.status),
-    })),
-    getRelatedList(`${basePath}/${id}/invoices`, (item) => ({
-      id: asString(item.id),
-      label: asString(item.subject),
-      meta: asString(item.status),
-    })),
-    getRelatedList(`${basePath}/${id}/cases`, (item) => ({
-      id: asString(item.id),
-      label: asString(item.subject || item.case_number),
-      meta: [asString(item.case_number), asString(item.status)].filter(Boolean).join(" - "),
-    })),
-    getRelatedList(`${basePath}/${id}/solutions`, (item) => ({
-      id: asString(item.id),
-      label: asString(item.solution_title || item.solution_number),
-      meta: [asString(item.solution_number), asString(item.status)].filter(Boolean).join(" - "),
-    })),
+      getRelatedList(`${basePath}/${id}/products`, (item) => ({
+        id: asString(item.id),
+        label: asString(item.product_name || item.productName || item.vendor_name || item.vendorName),
+        meta: asString(item.product_code || item.phone),
+        createdAt: asString(item.created_at),
+      })),
+      getRelatedList(`${basePath}/${id}/vendors`, (item) => ({
+        id: asString(item.id),
+        label: asString(item.vendor_name || item.name),
+        meta: asString(item.email || item.phone),
+        createdAt: asString(item.created_at),
+      })),
+      getRelatedList(`${basePath}/${id}/price-books`, (item) => ({
+        id: asString(item.id),
+        label: asString(item.name),
+        meta: asString(item.pricing_model),
+        createdAt: asString(item.created_at),
+      })),
+      getRelatedList(`${basePath}/${id}/quotes`, (item) => ({
+        id: asString(item.id),
+        label: asString(item.subject),
+        meta: asString(item.quote_stage || item.price_book_name),
+        createdAt: asString(item.created_at),
+      })),
+      getRelatedList(`${basePath}/${id}/sales-orders`, (item) => ({
+        id: asString(item.id),
+        label: asString(item.subject),
+        meta: asString(item.status),
+        createdAt: asString(item.created_at),
+      })),
+      getRelatedList(`${basePath}/${id}/purchase-orders`, (item) => ({
+        id: asString(item.id),
+        label: asString(item.subject),
+        meta: asString(item.status),
+        createdAt: asString(item.created_at),
+      })),
+      getRelatedList(`${basePath}/${id}/invoices`, (item) => ({
+        id: asString(item.id),
+        label: asString(item.subject),
+        meta: asString(item.status),
+        createdAt: asString(item.created_at),
+      })),
+      getRelatedList(`${basePath}/${id}/cases`, (item) => ({
+        id: asString(item.id),
+        label: asString(item.subject || item.case_number),
+        meta: [asString(item.case_number), asString(item.status)].filter(Boolean).join(" - "),
+        createdAt: asString(item.created_at),
+      })),
+      getRelatedList(`${basePath}/${id}/solutions`, (item) => ({
+        id: asString(item.id),
+        label: asString(item.solution_title || item.solution_number),
+        meta: [asString(item.solution_number), asString(item.status)].filter(Boolean).join(" - "),
+        createdAt: asString(item.created_at),
+      })),
+    getRelatedServices(moduleKey, id),
     detail.account || detail.contact || detail.deal
       ? integrationsApi
           .listSyncedEmailMessages({
@@ -648,7 +756,17 @@ export async function getInventoryDetail(
     })
       .filter(([, value]) => value !== undefined && value !== null && value !== "")
       .map(([label, value]) => ({ label, value: asString(value) })),
-    timeline: mapTimelineFromRelated(notes, openActivities, closedActivities, mergedEmails),
+      timeline: mapTimelineFromRelated(id, notes, openActivities, closedActivities, mergedEmails, {
+        attachments,
+        products,
+        quotes,
+        salesOrders,
+        purchaseOrders,
+        invoices,
+        services: services as any,
+        cases,
+        solutions,
+      }),
     description: asString(detail.description),
     termsAndConditions: asString(detail.terms_and_conditions),
     items: Array.isArray(detail.items) ? detail.items.map(mapLineItem) : [],
@@ -671,6 +789,7 @@ export async function getInventoryDetail(
       salesOrders,
       purchaseOrders,
       invoices,
+      services,
       contacts: linkedContacts,
       accounts: linkedAccounts,
       deals: linkedDeals,
@@ -750,17 +869,22 @@ function serializeVendor(values: VendorFormValues) {
 }
 
 function serializePriceBook(values: PriceBookFormValues) {
+  const shouldSendRanges = values.pricingModel === "range";
   return {
     owner: values.owner ? Number(values.owner) : undefined,
     name: values.name,
     active: values.active,
     pricing_model: values.pricingModel,
     description: values.description || "",
-    ranges: values.ranges.map((item) => ({
-      from_range: item.fromRange,
-      to_range: item.toRange,
-      discount_percentage: item.discountPercentage,
-    })),
+    ranges: shouldSendRanges
+      ? values.ranges
+          .filter((item) => Number(item.toRange) >= Number(item.fromRange))
+          .map((item) => ({
+            from_range: item.fromRange,
+            to_range: item.toRange,
+            discount_percentage: item.discountPercentage,
+          }))
+      : [],
     product_links: values.productLinks.map((item) => ({
       product: Number(item.product),
       list_price: item.listPrice,

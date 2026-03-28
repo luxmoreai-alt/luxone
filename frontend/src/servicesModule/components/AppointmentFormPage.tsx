@@ -10,6 +10,7 @@ import {
 import {
   createAppointment,
   getAppointment,
+  getLookupOptionById,
   getService,
   listHolidays,
   listServices,
@@ -32,8 +33,11 @@ const emptyForm: AppointmentFormData = {
   appointmentEndTime: "",
   assignedMemberId: "",
   productId: "",
+  productLabel: "",
   salesOrderId: "",
+  salesOrderLabel: "",
   invoiceId: "",
+  invoiceLabel: "",
   customerAssetName: "",
   productSerialNumber: "",
   coverageType: "none",
@@ -43,17 +47,29 @@ const emptyForm: AppointmentFormData = {
   notes: "",
   completionNotes: "",
   completionProofUrl: "",
+  completionProofFile: null,
+  completionProofFileUrl: "",
+  completionProofFileName: "",
+  clearCompletionProofFile: false,
 };
+
+function withSearchDefaults(searchParams: URLSearchParams): AppointmentFormData {
+  return {
+    ...emptyForm,
+    serviceId: searchParams.get("service") || "",
+    salesOrderId: searchParams.get("salesOrder") || "",
+    salesOrderLabel: "",
+    invoiceId: searchParams.get("invoice") || "",
+    invoiceLabel: "",
+  };
+}
 
 export default function AppointmentFormPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const isEdit = Boolean(id);
-  const [form, setForm] = useState<AppointmentFormData>({
-    ...emptyForm,
-    serviceId: searchParams.get("service") || "",
-  });
+  const [form, setForm] = useState<AppointmentFormData>(() => withSearchDefaults(searchParams));
   const [services, setServices] = useState<ServiceRecord[]>([]);
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
@@ -88,8 +104,11 @@ export default function AppointmentFormPage() {
             appointmentEndTime: detail.appointmentEndTime,
             assignedMemberId: detail.assignedMemberId,
             productId: detail.productId,
+            productLabel: detail.productName,
             salesOrderId: detail.salesOrderId,
+            salesOrderLabel: detail.salesOrderSubject,
             invoiceId: detail.invoiceId,
+            invoiceLabel: detail.invoiceSubject,
             customerAssetName: detail.customerAssetName,
             productSerialNumber: detail.productSerialNumber,
             coverageType: detail.coverageType || "none",
@@ -99,6 +118,10 @@ export default function AppointmentFormPage() {
             notes: detail.notes,
             completionNotes: detail.completionNotes,
             completionProofUrl: detail.completionProofUrl,
+            completionProofFile: null,
+            completionProofFileUrl: detail.completionProofFileUrl,
+            completionProofFileName: detail.completionProofFileName,
+            clearCompletionProofFile: false,
           });
         } else if (searchParams.get("service")) {
           const serviceDetail = await getService(searchParams.get("service") as string);
@@ -110,6 +133,27 @@ export default function AppointmentFormPage() {
             serviceId: serviceDetail.id,
             location: prev.location || serviceDetail.location || "",
           }));
+        } else {
+          setForm((prev) => ({
+            ...withSearchDefaults(searchParams),
+            appointmentDate: prev.appointmentDate,
+            appointmentStartTime: prev.appointmentStartTime,
+            appointmentEndTime: prev.appointmentEndTime,
+            assignedMemberId: prev.assignedMemberId,
+            customerAssetName: prev.customerAssetName,
+            productSerialNumber: prev.productSerialNumber,
+            coverageType: prev.coverageType,
+            coverageStatus: prev.coverageStatus,
+            location: prev.location,
+            status: prev.status,
+            notes: prev.notes,
+            completionNotes: prev.completionNotes,
+            completionProofUrl: prev.completionProofUrl,
+            completionProofFile: prev.completionProofFile,
+            completionProofFileUrl: prev.completionProofFileUrl,
+            completionProofFileName: prev.completionProofFileName,
+            clearCompletionProofFile: prev.clearCompletionProofFile,
+          }));
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unable to load appointment form.");
@@ -119,6 +163,23 @@ export default function AppointmentFormPage() {
     };
     void load();
   }, [id, searchParams]);
+
+  useEffect(() => {
+    if (isEdit) return;
+
+    const salesOrderFromQuery = searchParams.get("salesOrder") || "";
+    const invoiceFromQuery = searchParams.get("invoice") || "";
+    const serviceFromQuery = searchParams.get("service") || "";
+
+    setForm((prev) => ({
+      ...prev,
+      serviceId: serviceFromQuery || prev.serviceId,
+      salesOrderId: salesOrderFromQuery || (invoiceFromQuery ? "" : ""),
+      salesOrderLabel: salesOrderFromQuery || invoiceFromQuery ? "" : prev.salesOrderLabel,
+      invoiceId: invoiceFromQuery || "",
+      invoiceLabel: invoiceFromQuery ? "" : "",
+    }));
+  }, [isEdit, searchParams]);
 
   useEffect(() => {
     const loadSelectedService = async () => {
@@ -178,6 +239,39 @@ export default function AppointmentFormPage() {
       setForm((prev) => ({ ...prev, productId: prev.appointmentForId }));
     }
   }, [form.appointmentForId, form.appointmentForType, form.productId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const syncLabels = async () => {
+      try {
+        const [salesOrder, invoice, product] = await Promise.all([
+          form.salesOrderId && !form.salesOrderLabel ? getLookupOptionById("sales-order", form.salesOrderId) : Promise.resolve(null),
+          form.invoiceId && !form.invoiceLabel ? getLookupOptionById("invoice", form.invoiceId) : Promise.resolve(null),
+          form.productId && !form.productLabel ? getLookupOptionById("product", form.productId) : Promise.resolve(null),
+        ]);
+
+        if (cancelled) return;
+
+        if (salesOrder || invoice || product) {
+          setForm((prev) => ({
+            ...prev,
+            salesOrderLabel: prev.salesOrderLabel || salesOrder?.label || "",
+            invoiceLabel: prev.invoiceLabel || invoice?.label || "",
+            productLabel: prev.productLabel || product?.label || "",
+            salesOrderId: prev.invoiceId ? invoice?.salesOrderId || "" : prev.salesOrderId || invoice?.salesOrderId || "",
+          }));
+        }
+      } catch {
+        // Keep ids as-is if linked lookup enrichment fails.
+      }
+    };
+
+    void syncLabels();
+    return () => {
+      cancelled = true;
+    };
+  }, [form.invoiceId, form.invoiceLabel, form.productId, form.productLabel, form.salesOrderId, form.salesOrderLabel]);
 
   useEffect(() => {
     if (form.coverageType === "none" && form.coverageStatus !== "not_applicable") {
@@ -304,6 +398,13 @@ export default function AppointmentFormPage() {
                 {selectedService.businessHoursTimezone ? ` (${selectedService.businessHoursTimezone})` : ""}.
               </div>
             ) : null}
+            {form.salesOrderId || form.invoiceId ? (
+              <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-slate-700">
+                <div className="font-medium text-slate-900">Linked execution source</div>
+                {form.salesOrderId ? <div className="mt-1">Sales Order: {form.salesOrderLabel || form.salesOrderId}</div> : null}
+                {form.invoiceId ? <div className="mt-1">Invoice: {form.invoiceLabel || form.invoiceId}</div> : null}
+              </div>
+            ) : null}
             <div className="mt-6">
               <h2 className="text-sm font-semibold text-slate-900">Asset & Coverage</h2>
               <div className="mt-3 grid gap-4 md:grid-cols-2">
@@ -330,26 +431,26 @@ export default function AppointmentFormPage() {
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-slate-700">Linked Product ID</label>
                   <div className="flex gap-2">
-                    <input readOnly className={`${inputClass} flex-1`} value={form.productId} placeholder="Select product" />
+                    <input readOnly className={`${inputClass} flex-1`} value={form.productLabel || form.productId} placeholder="Select product" />
                     <button type="button" onClick={() => { setLookupMode("product"); setLookupOpen(true); }} className="rounded-md border border-slate-300 px-3 text-sm text-slate-700">Lookup</button>
-                    {form.productId ? <button type="button" onClick={() => setForm({ ...form, productId: "" })} className="rounded-md border border-slate-300 px-3 text-sm text-slate-700">Clear</button> : null}
+                    {form.productId ? <button type="button" onClick={() => setForm({ ...form, productId: "", productLabel: "" })} className="rounded-md border border-slate-300 px-3 text-sm text-slate-700">Clear</button> : null}
                   </div>
                   <p className="mt-1 text-xs text-slate-500">If you selected Product in appointment lookup, this fills automatically.</p>
                 </div>
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-slate-700">Sales Order ID</label>
                   <div className="flex gap-2">
-                    <input readOnly className={`${inputClass} flex-1`} value={form.salesOrderId} placeholder="Select sales order" />
+                    <input readOnly className={`${inputClass} flex-1`} value={form.salesOrderLabel || form.salesOrderId} placeholder="Select sales order" />
                     <button type="button" onClick={() => { setLookupMode("sales-order"); setLookupOpen(true); }} className="rounded-md border border-slate-300 px-3 text-sm text-slate-700">Lookup</button>
-                    {form.salesOrderId ? <button type="button" onClick={() => setForm({ ...form, salesOrderId: "" })} className="rounded-md border border-slate-300 px-3 text-sm text-slate-700">Clear</button> : null}
+                    {form.salesOrderId ? <button type="button" onClick={() => setForm({ ...form, salesOrderId: "", salesOrderLabel: "", invoiceId: "", invoiceLabel: "" })} className="rounded-md border border-slate-300 px-3 text-sm text-slate-700">Clear</button> : null}
                   </div>
                 </div>
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-slate-700">Invoice ID</label>
                   <div className="flex gap-2">
-                    <input readOnly className={`${inputClass} flex-1`} value={form.invoiceId} placeholder="Select invoice" />
+                    <input readOnly className={`${inputClass} flex-1`} value={form.invoiceLabel || form.invoiceId} placeholder="Select invoice" />
                     <button type="button" onClick={() => { setLookupMode("invoice"); setLookupOpen(true); }} className="rounded-md border border-slate-300 px-3 text-sm text-slate-700">Lookup</button>
-                    {form.invoiceId ? <button type="button" onClick={() => setForm({ ...form, invoiceId: "" })} className="rounded-md border border-slate-300 px-3 text-sm text-slate-700">Clear</button> : null}
+                    {form.invoiceId ? <button type="button" onClick={() => setForm({ ...form, invoiceId: "", invoiceLabel: "" })} className="rounded-md border border-slate-300 px-3 text-sm text-slate-700">Clear</button> : null}
                   </div>
                 </div>
               </div>
@@ -369,6 +470,52 @@ export default function AppointmentFormPage() {
                   <label className="mb-1.5 block text-sm font-medium text-slate-700">Completion Proof URL</label>
                   <input className={inputClass} value={form.completionProofUrl} onChange={(e) => setForm({ ...form, completionProofUrl: e.target.value })} placeholder="Photo, signature, drive link..." />
                 </div>
+                <div className="md:col-span-2">
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Completion Proof Document</label>
+                  <input
+                    type="file"
+                    className={`${inputClass} h-auto py-2`}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        completionProofFile: e.target.files?.[0] || null,
+                        clearCompletionProofFile: false,
+                      }))
+                    }
+                  />
+                  {form.completionProofFileName || form.completionProofFile ? (
+                    <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-600">
+                      <span>{form.completionProofFile?.name || form.completionProofFileName}</span>
+                      {form.completionProofFileUrl ? (
+                        <a
+                          href={form.completionProofFileUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-medium text-blue-600"
+                        >
+                          Open current file
+                        </a>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setForm((prev) => ({
+                            ...prev,
+                            completionProofFile: null,
+                            completionProofFileUrl: "",
+                            completionProofFileName: "",
+                            clearCompletionProofFile: true,
+                          }))
+                        }
+                        className="font-medium text-slate-700"
+                      >
+                        Remove file
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="mt-1 text-xs text-slate-500">Upload photo, signed document, PDF, or any proof file.</p>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -384,13 +531,16 @@ export default function AppointmentFormPage() {
             return;
           }
           if (lookupMode === "product") {
-            setForm((prev) => ({ ...prev, productId: option.id }));
+            setForm((prev) => ({ ...prev, productId: option.id, productLabel: option.label }));
             return;
           }
           if (lookupMode === "sales-order") {
             setForm((prev) => ({
               ...prev,
               salesOrderId: option.id,
+              salesOrderLabel: option.label,
+              invoiceId: "",
+              invoiceLabel: "",
               appointmentForType:
                 prev.appointmentForId
                   ? prev.appointmentForType
@@ -410,7 +560,9 @@ export default function AppointmentFormPage() {
           setForm((prev) => ({
             ...prev,
             invoiceId: option.id,
-            salesOrderId: prev.salesOrderId || option.salesOrderId || "",
+            invoiceLabel: option.label,
+            salesOrderId: option.salesOrderId || "",
+            salesOrderLabel: "",
             appointmentForType:
               prev.appointmentForId
                 ? prev.appointmentForType

@@ -70,7 +70,6 @@ class UserDetailSerializer(serializers.ModelSerializer):
             "id",
             "email",
             "name",
-            "organization_name",
             "role",
             "role_display",
             "department",

@@ -175,7 +175,7 @@ export default function CreateLeadPage() {
           annualRevenue: String(lead.annualRevenue || ""),
           rating: lead.rating ?? "",
           emailOptOut: false,
-          skypeId: "",
+          skypeId: lead.skypeId ?? "",
           secondaryEmail: lead.secondaryEmail ?? "",
           twitter: "@",
           country: lead.country ?? "",

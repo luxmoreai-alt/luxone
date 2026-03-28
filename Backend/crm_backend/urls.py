@@ -17,6 +17,7 @@ Including another URLconf
 from django.conf import settings
 from django.conf.urls.static import static
 from django.urls import path, include
+from django.http import JsonResponse
 from crm_backend.email_views import send_email_view
 from crm_backend.import_views import import_file_view
 from rest_framework import permissions
@@ -36,7 +37,16 @@ schema_view = get_schema_view(
     permission_classes=(permissions.AllowAny,),
 )
 
+
+def health_check_view(_request):
+    return JsonResponse({
+        "status": "ok",
+        "service": "crm-backend",
+        "debug": settings.DEBUG,
+    })
+
 urlpatterns = [
+    path('health/', health_check_view, name='health-check'),
     path('api/auth/', include('authentication.urls')),
     path('api/', include('leads.urls')),
     path('api/', include('accounts.urls')),
@@ -50,6 +60,7 @@ urlpatterns = [
     path('api/', include('notes.urls')),
     path('api/', include('activities.urls')),
     path('api/', include('project.urls')),
+    path('api/', include('projectdesk.urls')),
     path('api/', include('documents.urls')),
     path('api/send-email', send_email_view, name='send-email'),
     path('api/imports', import_file_view, name='import-file'),

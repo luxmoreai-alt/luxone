@@ -164,6 +164,8 @@ export type AppointmentRecord = CRMRecord & {
   notes: string;
   completionNotes: string;
   completionProofUrl: string;
+  completionProofFileUrl: string;
+  completionProofFileName: string;
   completedAt: string;
   publicBookingUrl?: string;
   createdAt: string;
@@ -180,8 +182,11 @@ export type AppointmentFormData = {
   appointmentEndTime: string;
   assignedMemberId: string;
   productId: string;
+  productLabel?: string;
   salesOrderId: string;
+  salesOrderLabel?: string;
   invoiceId: string;
+  invoiceLabel?: string;
   customerAssetName: string;
   productSerialNumber: string;
   coverageType: string;
@@ -191,6 +196,10 @@ export type AppointmentFormData = {
   notes: string;
   completionNotes: string;
   completionProofUrl: string;
+  completionProofFile?: File | null;
+  completionProofFileUrl?: string;
+  completionProofFileName?: string;
+  clearCompletionProofFile?: boolean;
 };
 
 export type JobSheetField = {

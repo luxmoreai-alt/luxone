@@ -4,6 +4,8 @@ import CRMImportPage from "../../components/crm/CRMImportPage";
 export default function ImportPage() {
   const location = useLocation();
   const path = location.pathname;
+  const searchParams = new URLSearchParams(location.search);
+  const initialTargetRecordId = searchParams.get("leadId") ?? undefined;
 
   let moduleLabel = "Leads";
   let backPath = "/leads";
@@ -36,6 +38,7 @@ export default function ImportPage() {
       moduleLabel={moduleLabel}
       mode={isNotes ? "notes" : "module"}
       backPath={backPath}
+      initialTargetRecordId={initialTargetRecordId}
     />
   );
 }

@@ -48,7 +48,7 @@ export default function AccountDetailPage() {
         ]);
         setNotes(notesData);
 
-        const related = await loadAccountLinkedData(accountData).catch(() => null);
+        const related = await loadAccountLinkedData(accountData, { forceRefresh: true }).catch(() => null);
         setLinkedData({
           ...related,
           contacts: related?.contacts?.length

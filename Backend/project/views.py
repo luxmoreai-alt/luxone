@@ -210,13 +210,18 @@ class ProjectViewSet(viewsets.ModelViewSet):
         note = services.add_note(project, serializer.validated_data)
         return Response(ProjectNoteSerializer(note).data, status=status.HTTP_201_CREATED)
 
-    @action(detail=True, methods=['delete'], url_path='notes/(?P<note_id>[^/.]+)')
+    @action(detail=True, methods=['patch', 'delete'], url_path='notes/(?P<note_id>[^/.]+)')
     def note_detail(self, request, pk=None, note_id=None):
         project = self.get_object()
         try:
             note = project.notes.get(pk=note_id)
         except ProjectNote.DoesNotExist:
             return Response({'detail': 'Note not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if request.method == 'PATCH':
+            serializer = ProjectNoteSerializer(note, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data)
         note.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 

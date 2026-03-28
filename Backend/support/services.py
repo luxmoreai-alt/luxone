@@ -237,6 +237,7 @@ def list_solutions():
     return SupportSolution.objects.filter(is_active=True).select_related(
         "owner",
         "product",
+        "source_case",
         "created_by",
         "updated_by",
     )
@@ -416,6 +417,15 @@ def create_solution(data: dict[str, Any], user):
     if source_case:
         payload.setdefault("product", source_case.product)
         payload.setdefault("question", source_case.subject)
+        existing_solution = (
+            SupportSolution.objects.filter(is_active=True, source_case=source_case)
+            .order_by("-created_at")
+            .first()
+        )
+        if existing_solution:
+            payload.pop("created_by", None)
+            payload.pop("updated_by", None)
+            return update_solution(existing_solution, payload, user)
     payload.setdefault("solution_title", _solution_title_for(payload))
     payload["created_by"] = user
     payload["updated_by"] = user

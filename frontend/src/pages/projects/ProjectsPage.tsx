@@ -89,7 +89,7 @@ export default function ProjectsPage() {
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Search projects, account, owner..."
+                  placeholder="Search projects, project code, owner..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="w-full rounded-lg border border-slate-300 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-blue-500"
@@ -171,8 +171,7 @@ function ProjectsTable({ projects }: { projects: Project[] }) {
         <thead>
           <tr className="border-b border-slate-200 text-left text-sm text-slate-500">
             <th className="px-4 py-3 font-medium">Project Code</th>
-            <th className="px-4 py-3 font-medium">Project Name</th>
-            <th className="px-4 py-3 font-medium">Account</th>
+            <th className="px-4 py-3 font-medium">Project Name</th>
             <th className="px-4 py-3 font-medium">Owner</th>
             <th className="px-4 py-3 font-medium">Status</th>
             <th className="px-4 py-3 font-medium">Priority</th>
@@ -191,8 +190,7 @@ function ProjectsTable({ projects }: { projects: Project[] }) {
                 >
                   {project.name}
                 </Link>
-              </td>
-              <td className="px-4 py-4 text-slate-700">{project.account_name || "—"}</td>
+              </td>
               <td className="px-4 py-4 text-slate-700">{project.owner || "—"}</td>
               <td className="px-4 py-4">
                 <ProjectStatusBadge status={project.status} />
@@ -259,8 +257,7 @@ function ProjectsCards({ projects }: { projects: Project[] }) {
             <ProjectStatusBadge status={project.status} />
           </div>
 
-          <div className="space-y-2 text-sm text-slate-600">
-            <p><span className="font-medium text-slate-800">Account:</span> {project.account_name || "—"}</p>
+          <div className="space-y-2 text-sm text-slate-600">
             <p><span className="font-medium text-slate-800">Owner:</span> {project.owner || "—"}</p>
             <p><span className="font-medium text-slate-800">Due:</span> {project.due_date || "—"}</p>
           </div>

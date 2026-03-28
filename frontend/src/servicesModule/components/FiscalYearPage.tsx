@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import CRMSectionCard from "../../components/crm/CRMSectionCard";
-import { getFiscalYearSettings, updateFiscalYearSettings } from "../api";
+import { getFiscalYearSettings, listAppointments, listJobSheets, updateFiscalYearSettings } from "../api";
 import { fiscalYearMonthOptions } from "../config";
 import type { FiscalYearSettings } from "../types";
 
@@ -13,11 +13,27 @@ export default function FiscalYearPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
+  const [usageSummary, setUsageSummary] = useState({ appointmentsInPeriod: 0, completedAppointments: 0, jobSheetsInPeriod: 0 });
 
   useEffect(() => {
     const load = async () => {
       try {
-        setForm(await getFiscalYearSettings());
+        const [settings, appointments, jobSheets] = await Promise.all([
+          getFiscalYearSettings(),
+          listAppointments(),
+          listJobSheets(),
+        ]);
+        setForm(settings);
+        const inRange = (value?: string) => {
+          if (!value || !settings.currentPeriodStart || !settings.currentPeriodEnd) return false;
+          return value >= settings.currentPeriodStart && value <= settings.currentPeriodEnd;
+        };
+        const appointmentsInPeriod = appointments.filter((item) => inRange(item.appointmentDate));
+        setUsageSummary({
+          appointmentsInPeriod: appointmentsInPeriod.length,
+          completedAppointments: appointmentsInPeriod.filter((item) => item.status.toLowerCase() === "completed").length,
+          jobSheetsInPeriod: jobSheets.filter((item) => inRange(item.createdAt.slice(0, 10))).length,
+        });
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unable to load fiscal year settings.");
       } finally {
@@ -81,6 +97,20 @@ export default function FiscalYearPage() {
             <div><p className="text-xs uppercase tracking-wide text-slate-500">Current Period</p><p className="mt-1 text-sm text-slate-800">{form.currentPeriodStart && form.currentPeriodEnd ? `${form.currentPeriodStart} to ${form.currentPeriodEnd}` : "-"}</p></div>
           </div>
         </CRMSectionCard>
+        <div className="grid gap-3 md:grid-cols-3">
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="text-xs uppercase tracking-wide text-slate-500">Appointments In Period</div>
+            <div className="mt-2 text-2xl font-semibold text-slate-900">{usageSummary.appointmentsInPeriod}</div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="text-xs uppercase tracking-wide text-slate-500">Completed Appointments</div>
+            <div className="mt-2 text-2xl font-semibold text-slate-900">{usageSummary.completedAppointments}</div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="text-xs uppercase tracking-wide text-slate-500">Job Sheets In Period</div>
+            <div className="mt-2 text-2xl font-semibold text-slate-900">{usageSummary.jobSheetsInPeriod}</div>
+          </div>
+        </div>
       </div>
     </DashboardLayout>
   );

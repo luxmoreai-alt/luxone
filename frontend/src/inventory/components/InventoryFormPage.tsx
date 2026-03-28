@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { apiRequest } from "../../api/client";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import { getLoggedInUser, getLoggedInUserName } from "../../lib/auth/currentUser";
@@ -47,16 +47,316 @@ function getInitialValues(moduleKey: InventoryModuleKey): InventoryFormValues {
   if (moduleKey === "vendors") return { vendorOwner: currentUserId, vendorName: "", email: "", phone: "", website: "", category: "", description: "", billingStreet: "", billingCity: "", billingState: "", billingCountry: "", billingZipCode: "", shippingStreet: "", shippingCity: "", shippingState: "", shippingCountry: "", shippingZipCode: "" } as VendorFormValues;
   if (moduleKey === "price-books") return { owner: currentUserId, name: "", active: true, pricingModel: "fixed", description: "", ranges: [{ fromRange: 1, toRange: 10, discountPercentage: 0 }], productLinks: [] } as PriceBookFormValues;
   if (moduleKey === "quotes") return { owner: currentUserId, subject: "", quoteStage: "", team: "", carrier: "", priceBook: "", priceBookLabel: "", deal: "", dealLabel: "", validUntil: "", contact: "", contactLabel: "", account: "", accountLabel: "", billingCycle: "yearly", licenseType: "named", licensedUsers: 1, implementationRequired: false, subscriptionStartDate: "", subscriptionEndDate: "", renewalDueDate: "", subtotal: 0, discount: 0, tax: 0, adjustment: 0, grandTotal: 0, termsAndConditions: "", description: "", billingStreet: "", billingCity: "", billingState: "", billingCountry: "", billingZipCode: "", shippingStreet: "", shippingCity: "", shippingState: "", shippingCountry: "", shippingZipCode: "", items: [emptyLineItem()] } as QuoteFormValues;
-  if (moduleKey === "sales-orders") return { owner: currentUserId, subject: "", customerNo: "", quote: "", quoteLabel: "", pending: false, carrier: "", salesCommission: 0, account: "", accountLabel: "", deal: "", dealLabel: "", dueDate: "", contact: "", contactLabel: "", billingCycle: "yearly", licenseType: "named", licensedUsers: 1, implementationRequired: false, subscriptionStartDate: "", subscriptionEndDate: "", renewalDueDate: "", exciseDuty: 0, status: "", subtotal: 0, discount: 0, tax: 0, adjustment: 0, grandTotal: 0, termsAndConditions: "", description: "", billingStreet: "", billingCity: "", billingState: "", billingCountry: "", billingZipCode: "", shippingStreet: "", shippingCity: "", shippingState: "", shippingCountry: "", shippingZipCode: "", items: [emptyLineItem()] } as SalesOrderFormValues;
-  if (moduleKey === "purchase-orders") return { owner: currentUserId, subject: "", requisitionNumber: "", contact: "", contactLabel: "", dueDate: "", exciseDuty: 0, status: "", poNumber: "", vendor: "", vendorLabel: "", trackingNumber: "", poDate: "", carrier: "", salesCommission: 0, subtotal: 0, discount: 0, tax: 0, adjustment: 0, grandTotal: 0, termsAndConditions: "", description: "", billingStreet: "", billingCity: "", billingState: "", billingCountry: "", billingZipCode: "", shippingStreet: "", shippingCity: "", shippingState: "", shippingCountry: "", shippingZipCode: "", items: [emptyLineItem()] } as PurchaseOrderFormValues;
-  if (moduleKey === "invoices") return { owner: currentUserId, subject: "", invoiceDate: "", dueDate: "", salesCommission: 0, account: "", accountLabel: "", contact: "", contactLabel: "", deal: "", dealLabel: "", salesOrder: "", salesOrderLabel: "", purchaseOrder: "", purchaseOrderLabel: "", billingCycle: "yearly", licenseType: "named", licensedUsers: 1, implementationRequired: false, subscriptionStartDate: "", subscriptionEndDate: "", renewalDueDate: "", exciseDuty: 0, status: "", subtotal: 0, discount: 0, tax: 0, adjustment: 0, grandTotal: 0, termsAndConditions: "", description: "", billingStreet: "", billingCity: "", billingState: "", billingCountry: "", billingZipCode: "", shippingStreet: "", shippingCity: "", shippingState: "", shippingCountry: "", shippingZipCode: "", items: [emptyLineItem()] } as InvoiceFormValues;
+  if (moduleKey === "sales-orders") return { owner: currentUserId, subject: "", customerNo: "", quote: "", quoteLabel: "", pending: false, carrier: "", salesCommission: 0, account: "", accountLabel: "", deal: "", dealLabel: "", dueDate: "", contact: "", contactLabel: "", billingCycle: "yearly", licenseType: "named", licensedUsers: 1, implementationRequired: false, subscriptionStartDate: "", subscriptionEndDate: "", renewalDueDate: "", exciseDuty: 0, status: "Created", subtotal: 0, discount: 0, tax: 0, adjustment: 0, grandTotal: 0, termsAndConditions: "", description: "", billingStreet: "", billingCity: "", billingState: "", billingCountry: "", billingZipCode: "", shippingStreet: "", shippingCity: "", shippingState: "", shippingCountry: "", shippingZipCode: "", items: [emptyLineItem()] } as SalesOrderFormValues;
+  if (moduleKey === "purchase-orders") return { owner: currentUserId, subject: "", requisitionNumber: "", contact: "", contactLabel: "", dueDate: "", exciseDuty: 0, status: "Draft", poNumber: "", vendor: "", vendorLabel: "", trackingNumber: "", poDate: "", carrier: "", salesCommission: 0, subtotal: 0, discount: 0, tax: 0, adjustment: 0, grandTotal: 0, termsAndConditions: "", description: "", billingStreet: "", billingCity: "", billingState: "", billingCountry: "", billingZipCode: "", shippingStreet: "", shippingCity: "", shippingState: "", shippingCountry: "", shippingZipCode: "", items: [emptyLineItem()] } as PurchaseOrderFormValues;
+  if (moduleKey === "invoices") return { owner: currentUserId, subject: "", invoiceDate: "", dueDate: "", salesCommission: 0, account: "", accountLabel: "", contact: "", contactLabel: "", deal: "", dealLabel: "", salesOrder: "", salesOrderLabel: "", purchaseOrder: "", purchaseOrderLabel: "", billingCycle: "yearly", licenseType: "named", licensedUsers: 1, implementationRequired: false, subscriptionStartDate: "", subscriptionEndDate: "", renewalDueDate: "", exciseDuty: 0, status: "Draft", subtotal: 0, discount: 0, tax: 0, adjustment: 0, grandTotal: 0, termsAndConditions: "", description: "", billingStreet: "", billingCity: "", billingState: "", billingCountry: "", billingZipCode: "", shippingStreet: "", shippingCity: "", shippingState: "", shippingCountry: "", shippingZipCode: "", items: [emptyLineItem()] } as InvoiceFormValues;
   return { name: "", targetModule: "quotes", layout: "", subform: "", lookupField: "", description: "", active: true, rules: [{ criteria: "{\"all\":[]}", actionType: "mandatory_product", targetProduct: "", targetProductLabel: "", fieldName: "", fieldValue: "", metadata: "{}" } as ConfiguratorRuleForm] } as ConfiguratorFormValues;
+}
+
+function mapSnapshotLineItems(items: any[] | undefined): InventoryLineItem[] {
+  if (!Array.isArray(items) || items.length === 0) return [emptyLineItem()];
+  return items.map((item: any) => ({
+    id: String(item.id || ""),
+    product: String(item.product || ""),
+    productName: String(item.product_name || ""),
+    productCode: String(item.product_code || ""),
+    quantity: Number(item.quantity || 0),
+    listPrice: Number(item.list_price || 0),
+    amount: Number(item.amount || 0),
+    discount: Number(item.discount || 0),
+    tax: Number(item.tax || 0),
+    total: Number(item.total || 0),
+    rowDescription: String(item.row_description || ""),
+  }));
+}
+
+function mapSnapshotToForm(moduleKey: InventoryModuleKey, snapshot: any): InventoryFormValues {
+  if (moduleKey === "products") {
+    return {
+      owner: String(snapshot.owner || ""),
+      productName: String(snapshot.product_name || ""),
+      productCode: String(snapshot.product_code || ""),
+      vendor: String(snapshot.vendor || ""),
+      vendorLabel: String(snapshot.vendor_name || ""),
+      manufacturer: String(snapshot.manufacturer || ""),
+      productCategory: String(snapshot.product_category || ""),
+      productType: String(snapshot.product_type || "software"),
+      deploymentModel: String(snapshot.deployment_model || "cloud"),
+      billingCycle: String(snapshot.billing_cycle || "yearly"),
+      licenseType: String(snapshot.license_type || "named"),
+      unitPrice: Number(snapshot.unit_price || 0),
+      commissionRate: Number(snapshot.commission_rate || 0),
+      tax: Number(snapshot.tax || 0),
+      quantityInStock: Number(snapshot.quantity_in_stock || 0),
+      quantityInDemand: Number(snapshot.quantity_in_demand || 0),
+      reorderLevel: Number(snapshot.reorder_level || 0),
+      usageUnit: String(snapshot.usage_unit || "users"),
+      defaultUserSeats: Number(snapshot.default_user_seats || 1),
+      subscriptionTermMonths: Number(snapshot.subscription_term_months || 12),
+      renewalRequired: Boolean(snapshot.renewal_required),
+      implementationRequired: Boolean(snapshot.implementation_required),
+      supportStartDate: String(snapshot.support_start_date || ""),
+      supportExpiryDate: String(snapshot.support_expiry_date || ""),
+      description: String(snapshot.description || ""),
+    } as ProductFormValues;
+  }
+
+  if (moduleKey === "vendors") {
+    return {
+      vendorOwner: String(snapshot.vendor_owner || snapshot.owner || ""),
+      vendorName: String(snapshot.vendor_name || ""),
+      email: String(snapshot.email || ""),
+      phone: String(snapshot.phone || ""),
+      website: String(snapshot.website || ""),
+      category: String(snapshot.category || ""),
+      description: String(snapshot.description || ""),
+      billingStreet: String(snapshot.billing_street || ""),
+      billingCity: String(snapshot.billing_city || ""),
+      billingState: String(snapshot.billing_state || ""),
+      billingCountry: String(snapshot.billing_country || ""),
+      billingZipCode: String(snapshot.billing_zip_code || ""),
+      shippingStreet: String(snapshot.shipping_street || ""),
+      shippingCity: String(snapshot.shipping_city || ""),
+      shippingState: String(snapshot.shipping_state || ""),
+      shippingCountry: String(snapshot.shipping_country || ""),
+      shippingZipCode: String(snapshot.shipping_zip_code || ""),
+    } as VendorFormValues;
+  }
+
+  if (moduleKey === "price-books") {
+    return {
+      owner: String(snapshot.owner || ""),
+      name: String(snapshot.name || ""),
+      active: Boolean(snapshot.active),
+      pricingModel: String(snapshot.pricing_model || "fixed"),
+      description: String(snapshot.description || ""),
+      ranges: Array.isArray(snapshot.ranges) && snapshot.ranges.length > 0
+        ? snapshot.ranges.map((item: any) => ({
+            id: String(item.id || ""),
+            fromRange: Number(item.from_range || 0),
+            toRange: Number(item.to_range || 0),
+            discountPercentage: Number(item.discount_percentage || 0),
+          }))
+        : [{ fromRange: 1, toRange: 10, discountPercentage: 0 }],
+      productLinks: Array.isArray(snapshot.product_links)
+        ? snapshot.product_links.map((item: any) => ({
+            id: String(item.id || ""),
+            product: String(item.product || ""),
+            productLabel: String(item.product_name || ""),
+            listPrice: Number(item.list_price || 0),
+            active: item.active !== false,
+          }))
+        : [],
+    } as PriceBookFormValues;
+  }
+
+  if (moduleKey === "quotes") {
+    return {
+      owner: String(snapshot.owner || ""),
+      subject: String(snapshot.subject || ""),
+      quoteStage: String(snapshot.quote_stage || ""),
+      team: String(snapshot.team || ""),
+      carrier: String(snapshot.carrier || ""),
+      priceBook: String(snapshot.price_book || ""),
+      priceBookLabel: String(snapshot.price_book_name || ""),
+      deal: String(snapshot.deal || ""),
+      dealLabel: String(snapshot.deal_name || ""),
+      validUntil: String(snapshot.valid_until || ""),
+      contact: String(snapshot.contact || ""),
+      contactLabel: String(snapshot.contact_name || ""),
+      account: String(snapshot.account || ""),
+      accountLabel: String(snapshot.account_name || ""),
+      billingCycle: String(snapshot.billing_cycle || "yearly"),
+      licenseType: String(snapshot.license_type || "named"),
+      licensedUsers: Number(snapshot.licensed_users || 1),
+      implementationRequired: Boolean(snapshot.implementation_required),
+      subscriptionStartDate: String(snapshot.subscription_start_date || ""),
+      subscriptionEndDate: String(snapshot.subscription_end_date || ""),
+      renewalDueDate: String(snapshot.renewal_due_date || ""),
+      subtotal: Number(snapshot.subtotal || 0),
+      discount: Number(snapshot.discount || 0),
+      tax: Number(snapshot.tax || 0),
+      adjustment: Number(snapshot.adjustment || 0),
+      grandTotal: Number(snapshot.grand_total || 0),
+      termsAndConditions: String(snapshot.terms_and_conditions || ""),
+      description: String(snapshot.description || ""),
+      billingStreet: String(snapshot.billing_street || ""),
+      billingCity: String(snapshot.billing_city || ""),
+      billingState: String(snapshot.billing_state || ""),
+      billingCountry: String(snapshot.billing_country || ""),
+      billingZipCode: String(snapshot.billing_zip_code || ""),
+      shippingStreet: String(snapshot.shipping_street || ""),
+      shippingCity: String(snapshot.shipping_city || ""),
+      shippingState: String(snapshot.shipping_state || ""),
+      shippingCountry: String(snapshot.shipping_country || ""),
+      shippingZipCode: String(snapshot.shipping_zip_code || ""),
+      items: mapSnapshotLineItems(snapshot.items),
+    } as QuoteFormValues;
+  }
+
+  if (moduleKey === "sales-orders") {
+    return {
+      owner: String(snapshot.owner || ""),
+      subject: String(snapshot.subject || ""),
+      customerNo: String(snapshot.customer_no || ""),
+      quote: String(snapshot.quote || ""),
+      quoteLabel: String(snapshot.quote_name || snapshot.quote_subject || ""),
+      pending: Boolean(snapshot.pending),
+      carrier: String(snapshot.carrier || ""),
+      salesCommission: Number(snapshot.sales_commission || 0),
+      account: String(snapshot.account || ""),
+      accountLabel: String(snapshot.account_name || ""),
+      deal: String(snapshot.deal || ""),
+      dealLabel: String(snapshot.deal_name || ""),
+      dueDate: String(snapshot.due_date || ""),
+      contact: String(snapshot.contact || ""),
+      contactLabel: String(snapshot.contact_name || ""),
+      billingCycle: String(snapshot.billing_cycle || "yearly"),
+      licenseType: String(snapshot.license_type || "named"),
+      licensedUsers: Number(snapshot.licensed_users || 1),
+      implementationRequired: Boolean(snapshot.implementation_required),
+      subscriptionStartDate: String(snapshot.subscription_start_date || ""),
+      subscriptionEndDate: String(snapshot.subscription_end_date || ""),
+      renewalDueDate: String(snapshot.renewal_due_date || ""),
+      exciseDuty: Number(snapshot.excise_duty || 0),
+      status: String(snapshot.status || "Created"),
+      subtotal: Number(snapshot.subtotal || 0),
+      discount: Number(snapshot.discount || 0),
+      tax: Number(snapshot.tax || 0),
+      adjustment: Number(snapshot.adjustment || 0),
+      grandTotal: Number(snapshot.grand_total || 0),
+      termsAndConditions: String(snapshot.terms_and_conditions || ""),
+      description: String(snapshot.description || ""),
+      billingStreet: String(snapshot.billing_street || ""),
+      billingCity: String(snapshot.billing_city || ""),
+      billingState: String(snapshot.billing_state || ""),
+      billingCountry: String(snapshot.billing_country || ""),
+      billingZipCode: String(snapshot.billing_zip_code || ""),
+      shippingStreet: String(snapshot.shipping_street || ""),
+      shippingCity: String(snapshot.shipping_city || ""),
+      shippingState: String(snapshot.shipping_state || ""),
+      shippingCountry: String(snapshot.shipping_country || ""),
+      shippingZipCode: String(snapshot.shipping_zip_code || ""),
+      items: mapSnapshotLineItems(snapshot.items),
+    } as SalesOrderFormValues;
+  }
+
+  if (moduleKey === "purchase-orders") {
+    return {
+      owner: String(snapshot.owner || ""),
+      subject: String(snapshot.subject || ""),
+      requisitionNumber: String(snapshot.requisition_number || ""),
+      contact: String(snapshot.contact || ""),
+      contactLabel: String(snapshot.contact_name || ""),
+      dueDate: String(snapshot.due_date || ""),
+      exciseDuty: Number(snapshot.excise_duty || 0),
+      status: String(snapshot.status || "Draft"),
+      poNumber: String(snapshot.po_number || ""),
+      vendor: String(snapshot.vendor || ""),
+      vendorLabel: String(snapshot.vendor_name || ""),
+      trackingNumber: String(snapshot.tracking_number || ""),
+      poDate: String(snapshot.po_date || ""),
+      carrier: String(snapshot.carrier || ""),
+      salesCommission: Number(snapshot.sales_commission || 0),
+      subtotal: Number(snapshot.subtotal || 0),
+      discount: Number(snapshot.discount || 0),
+      tax: Number(snapshot.tax || 0),
+      adjustment: Number(snapshot.adjustment || 0),
+      grandTotal: Number(snapshot.grand_total || 0),
+      termsAndConditions: String(snapshot.terms_and_conditions || ""),
+      description: String(snapshot.description || ""),
+      billingStreet: String(snapshot.billing_street || ""),
+      billingCity: String(snapshot.billing_city || ""),
+      billingState: String(snapshot.billing_state || ""),
+      billingCountry: String(snapshot.billing_country || ""),
+      billingZipCode: String(snapshot.billing_zip_code || ""),
+      shippingStreet: String(snapshot.shipping_street || ""),
+      shippingCity: String(snapshot.shipping_city || ""),
+      shippingState: String(snapshot.shipping_state || ""),
+      shippingCountry: String(snapshot.shipping_country || ""),
+      shippingZipCode: String(snapshot.shipping_zip_code || ""),
+      items: mapSnapshotLineItems(snapshot.items),
+    } as PurchaseOrderFormValues;
+  }
+
+  if (moduleKey === "invoices") {
+    return {
+      owner: String(snapshot.owner || ""),
+      subject: String(snapshot.subject || ""),
+      invoiceDate: String(snapshot.invoice_date || ""),
+      dueDate: String(snapshot.due_date || ""),
+      salesCommission: Number(snapshot.sales_commission || 0),
+      account: String(snapshot.account || ""),
+      accountLabel: String(snapshot.account_name || ""),
+      contact: String(snapshot.contact || ""),
+      contactLabel: String(snapshot.contact_name || ""),
+      deal: String(snapshot.deal || ""),
+      dealLabel: String(snapshot.deal_name || ""),
+      salesOrder: String(snapshot.sales_order || ""),
+      salesOrderLabel: String(snapshot.sales_order_name || snapshot.sales_order_subject || ""),
+      purchaseOrder: String(snapshot.purchase_order || ""),
+      purchaseOrderLabel: String(snapshot.purchase_order_name || snapshot.purchase_order_subject || ""),
+      billingCycle: String(snapshot.billing_cycle || "yearly"),
+      licenseType: String(snapshot.license_type || "named"),
+      licensedUsers: Number(snapshot.licensed_users || 1),
+      implementationRequired: Boolean(snapshot.implementation_required),
+      subscriptionStartDate: String(snapshot.subscription_start_date || ""),
+      subscriptionEndDate: String(snapshot.subscription_end_date || ""),
+      renewalDueDate: String(snapshot.renewal_due_date || ""),
+      exciseDuty: Number(snapshot.excise_duty || 0),
+      status: String(snapshot.status || "Draft"),
+      subtotal: Number(snapshot.subtotal || 0),
+      discount: Number(snapshot.discount || 0),
+      tax: Number(snapshot.tax || 0),
+      adjustment: Number(snapshot.adjustment || 0),
+      grandTotal: Number(snapshot.grand_total || 0),
+      termsAndConditions: String(snapshot.terms_and_conditions || ""),
+      description: String(snapshot.description || ""),
+      billingStreet: String(snapshot.billing_street || ""),
+      billingCity: String(snapshot.billing_city || ""),
+      billingState: String(snapshot.billing_state || ""),
+      billingCountry: String(snapshot.billing_country || ""),
+      billingZipCode: String(snapshot.billing_zip_code || ""),
+      shippingStreet: String(snapshot.shipping_street || ""),
+      shippingCity: String(snapshot.shipping_city || ""),
+      shippingState: String(snapshot.shipping_state || ""),
+      shippingCountry: String(snapshot.shipping_country || ""),
+      shippingZipCode: String(snapshot.shipping_zip_code || ""),
+      items: mapSnapshotLineItems(snapshot.items),
+    } as InvoiceFormValues;
+  }
+
+  return {
+    name: String(snapshot.name || ""),
+    targetModule: String(snapshot.target_module || "quotes"),
+    layout: String(snapshot.layout || ""),
+    subform: String(snapshot.subform || ""),
+    lookupField: String(snapshot.lookup_field || ""),
+    description: String(snapshot.description || ""),
+    active: snapshot.active !== false,
+    rules: Array.isArray(snapshot.rules) && snapshot.rules.length > 0
+      ? snapshot.rules.map((rule: any) => ({
+          id: String(rule.id || ""),
+          configurator: String(rule.configurator || ""),
+          criteria: JSON.stringify(rule.criteria || { all: [] }),
+          actionType: String(rule.action_type || "mandatory_product") as ConfiguratorRuleForm["actionType"],
+          targetProduct: String(rule.target_product || ""),
+          targetProductLabel: String(rule.target_product_name || ""),
+          fieldName: String(rule.field_name || ""),
+          fieldValue: String(rule.field_value || ""),
+          metadata: JSON.stringify(rule.metadata || {}),
+        }))
+      : [{ criteria: "{\"all\":[]}", actionType: "mandatory_product", targetProduct: "", targetProductLabel: "", fieldName: "", fieldValue: "", metadata: "{}" }],
+  } as ConfiguratorFormValues;
 }
 
 export default function InventoryFormPage({ moduleKey }: Props) {
   const meta = getInventoryMeta(moduleKey);
   const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const isEdit = Boolean(id);
   const [form, setForm] = useState<InventoryFormValues>(() => getInitialValues(moduleKey));
+  const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -65,6 +365,40 @@ export default function InventoryFormPage({ moduleKey }: Props) {
   const anyForm = form as any;
   const currentUserName = getLoggedInUserName();
   const totals = useMemo(() => Array.isArray(anyForm.items) ? recalculateDocument(anyForm.items as InventoryLineItem[], Number(anyForm.adjustment || 0)) : null, [anyForm.adjustment, anyForm.items]);
+
+  useEffect(() => {
+    if (!isEdit || !id) {
+      setForm(getInitialValues(moduleKey));
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const loadRecord = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const snapshot =
+          moduleKey === "configurator"
+            ? await apiRequest<any>(`/inventory/configurator/${id}`)
+            : await getInventoryRecordSnapshot(moduleKey as Exclude<InventoryModuleKey, "configurator">, id);
+        if (cancelled) return;
+        setForm(mapSnapshotToForm(moduleKey, snapshot));
+      } catch (err) {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : `Failed to load ${meta.singular.toLowerCase()}.`);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadRecord();
+    return () => {
+      cancelled = true;
+    };
+  }, [id, isEdit, meta.singular, moduleKey]);
 
   useEffect(() => {
     if (moduleKey !== "quotes" || !anyForm.deal) return;
@@ -204,6 +538,40 @@ export default function InventoryFormPage({ moduleKey }: Props) {
   }, [anyForm.quote, moduleKey]);
 
   useEffect(() => {
+    if (moduleKey !== "sales-orders") return;
+
+    if (!anyForm.account) {
+      setForm((current: InventoryFormValues) => {
+        const draft = current as SalesOrderFormValues;
+        return draft.customerNo ? { ...draft, customerNo: "" } : current;
+      });
+      return;
+    }
+
+    let cancelled = false;
+    const loadAccount = async () => {
+      try {
+        const account = await apiRequest<any>(`/accounts/${String(anyForm.account)}`);
+        if (cancelled) return;
+        setForm((current: InventoryFormValues) => {
+          const draft = current as SalesOrderFormValues;
+          if (String(draft.account || "") !== String(anyForm.account || "")) return current;
+          return {
+            ...draft,
+            customerNo: String(account.account_number || ""),
+          };
+        });
+      } catch {
+        // Keep the current value when account lookup enrichment fails.
+      }
+    };
+    void loadAccount();
+    return () => {
+      cancelled = true;
+    };
+  }, [anyForm.account, moduleKey]);
+
+  useEffect(() => {
     if (moduleKey !== "purchase-orders" || !anyForm.vendor) return;
     let cancelled = false;
     const loadVendor = async () => {
@@ -304,7 +672,7 @@ export default function InventoryFormPage({ moduleKey }: Props) {
     try {
       setSaving(true);
       setError(null);
-      const result = await saveInventoryRecord(moduleKey, form);
+      const result = await saveInventoryRecord(moduleKey, form, id);
       navigate(`${meta.baseRoute}/${result.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save.");
@@ -384,6 +752,21 @@ export default function InventoryFormPage({ moduleKey }: Props) {
       return;
     }
 
+    if (moduleKey === "price-books" && !String(anyForm.name || "").trim()) {
+      setError("Price Book Name is required.");
+      return;
+    }
+
+    if (moduleKey === "price-books" && Array.isArray(anyForm.productLinks)) {
+      const hasInvalidProductLink = anyForm.productLinks.some(
+        (item: any) => String(item.productLabel || "").trim().length > 0 && String(item.product || "").trim().length === 0
+      );
+      if (hasInvalidProductLink) {
+        setError("Select a valid product from the dropdown for each linked product row.");
+        return;
+      }
+    }
+
     if (moduleKey === "invoices" && (!anyForm.account || !anyForm.contact)) {
       setError("Invoices need a selected account and contact.");
       return;
@@ -417,23 +800,75 @@ export default function InventoryFormPage({ moduleKey }: Props) {
     setForm({ ...anyForm, ...next, items });
   };
 
+  const updateInventoryForm = (nextValues: InventoryFormValues) => {
+    if (error) setError(null);
+    setForm(nextValues);
+  };
+
+  const priceBookSummary = moduleKey === "price-books"
+    ? {
+        linkedProducts: (anyForm.productLinks || []).length,
+        activeProducts: (anyForm.productLinks || []).filter((item: any) => Boolean(item.active)).length,
+        rangeCount: (anyForm.ranges || []).length,
+      }
+    : null;
+
+  const priceBookFieldErrors = moduleKey === "price-books"
+    ? {
+        name: !String(anyForm.name || "").trim() ? "Price Book Name is required." : "",
+        invalidLinks: (anyForm.productLinks || []).some(
+          (item: any) => String(item.productLabel || "").trim().length > 0 && String(item.product || "").trim().length === 0
+        )
+          ? "Choose each linked product from the dropdown list."
+          : "",
+      }
+    : { name: "", invalidLinks: "" };
+
+  const quoteFieldErrors = moduleKey === "quotes"
+    ? {
+        subject: !String(anyForm.subject || "").trim() ? "Subject is required." : "",
+        priceBook: !String(anyForm.priceBook || "").trim() ? "Select a price book." : "",
+        account: !String(anyForm.account || "").trim() ? "Select an account." : "",
+        contact: !String(anyForm.contact || "").trim() ? "Select a contact." : "",
+        deal: !String(anyForm.deal || "").trim() ? "Select a deal." : "",
+      }
+    : { subject: "", priceBook: "", account: "", contact: "", deal: "" };
+
+  const formGuidance = {
+    products: "Create reusable catalog items with billing, licensing, and renewal defaults so downstream quotes and invoices autofill correctly.",
+    vendors: "Capture clean billing and shipping details here so purchase orders and vendor lookups stay consistent across inventory flows.",
+    "price-books": "Pick a pricing model first, then link products or ranges. Quotes will inherit these pricing rules automatically.",
+    quotes: "Choose the price book, account, contact, and deal before editing line items so totals and related records stay aligned.",
+    "sales-orders": "Start from the linked quote or deal whenever possible to keep account, contact, and subscription fields in sync.",
+    "purchase-orders": "Select the vendor first, then review due dates, shipping details, and item pricing before saving.",
+    invoices: "Invoices work best when they are connected to an account, contact, and upstream sales order so change review can validate the totals.",
+    configurator: "Use configurator rules to control mandatory products and guided selling behavior without changing quote logic manually.",
+  } as const;
+
   return (
     <DashboardLayout>
       <div className="space-y-4">
         <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-5 py-4">
           <div>
-            <h1 className="text-lg font-semibold text-slate-900">{meta.createLabel}</h1>
+            <h1 className="text-lg font-semibold text-slate-900">{isEdit ? `Edit ${meta.singular}` : meta.createLabel}</h1>
             <p className="text-sm text-slate-500">Integrated {meta.singular.toLowerCase()} form connected to the CRM backend.</p>
           </div>
           <div className="flex gap-2">
-            <button type="button" onClick={() => navigate(meta.baseRoute)} className="rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-700">Cancel</button>
-            <button type="button" disabled={saving} onClick={() => void onSaveClick()} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white">{saving ? "Saving..." : "Save"}</button>
+            <button type="button" onClick={() => navigate(isEdit && id ? `${meta.baseRoute}/${id}` : meta.baseRoute)} className="rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-700">Cancel</button>
+            <button type="button" disabled={saving || loading} onClick={() => void onSaveClick()} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white">{loading ? "Loading..." : saving ? "Saving..." : isEdit ? "Update" : "Save"}</button>
           </div>
         </div>
 
         {error && <div className="rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
+        {loading && <div className="rounded-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">Loading {meta.singular.toLowerCase()} details...</div>}
+        {!loading && (
+          <div className="rounded-xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-sm text-slate-700">
+            <span className="font-medium text-slate-900">Before you save:</span>{" "}
+            {formGuidance[moduleKey]}
+          </div>
+        )}
 
-        {(moduleKey === "products" || moduleKey === "vendors" || moduleKey === "price-books" || moduleKey === "configurator") && (
+        {!loading && (moduleKey === "products" || moduleKey === "vendors" || moduleKey === "price-books" || moduleKey === "configurator") && (
           <div className="rounded-xl border border-slate-200 bg-white p-5">
             <div className="grid gap-4 md:grid-cols-2">
               {moduleKey === "products" && (
@@ -475,18 +910,201 @@ export default function InventoryFormPage({ moduleKey }: Props) {
               )}
               {moduleKey === "price-books" && (
                 <>
-                  <Field label="Price Book Owner"><input className={inputClass} value={currentUserName} readOnly /></Field>
-                  <Field label="Price Book Name"><input className={inputClass} value={anyForm.name} onChange={(e) => setForm({ ...anyForm, name: e.target.value })} /></Field>
-                  <Field label="Active"><label className="flex h-[38px] items-center gap-2 rounded-md border border-slate-300 px-3"><input type="checkbox" checked={anyForm.active} onChange={(e) => setForm({ ...anyForm, active: e.target.checked })} />Active</label></Field>
-                  <Field label="Pricing Model"><select className={inputClass} value={anyForm.pricingModel} onChange={(e) => setForm({ ...anyForm, pricingModel: e.target.value })}><option value="fixed">Fixed</option><option value="range">Range</option><option value="cpq">CPQ</option></select></Field>
-                  <div className="md:col-span-2"><Field label="Description"><textarea className={textareaClass} value={anyForm.description || ""} onChange={(e) => setForm({ ...anyForm, description: e.target.value })} /></Field></div>
-                  <div className="md:col-span-2 rounded-xl border border-slate-200 p-4">
-                    <div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-semibold text-slate-800">Pricing Details</h3><button type="button" className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" onClick={() => setForm({ ...anyForm, ranges: [...anyForm.ranges, { fromRange: 0, toRange: 0, discountPercentage: 0 }] })}>Add Row</button></div>
-                    <div className="space-y-3">{anyForm.ranges.map((range: any, index: number) => <div key={index} className="grid gap-3 md:grid-cols-3"><input type="number" className={inputClass} placeholder="From Range" value={range.fromRange} onChange={(e) => { const ranges = [...anyForm.ranges]; ranges[index] = { ...ranges[index], fromRange: Number(e.target.value) }; setForm({ ...anyForm, ranges }); }} /><input type="number" className={inputClass} placeholder="To Range" value={range.toRange} onChange={(e) => { const ranges = [...anyForm.ranges]; ranges[index] = { ...ranges[index], toRange: Number(e.target.value) }; setForm({ ...anyForm, ranges }); }} /><input type="number" className={inputClass} placeholder="Discount %" value={range.discountPercentage} onChange={(e) => { const ranges = [...anyForm.ranges]; ranges[index] = { ...ranges[index], discountPercentage: Number(e.target.value) }; setForm({ ...anyForm, ranges }); }} /></div>)}</div>
+                  <div className="md:col-span-2 grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-3">
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Linked Products</div>
+                      <div className="mt-2 text-2xl font-semibold text-slate-900">{priceBookSummary?.linkedProducts ?? 0}</div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Active Products</div>
+                      <div className="mt-2 text-2xl font-semibold text-slate-900">{priceBookSummary?.activeProducts ?? 0}</div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Range Rows</div>
+                      <div className="mt-2 text-2xl font-semibold text-slate-900">{priceBookSummary?.rangeCount ?? 0}</div>
+                    </div>
                   </div>
+                  <Field label="Price Book Owner"><input className={inputClass} value={currentUserName} readOnly /></Field>
+                  <div>
+                    <Field label="Price Book Name *"><input className={`${inputClass} ${priceBookFieldErrors.name ? "border-rose-300 focus:border-rose-500" : ""}`} value={anyForm.name} onChange={(e) => updateInventoryForm({ ...anyForm, name: e.target.value })} /></Field>
+                    {priceBookFieldErrors.name ? <p className="mt-1 text-xs text-rose-600">{priceBookFieldErrors.name}</p> : null}
+                  </div>
+                  <Field label="Active"><label className="flex h-[38px] items-center gap-2 rounded-md border border-slate-300 px-3"><input type="checkbox" checked={anyForm.active} onChange={(e) => updateInventoryForm({ ...anyForm, active: e.target.checked })} />Active</label></Field>
+                  <div>
+                    <Field label="Pricing Model">
+                      <select
+                        className={inputClass}
+                        value={anyForm.pricingModel}
+                        onChange={(e) => {
+                          const nextModel = e.target.value;
+                          updateInventoryForm({
+                            ...anyForm,
+                            pricingModel: nextModel,
+                            ranges: nextModel === "range" ? (anyForm.ranges.length ? anyForm.ranges : [{ fromRange: 1, toRange: 10, discountPercentage: 0 }]) : [],
+                          });
+                        }}
+                      >
+                        <option value="fixed">Fixed</option>
+                        <option value="range">Range</option>
+                        <option value="cpq">CPQ</option>
+                      </select>
+                    </Field>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {anyForm.pricingModel === "fixed" && "Fixed uses the linked product list prices directly."}
+                      {anyForm.pricingModel === "range" && "Range pricing applies discount rules by quantity band."}
+                      {anyForm.pricingModel === "cpq" && "CPQ keeps this price book ready for guided quote configuration."}
+                    </p>
+                  </div>
+                  <div className="md:col-span-2"><Field label="Description"><textarea className={textareaClass} value={anyForm.description || ""} onChange={(e) => setForm({ ...anyForm, description: e.target.value })} /></Field></div>
+                  {anyForm.pricingModel === "range" && (
+                    <div className="md:col-span-2 rounded-xl border border-slate-200 p-4">
+                      <div className="mb-3 flex items-center justify-between">
+                        <div>
+                          <h3 className="text-sm font-semibold text-slate-800">Pricing Details</h3>
+                          <p className="mt-1 text-xs text-slate-500">Define valid quantity ranges and discounts for this price book.</p>
+                        </div>
+                        <button
+                          type="button"
+                          className="rounded-md border border-slate-300 px-3 py-1.5 text-sm"
+                          onClick={() => setForm({ ...anyForm, ranges: [...anyForm.ranges, { fromRange: 0, toRange: 0, discountPercentage: 0 }] })}
+                        >
+                          Add Row
+                        </button>
+                      </div>
+                      <div className="mb-3 grid gap-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400 md:grid-cols-[1fr_1fr_1fr_auto]">
+                        <div>From Qty</div>
+                        <div>To Qty</div>
+                        <div>Discount %</div>
+                        <div>Action</div>
+                      </div>
+                      <div className="space-y-3">
+                        {anyForm.ranges.map((range: any, index: number) => (
+                          <div key={index} className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]">
+                            <input
+                              type="number"
+                              className={inputClass}
+                              placeholder="From Range"
+                              value={range.fromRange}
+                              onChange={(e) => {
+                                const ranges = [...anyForm.ranges];
+                                ranges[index] = { ...ranges[index], fromRange: Number(e.target.value) };
+                                updateInventoryForm({ ...anyForm, ranges });
+                              }}
+                            />
+                            <input
+                              type="number"
+                              className={inputClass}
+                              placeholder="To Range"
+                              value={range.toRange}
+                              onChange={(e) => {
+                                const ranges = [...anyForm.ranges];
+                                ranges[index] = { ...ranges[index], toRange: Number(e.target.value) };
+                                updateInventoryForm({ ...anyForm, ranges });
+                              }}
+                            />
+                            <input
+                              type="number"
+                              className={inputClass}
+                              placeholder="Discount %"
+                              value={range.discountPercentage}
+                              onChange={(e) => {
+                                const ranges = [...anyForm.ranges];
+                                ranges[index] = { ...ranges[index], discountPercentage: Number(e.target.value) };
+                                updateInventoryForm({ ...anyForm, ranges });
+                              }}
+                            />
+                            <button
+                              type="button"
+                              className="h-[38px] rounded-md border border-slate-300 px-3 text-sm text-slate-600"
+                              onClick={() => updateInventoryForm({ ...anyForm, ranges: anyForm.ranges.filter((_: any, itemIndex: number) => itemIndex !== index) })}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {anyForm.pricingModel === "fixed" && (
+                    <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                      Fixed pricing is active. Quotes and sales orders will use each linked product's list price from this price book.
+                    </div>
+                  )}
+                  {anyForm.pricingModel === "cpq" && (
+                    <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                      CPQ mode is ready for advanced guided pricing. Linked products can still be attached now, and configurator rules can be layered later.
+                    </div>
+                  )}
                   <div className="md:col-span-2 rounded-xl border border-slate-200 p-4">
-                    <div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-semibold text-slate-800">Linked Products</h3><button type="button" className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" onClick={() => setForm({ ...anyForm, productLinks: [...anyForm.productLinks, { product: "", productLabel: "", listPrice: 0, active: true }] })}>Add Product</button></div>
-                    <div className="space-y-3">{(anyForm.productLinks || []).map((link: any, index: number) => <div key={index} className="grid gap-3 md:grid-cols-[1fr_160px_120px]"><InventoryLookupField lookup="products" value={link.product || ""} displayValue={link.productLabel || ""} onChange={(option) => { const productLinks = [...anyForm.productLinks]; productLinks[index] = { ...productLinks[index], product: option?.id || "", productLabel: option?.label || "", listPrice: option?.unitPrice ?? productLinks[index].listPrice }; setForm({ ...anyForm, productLinks }); }} /><input type="number" className={inputClass} placeholder="List Price" value={link.listPrice || 0} onChange={(e) => { const productLinks = [...anyForm.productLinks]; productLinks[index] = { ...productLinks[index], listPrice: Number(e.target.value) }; setForm({ ...anyForm, productLinks }); }} /><label className="flex h-[38px] items-center gap-2 rounded-md border border-slate-300 px-3 text-sm text-slate-700"><input type="checkbox" checked={Boolean(link.active)} onChange={(e) => { const productLinks = [...anyForm.productLinks]; productLinks[index] = { ...productLinks[index], active: e.target.checked }; setForm({ ...anyForm, productLinks }); }} />Active</label></div>)}</div>
+                    <div className="mb-3 flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-semibold text-slate-800">Linked Products</h3>
+                        <p className="mt-1 text-xs text-slate-500">Attach products and define the selling price used by this price book.</p>
+                      </div>
+                      <button type="button" className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" onClick={() => updateInventoryForm({ ...anyForm, productLinks: [...anyForm.productLinks, { product: "", productLabel: "", listPrice: 0, active: true }] })}>Add Product</button>
+                    </div>
+                    {priceBookFieldErrors.invalidLinks ? <p className="mb-3 text-xs text-rose-600">{priceBookFieldErrors.invalidLinks}</p> : null}
+                    <div className="space-y-3">
+                      {(anyForm.productLinks || []).length === 0 ? (
+                        <div className="rounded-lg bg-slate-50 px-4 py-6 text-sm text-slate-500">No linked products yet. Add at least one product to make this price book useful in quotes and sales orders.</div>
+                      ) : (
+                        <>
+                          <div className="hidden gap-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400 md:grid md:grid-cols-[1fr_160px_120px_auto]">
+                            <div>Product</div>
+                            <div>List Price</div>
+                            <div>Status</div>
+                            <div>Action</div>
+                          </div>
+                          {(anyForm.productLinks || []).map((link: any, index: number) => (
+                          <div key={index} className="grid gap-3 md:grid-cols-[1fr_160px_120px_auto]">
+                            <InventoryLookupField
+                              lookup="products"
+                              value={link.product || ""}
+                              displayValue={link.productLabel || ""}
+                              onChange={(option) => {
+                                const productLinks = [...anyForm.productLinks];
+                                productLinks[index] = { ...productLinks[index], product: option?.id || "", productLabel: option?.label || "", listPrice: option?.unitPrice ?? productLinks[index].listPrice };
+                                updateInventoryForm({ ...anyForm, productLinks });
+                              }}
+                            />
+                            <div className="relative">
+                              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">₹</span>
+                              <input
+                                type="number"
+                                className={`${inputClass} pl-7`}
+                                placeholder="List Price"
+                                value={link.listPrice || 0}
+                                onChange={(e) => {
+                                  const productLinks = [...anyForm.productLinks];
+                                  productLinks[index] = { ...productLinks[index], listPrice: Number(e.target.value) };
+                                  updateInventoryForm({ ...anyForm, productLinks });
+                                }}
+                              />
+                            </div>
+                            <label className="flex h-[38px] items-center gap-2 rounded-md border border-slate-300 px-3 text-sm text-slate-700">
+                              <input
+                                type="checkbox"
+                                checked={Boolean(link.active)}
+                                onChange={(e) => {
+                                  const productLinks = [...anyForm.productLinks];
+                                  productLinks[index] = { ...productLinks[index], active: e.target.checked };
+                                  updateInventoryForm({ ...anyForm, productLinks });
+                                }}
+                              />
+                              Active
+                            </label>
+                            <button
+                              type="button"
+                              className="h-[38px] rounded-md border border-slate-300 px-3 text-sm text-slate-600"
+                              onClick={() => updateInventoryForm({ ...anyForm, productLinks: anyForm.productLinks.filter((_: any, itemIndex: number) => itemIndex !== index) })}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))}
+                        </>
+                      )}
+                    </div>
                   </div>
                 </>
               )}
@@ -508,27 +1126,89 @@ export default function InventoryFormPage({ moduleKey }: Props) {
           </div>
         )}
 
-        {(moduleKey === "quotes" || moduleKey === "sales-orders" || moduleKey === "purchase-orders" || moduleKey === "invoices") && (
+        {!loading && (moduleKey === "quotes" || moduleKey === "sales-orders" || moduleKey === "purchase-orders" || moduleKey === "invoices") && (
           <>
             <div className="rounded-xl border border-slate-200 bg-white p-5">
               <div className="mb-4 text-sm font-semibold text-slate-800">{moduleKey === "quotes" ? "Quote Information" : moduleKey === "sales-orders" ? "Sales Order Information" : moduleKey === "purchase-orders" ? "Purchase Order Information" : "Invoice Information"}</div>
               <div className="grid gap-4 md:grid-cols-2">
+                {moduleKey === "quotes" && (
+                  <div className="md:col-span-2 grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-4">
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Selected Account</div>
+                      <div className="mt-2 truncate text-base font-semibold text-slate-900">{anyForm.accountLabel || "Not selected"}</div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Selected Deal</div>
+                      <div className="mt-2 truncate text-base font-semibold text-slate-900">{anyForm.dealLabel || "Not selected"}</div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Price Book</div>
+                      <div className="mt-2 truncate text-base font-semibold text-slate-900">{anyForm.priceBookLabel || "Not selected"}</div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Line Items</div>
+                      <div className="mt-2 text-base font-semibold text-slate-900">{Array.isArray(anyForm.items) ? anyForm.items.length : 0}</div>
+                    </div>
+                  </div>
+                )}
                 <Field label="Owner"><input className={inputClass} value={currentUserName} readOnly /></Field>
-                <Field label="Subject"><input className={inputClass} value={anyForm.subject || ""} onChange={(e) => setForm({ ...anyForm, subject: e.target.value })} /></Field>
-                {moduleKey === "quotes" && <Field label="Quote Stage"><input className={inputClass} value={anyForm.quoteStage || ""} onChange={(e) => setForm({ ...anyForm, quoteStage: e.target.value })} /></Field>}
+                <div>
+                  <Field label={moduleKey === "quotes" ? "Subject *" : "Subject"}><input className={`${inputClass} ${moduleKey === "quotes" && quoteFieldErrors.subject ? "border-rose-300 focus:border-rose-500" : ""}`} value={anyForm.subject || ""} onChange={(e) => updateInventoryForm({ ...anyForm, subject: e.target.value })} /></Field>
+                  {moduleKey === "quotes" && quoteFieldErrors.subject ? <p className="mt-1 text-xs text-rose-600">{quoteFieldErrors.subject}</p> : null}
+                </div>
+                {moduleKey === "quotes" && (
+                  <div>
+                    <Field label="Quote Stage">
+                      <select className={inputClass} value={anyForm.quoteStage || ""} onChange={(e) => updateInventoryForm({ ...anyForm, quoteStage: e.target.value })}>
+                        <option value="">Select stage</option>
+                        <option value="Draft">Draft</option>
+                        <option value="Presented">Presented</option>
+                        <option value="Negotiation">Negotiation</option>
+                        <option value="Completed">Completed</option>
+                        <option value="Closed Won">Closed Won</option>
+                        <option value="Closed Lost">Closed Lost</option>
+                      </select>
+                    </Field>
+                  </div>
+                )}
                 {moduleKey === "quotes" && <Field label="Team"><input className={inputClass} value={anyForm.team || ""} onChange={(e) => setForm({ ...anyForm, team: e.target.value })} /></Field>}
-                {moduleKey === "quotes" && <Field label="Price Book"><InventoryLookupField lookup="price-books" value={anyForm.priceBook || ""} displayValue={anyForm.priceBookLabel || ""} onChange={(option) => setForm({ ...anyForm, priceBook: option?.id || "", priceBookLabel: option?.label || "" })} /></Field>}
-                {moduleKey === "sales-orders" && <Field label="Customer No"><input className={inputClass} value={anyForm.customerNo || ""} onChange={(e) => setForm({ ...anyForm, customerNo: e.target.value })} /></Field>}
+                {moduleKey === "quotes" && (
+                  <div>
+                    <Field label="Price Book *"><InventoryLookupField lookup="price-books" value={anyForm.priceBook || ""} displayValue={anyForm.priceBookLabel || ""} onChange={(option) => updateInventoryForm({ ...anyForm, priceBook: option?.id || "", priceBookLabel: option?.label || "" })} /></Field>
+                    <p className="mt-1 text-xs text-slate-500">Pricing for quote line items will follow the selected price book.</p>
+                    {quoteFieldErrors.priceBook ? <p className="mt-1 text-xs text-rose-600">{quoteFieldErrors.priceBook}</p> : null}
+                  </div>
+                )}
+                {moduleKey === "sales-orders" && <Field label="Customer No"><input className={`${inputClass} bg-slate-50 text-slate-500`} value={anyForm.customerNo || ""} readOnly placeholder="Auto-filled from account" /></Field>}
                 {moduleKey === "purchase-orders" && <Field label="Requisition Number"><input className={inputClass} value={anyForm.requisitionNumber || ""} onChange={(e) => setForm({ ...anyForm, requisitionNumber: e.target.value })} /></Field>}
+                {moduleKey === "purchase-orders" && <Field label="PO Number"><input className={`${inputClass} bg-slate-50 text-slate-500`} value={anyForm.poNumber || ""} readOnly placeholder="Auto-generated on save" /></Field>}
                 {moduleKey === "invoices" && <Field label="Invoice Date"><input type="date" className={inputClass} value={anyForm.invoiceDate || ""} onChange={(e) => setForm({ ...anyForm, invoiceDate: e.target.value })} /></Field>}
                 {(moduleKey === "sales-orders" || moduleKey === "purchase-orders" || moduleKey === "invoices") && <Field label="Status"><input className={inputClass} value={anyForm.status || ""} onChange={(e) => setForm({ ...anyForm, status: e.target.value })} /></Field>}
                 <Field label="Carrier"><input className={inputClass} value={anyForm.carrier || ""} onChange={(e) => setForm({ ...anyForm, carrier: e.target.value })} /></Field>
-                {moduleKey === "quotes" && <Field label="Valid Until"><input type="date" className={inputClass} value={anyForm.validUntil || ""} onChange={(e) => setForm({ ...anyForm, validUntil: e.target.value })} /></Field>}
+                {moduleKey === "quotes" && (
+                  <div>
+                    <Field label="Valid Until"><input type="date" className={inputClass} value={anyForm.validUntil || ""} onChange={(e) => updateInventoryForm({ ...anyForm, validUntil: e.target.value })} /></Field>
+                    <p className="mt-1 text-xs text-slate-500">Set the last date the customer can accept this quote.</p>
+                  </div>
+                )}
                 {(moduleKey === "sales-orders" || moduleKey === "purchase-orders" || moduleKey === "invoices") && <Field label="Due Date"><input type="date" className={inputClass} value={anyForm.dueDate || ""} onChange={(e) => setForm({ ...anyForm, dueDate: e.target.value })} /></Field>}
                 {moduleKey === "sales-orders" && <Field label="Quote Name"><InventoryLookupField lookup="quotes" value={anyForm.quote || ""} displayValue={anyForm.quoteLabel || ""} onChange={(option) => setForm({ ...anyForm, quote: option?.id || "", quoteLabel: option?.label || "" })} /></Field>}
-                {moduleKey !== "purchase-orders" && <Field label="Account Name"><InventoryLookupField lookup="accounts" value={anyForm.account || ""} displayValue={anyForm.accountLabel || ""} onChange={(option) => setForm({ ...anyForm, account: option?.id || "", accountLabel: option?.label || "" })} /></Field>}
-                <Field label="Contact Name"><InventoryLookupField lookup="contacts" extraQuery={anyForm.account ? { account_id: String(anyForm.account) } : undefined} value={anyForm.contact || ""} displayValue={anyForm.contactLabel || ""} onChange={(option) => setForm({ ...anyForm, contact: option?.id || "", contactLabel: option?.label || "" })} /></Field>
-                {moduleKey !== "purchase-orders" && <Field label="Deal Name"><InventoryLookupField lookup="deals" value={anyForm.deal || ""} displayValue={anyForm.dealLabel || ""} onChange={(option) => setForm({ ...anyForm, deal: option?.id || "", dealLabel: option?.label || "" })} /></Field>}
+                {moduleKey !== "purchase-orders" && (
+                  <div>
+                    <Field label={moduleKey === "quotes" ? "Account Name *" : "Account Name"}><InventoryLookupField lookup="accounts" value={anyForm.account || ""} displayValue={anyForm.accountLabel || ""} onChange={(option) => updateInventoryForm({ ...anyForm, account: option?.id || "", accountLabel: option?.label || "" })} /></Field>
+                    {moduleKey === "quotes" && quoteFieldErrors.account ? <p className="mt-1 text-xs text-rose-600">{quoteFieldErrors.account}</p> : null}
+                  </div>
+                )}
+                <div>
+                  <Field label={moduleKey === "quotes" ? "Contact Name *" : "Contact Name"}><InventoryLookupField lookup="contacts" extraQuery={anyForm.account ? { account_id: String(anyForm.account) } : undefined} value={anyForm.contact || ""} displayValue={anyForm.contactLabel || ""} onChange={(option) => updateInventoryForm({ ...anyForm, contact: option?.id || "", contactLabel: option?.label || "" })} /></Field>
+                  {moduleKey === "quotes" && quoteFieldErrors.contact ? <p className="mt-1 text-xs text-rose-600">{quoteFieldErrors.contact}</p> : null}
+                </div>
+                {moduleKey !== "purchase-orders" && (
+                  <div>
+                    <Field label={moduleKey === "quotes" ? "Deal Name *" : "Deal Name"}><InventoryLookupField lookup="deals" value={anyForm.deal || ""} displayValue={anyForm.dealLabel || ""} onChange={(option) => updateInventoryForm({ ...anyForm, deal: option?.id || "", dealLabel: option?.label || "" })} /></Field>
+                    {moduleKey === "quotes" && quoteFieldErrors.deal ? <p className="mt-1 text-xs text-rose-600">{quoteFieldErrors.deal}</p> : null}
+                  </div>
+                )}
                 {moduleKey === "purchase-orders" && <Field label="Vendor Name"><div className="space-y-2"><InventoryLookupField lookup="vendors" value={anyForm.vendor || ""} displayValue={anyForm.vendorLabel || ""} onChange={(option) => setForm({ ...anyForm, vendor: option?.id || "", vendorLabel: option?.label || "" })} /><button type="button" className="text-sm font-medium text-blue-600" onClick={() => setQuickVendorOpen(true)}>New Vendor</button></div></Field>}
                 {moduleKey === "sales-orders" && <Field label="Pending"><label className="flex h-[38px] items-center gap-2 rounded-md border border-slate-300 px-3"><input type="checkbox" checked={Boolean(anyForm.pending)} onChange={(e) => setForm({ ...anyForm, pending: e.target.checked })} />Pending</label></Field>}
                 {moduleKey === "invoices" && <Field label="Sales Order"><InventoryLookupField lookup="sales-orders" value={anyForm.salesOrder || ""} displayValue={anyForm.salesOrderLabel || ""} onChange={(option) => setForm({ ...anyForm, salesOrder: option?.id || "", salesOrderLabel: option?.label || "" })} /></Field>}

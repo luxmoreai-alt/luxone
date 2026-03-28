@@ -1343,6 +1343,37 @@ class CRMEmailDetailAPIView(APIView):
         return Response(CRMEmailDetailSerializer(instance).data)
 
 
+class CRMEmailUnreadCountAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        count = SyncedEmailMessage.objects.filter(
+            direction=SyncedEmailMessage.Direction.INCOMING,
+            is_read=False,
+        ).count()
+        recent = SyncedEmailMessage.objects.filter(
+            direction=SyncedEmailMessage.Direction.INCOMING,
+            is_read=False,
+        ).order_by("-received_at", "-created_at").values(
+            "id", "subject", "from_email", "received_at"
+        )[:10]
+        return Response({
+            "unread_count": count,
+            "recent": list(recent),
+        })
+
+
+class CRMEmailMarkAllReadAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        updated = SyncedEmailMessage.objects.filter(
+            direction=SyncedEmailMessage.Direction.INCOMING,
+            is_read=False,
+        ).update(is_read=True)
+        return Response({"marked_read": updated})
+
+
 class CRMEmailSendAPIView(APIView):
     permission_classes = [IsAuthenticated]
 

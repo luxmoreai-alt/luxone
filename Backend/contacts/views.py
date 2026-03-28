@@ -20,6 +20,7 @@ from .serializers import (
     ContactDetailSerializer,
     ContactListSerializer,
     ContactLogCallSerializer,
+    ContactMeetingSerializer,
     ContactNoteCreateSerializer,
     ContactNoteSerializer,
     ContactSendEmailSerializer,
@@ -111,6 +112,9 @@ class ContactViewSet(viewsets.ModelViewSet):
 
         if self.action == "log_call":
             return ContactLogCallSerializer
+
+        if self.action == "schedule_meeting":
+            return ContactMeetingSerializer
 
         if self.action == "send_email":
             return ContactSendEmailSerializer
@@ -501,6 +505,35 @@ class ContactViewSet(viewsets.ModelViewSet):
 
         return Response(
             {"message": "Call logged successfully"},
+            status=status.HTTP_201_CREATED,
+        )
+
+    # Send Email
+
+    @action(detail=True, methods=["post"], url_path="schedule-meeting")
+    def schedule_meeting(self, request, pk=None):
+
+        contact = self.get_object()
+
+        serializer = ContactMeetingSerializer(data=request.data)
+
+        serializer.is_valid(raise_exception=True)
+
+        description = serializer.validated_data["meeting_subject"]
+        agenda = serializer.validated_data.get("agenda", "").strip()
+
+        if agenda:
+            description = f"{description} | {agenda}"
+
+        contact_service.log_activity(
+            contact=contact,
+            action="Meeting scheduled",
+            description=description,
+            user=request.user,
+        )
+
+        return Response(
+            {"message": "Meeting scheduled successfully"},
             status=status.HTTP_201_CREATED,
         )
 

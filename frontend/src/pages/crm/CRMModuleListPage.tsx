@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiRequest } from "../../api/client";
 import ModuleToolbar from "../../components/crm/ModuleToolbar";
@@ -32,6 +32,14 @@ type CRMModuleListPageProps<T extends CRMRecord> = {
   showNotes?: boolean;
   showActivity?: boolean;
   onDeleteRow?: (id: string) => Promise<void>;
+  renderTopContent?: (context: {
+    rows: T[];
+    processedRows: T[];
+    paginatedRows: T[];
+    loading: boolean;
+  }) => ReactNode;
+  hideFilterSidebar?: boolean;
+  hideTable?: boolean;
 };
 
 type ModalState =
@@ -70,6 +78,9 @@ export default function CRMModuleListPage<T extends CRMRecord>({
   showNotes = true,
   showActivity = false,
   onDeleteRow,
+  renderTopContent,
+  hideFilterSidebar = false,
+  hideTable = false,
 }: CRMModuleListPageProps<T>) {
   const navigate = useNavigate();
 
@@ -142,6 +153,9 @@ export default function CRMModuleListPage<T extends CRMRecord>({
     if (actionKey === "delete") return openModal("delete", row);
     if (actionKey === "edit") {
       if (config.module === "leads") {
+        return navigate(`${config.baseRoute}/${row.id}/edit`);
+      }
+      if (config.module === "contacts" || config.module === "accounts") {
         return navigate(`${config.baseRoute}/${row.id}/edit`);
       }
       return navigate(`${config.baseRoute}/${row.id}`);
@@ -278,6 +292,9 @@ export default function CRMModuleListPage<T extends CRMRecord>({
     } else if (config.module === "accounts") {
       const { scheduleAccountMeeting } = await import("../../lib/api/accountsApi");
       await scheduleAccountMeeting(activeRow.id, payload);
+    } else if (config.module === "contacts") {
+      const { scheduleContactMeeting } = await import("../../lib/api/contactsApi");
+      await scheduleContactMeeting(activeRow.id, payload);
     } else if (config.module === "leads") {
       const { scheduleLeadMeeting } = await import("../../lib/api/leadsApi");
       await scheduleLeadMeeting(activeRow.id, payload);
@@ -425,7 +442,7 @@ export default function CRMModuleListPage<T extends CRMRecord>({
         />
 
         <div className="flex gap-3">
-          {config.filterSections && filterOpen && (
+          {config.filterSections && filterOpen && !hideFilterSidebar && (
             <FilterSidebar
               title={`Filter ${config.title} by`}
               sections={config.filterSections}
@@ -441,7 +458,14 @@ export default function CRMModuleListPage<T extends CRMRecord>({
           )}
 
           <div className="min-w-0 flex-1">
-            {loading ? (
+            {renderTopContent?.({
+              rows,
+              processedRows,
+              paginatedRows,
+              loading,
+            })}
+
+            {hideTable ? null : loading ? (
               <div className="flex min-h-[400px] items-center justify-center rounded-xl border border-slate-200 bg-white">
                 <div className="flex items-center gap-3 text-slate-500">
                   <svg className="h-5 w-5 animate-spin text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -510,7 +534,7 @@ export default function CRMModuleListPage<T extends CRMRecord>({
               }
             />}
 
-            {!loading && processedRows.length > pageSize && (
+            {!hideTable && !loading && processedRows.length > pageSize && (
               <CRMPagination
                 page={page}
                 pageSize={pageSize}

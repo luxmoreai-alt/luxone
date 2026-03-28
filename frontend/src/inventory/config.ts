@@ -108,6 +108,7 @@ export const inventoryModules = {
       "Notes",
       "Connected Records",
       "Attachments",
+      "Services",
       "Vendors",
       "Price Books",
       "Quotes",
@@ -173,6 +174,7 @@ export const inventoryModules = {
     relatedListItems: [
       "Notes",
       "Connected Records",
+      "Services",
       "Sales Orders",
       "Cases",
       "Solutions",
@@ -211,6 +213,7 @@ export const inventoryModules = {
       "Notes",
       "Connected Records",
       "Attachments",
+      "Services",
       "Invoices",
       "Cases",
       "Solutions",
@@ -223,6 +226,8 @@ export const inventoryModules = {
     rowActions: [
       ...defaultRowActions,
       { key: "convert-to-invoice", label: "Convert to Invoice" },
+      { key: "create-service-appointment", label: "Schedule Service" },
+      { key: "create-project", label: "Create Project" },
     ],
   } satisfies InventoryModuleMeta<SalesOrderRecord>,
   "purchase-orders": {
@@ -248,6 +253,7 @@ export const inventoryModules = {
       "Notes",
       "Connected Records",
       "Attachments",
+      "Services",
       "Cases",
       "Solutions",
       "Open Activities",
@@ -281,6 +287,7 @@ export const inventoryModules = {
       "Notes",
       "Connected Records",
       "Attachments",
+      "Services",
       "Cases",
       "Solutions",
       "Open Activities",
@@ -289,7 +296,11 @@ export const inventoryModules = {
       "Add Related List",
       "Links",
     ],
-    rowActions: defaultRowActions,
+    rowActions: [
+      ...defaultRowActions,
+      { key: "create-service-appointment", label: "Schedule Service" },
+      { key: "create-project", label: "Create Project" },
+    ],
   } satisfies InventoryModuleMeta<InventoryInvoiceRecord>,
   configurator: {
     key: "configurator",

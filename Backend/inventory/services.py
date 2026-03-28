@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from django.db import transaction
 from django.db.models import Prefetch
+from django.utils import timezone
 
 from .models import (
     ConfiguratorRule,
@@ -30,6 +31,9 @@ from .permissions import filter_queryset_for_user
 
 MONEY_ZERO = Decimal("0.00")
 PRODUCT_CODE_PREFIX = "PRD"
+DEFAULT_SALES_ORDER_STATUS = "Created"
+DEFAULT_PURCHASE_ORDER_STATUS = "Draft"
+DEFAULT_INVOICE_STATUS = "Draft"
 
 
 def as_money(value: Any) -> Decimal:
@@ -74,8 +78,43 @@ def calculate_document_totals(items: list[dict[str, Any]], adjustment: Any = Non
     }
 
 
-def generate_product_code(product_id: int) -> str:
-    return f"{PRODUCT_CODE_PREFIX}{product_id:04d}"
+def generate_product_code(_product_id: int) -> str:
+    return f"{PRODUCT_CODE_PREFIX}{Product.objects.count() + 1:04d}"
+
+
+def _resolve_account_customer_number(account) -> str:
+    if not account:
+        return ""
+    return str(getattr(account, "account_number", "") or "").strip()
+
+
+def generate_purchase_order_number(purchase_order_id: int) -> str:
+    return f"PO{purchase_order_id:04d}"
+
+
+def _clean_text(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _ensure_sales_order_defaults(data: dict[str, Any]) -> None:
+    if not _clean_text(data.get("status")):
+        data["status"] = DEFAULT_SALES_ORDER_STATUS
+
+
+def _ensure_purchase_order_defaults(data: dict[str, Any]) -> None:
+    if not _clean_text(data.get("status")):
+        data["status"] = DEFAULT_PURCHASE_ORDER_STATUS
+    if not data.get("po_date"):
+        data["po_date"] = timezone.localdate()
+
+
+def _ensure_invoice_defaults(data: dict[str, Any]) -> None:
+    if not _clean_text(data.get("status")):
+        data["status"] = DEFAULT_INVOICE_STATUS
+    if not data.get("invoice_date"):
+        data["invoice_date"] = timezone.localdate()
+    if not data.get("due_date"):
+        data["due_date"] = data.get("invoice_date")
 
 
 def _replace_items(
@@ -436,6 +475,8 @@ class QuoteService:
         sales_order = SalesOrder.objects.create(
             owner=quote.owner or user,
             subject=quote.subject,
+            status=DEFAULT_SALES_ORDER_STATUS,
+            customer_no=_resolve_account_customer_number(quote.account),
             quote=quote,
             account=quote.account,
             contact=quote.contact,
@@ -511,6 +552,7 @@ class SalesOrderService:
     def create_sales_order(self, *, data: dict[str, Any], user):
         items = data.pop("items", [])
         self._hydrate_sales_order_relationships(data)
+        _ensure_sales_order_defaults(data)
         items = data.pop("items", items)
         if not data.get("owner"):
             data["owner"] = user
@@ -538,6 +580,7 @@ class SalesOrderService:
     def update_sales_order(self, *, sales_order: SalesOrder, data: dict[str, Any]):
         items = data.pop("items", None)
         self._hydrate_sales_order_relationships(data)
+        _ensure_sales_order_defaults(data)
         items = data.pop("items", items)
         for field, value in data.items():
             setattr(sales_order, field, value)
@@ -572,11 +615,16 @@ class SalesOrderService:
     def _hydrate_sales_order_relationships(self, data: dict[str, Any]) -> None:
         quote = data.get("quote")
         if not quote:
+            account = data.get("account")
+            if account and not str(data.get("customer_no") or "").strip():
+                data["customer_no"] = _resolve_account_customer_number(account)
             _hydrate_software_defaults_from_items(data)
             return
         data.setdefault("account", quote.account)
         data.setdefault("contact", quote.contact)
         data.setdefault("deal", quote.deal)
+        if not str(data.get("customer_no") or "").strip():
+            data["customer_no"] = _resolve_account_customer_number(data.get("account"))
         for field in ("subject", "terms_and_conditions", "description", "adjustment"):
             data.setdefault(field, getattr(quote, field, None))
         _copy_software_contract_fields(quote, data)
@@ -612,6 +660,9 @@ class SalesOrderService:
         invoice = Invoice.objects.create(
             owner=sales_order.owner or user,
             subject=sales_order.subject,
+            invoice_date=timezone.localdate(),
+            due_date=sales_order.due_date or timezone.localdate(),
+            status=DEFAULT_INVOICE_STATUS,
             account=sales_order.account,
             contact=sales_order.contact,
             deal=sales_order.deal,
@@ -685,10 +736,14 @@ class PurchaseOrderService:
     def create_purchase_order(self, *, data: dict[str, Any], user):
         items = data.pop("items", [])
         self._hydrate_purchase_order_relationships(data)
+        _ensure_purchase_order_defaults(data)
         items = data.pop("items", items)
         if not data.get("owner"):
             data["owner"] = user
         purchase_order = PurchaseOrder.objects.create(**data)
+        if not str(purchase_order.po_number or "").strip():
+            purchase_order.po_number = generate_purchase_order_number(purchase_order.id)
+            purchase_order.save(update_fields=["po_number", "updated_at"])
         created_items = _replace_items(
             purchase_order,
             PurchaseOrderItem,
@@ -711,9 +766,12 @@ class PurchaseOrderService:
     def update_purchase_order(self, *, purchase_order: PurchaseOrder, data: dict[str, Any]):
         items = data.pop("items", None)
         self._hydrate_purchase_order_relationships(data)
+        _ensure_purchase_order_defaults(data)
         items = data.pop("items", items)
         for field, value in data.items():
             setattr(purchase_order, field, value)
+        if not str(purchase_order.po_number or "").strip():
+            purchase_order.po_number = generate_purchase_order_number(purchase_order.id)
         purchase_order.save()
         line_items = list(purchase_order.items.all())
         if items is not None:
@@ -791,6 +849,7 @@ class InvoiceService:
     def create_invoice(self, *, data: dict[str, Any], user):
         items = data.pop("items", [])
         self._hydrate_invoice_relationships(data)
+        _ensure_invoice_defaults(data)
         items = data.pop("items", items)
         if not data.get("owner"):
             data["owner"] = user
@@ -818,6 +877,7 @@ class InvoiceService:
     def update_invoice(self, *, invoice: Invoice, data: dict[str, Any]):
         items = data.pop("items", None)
         self._hydrate_invoice_relationships(data)
+        _ensure_invoice_defaults(data)
         items = data.pop("items", items)
         for field, value in data.items():
             setattr(invoice, field, value)
@@ -857,8 +917,10 @@ class InvoiceService:
             data.setdefault("account", sales_order.account)
             data.setdefault("contact", sales_order.contact)
             data.setdefault("deal", sales_order.deal)
+            data.setdefault("due_date", sales_order.due_date)
         elif purchase_order:
             data.setdefault("contact", purchase_order.contact)
+            data.setdefault("due_date", purchase_order.due_date)
         if source:
             for field in ("subject", "terms_and_conditions", "description", "adjustment"):
                 data.setdefault(field, getattr(source, field, None))

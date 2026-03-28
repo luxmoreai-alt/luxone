@@ -19,7 +19,9 @@ export type ProjectIssueSeverity = "Low" | "Medium" | "High" | "Critical";
 export interface ProjectTask {
   id: string | number;
   title: string;
+  description: string;
   owner: string;
+  assigned_by: string;
   due_date: string;
   status: ProjectTaskStatus;
   priority: ProjectPriority;
@@ -64,6 +66,30 @@ export interface ProjectNote {
   created_at: string;
 }
 
+export interface ProjectMeetingAttendanceRecord {
+  id: string | number;
+  participant_name: string;
+  participant_email: string;
+  attendance_status: "Pending" | "Attended" | "Not Attended";
+  marked_at: string | null;
+}
+
+export interface ProjectMeeting {
+  id: string | number;
+  project_id: number;
+  title: string;
+  participants: string;
+  meeting_type: "Online" | "Offline";
+  meeting_link: string;
+  location: string;
+  start_datetime: string;
+  status: "Scheduled" | "Completed" | "Cancelled" | "Rescheduled";
+  attendance_records: ProjectMeetingAttendanceRecord[];
+  attended_count: number;
+  not_attended_count: number;
+  pending_count: number;
+}
+
 export interface ProjectTimeLog {
   id: string | number;
   member: string;
@@ -79,6 +105,9 @@ export interface Project {
   account_name: string;
   contact_name: string;
   deal_name: string;
+  source_module?: string;
+  source_record_id?: number | null;
+  source_record_label?: string;
   owner: string;
   status: ProjectStatus;
   priority: ProjectPriority;
@@ -90,6 +119,7 @@ export interface Project {
   estimated_hours: number | null;
   logged_hours: number;
   tasks: ProjectTask[];
+  meetings: ProjectMeeting[];
   phases: ProjectPhase[];
   issues: ProjectIssue[];
   members: ProjectMember[];
@@ -104,6 +134,9 @@ export interface CreateProjectPayload {
   account_name: string;
   contact_name: string;
   deal_name: string;
+  source_module?: string;
+  source_record_id?: number | "";
+  source_record_label?: string;
   owner: string;
   status: ProjectStatus;
   priority: ProjectPriority;

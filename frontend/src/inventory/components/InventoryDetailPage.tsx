@@ -7,7 +7,7 @@ import CRMSectionCard from "../../components/crm/CRMSectionCard";
 import CRMTabs from "../../components/crm/CRMTabs";
 import CRMTimeline from "../../components/crm/CRMTimeline";
 import DashboardLayout from "../../components/layout/DashboardLayout";
-import { getInventoryDetail } from "../api";
+import { convertQuoteToSalesOrder, convertSalesOrderToInvoice, getInventoryDetail } from "../api";
 import { getInventoryMeta } from "../config";
 import { formatMoney } from "../utils";
 import type { InventoryModuleKey } from "../types";
@@ -24,6 +24,7 @@ function normalizeRelatedData(label: string, related: any) {
   if (lower === "connected records") return related.connectedRecords;
   if (lower === "open activities") return related.openActivities;
   if (lower === "closed activities") return related.closedActivities;
+  if (lower === "services") return related.services || [];
   if (lower === "products") return related.products;
   if (lower === "vendors") return related.vendors || [];
   if (lower === "price books") return related.priceBooks;
@@ -40,6 +41,32 @@ function normalizeRelatedData(label: string, related: any) {
   if (lower === "links") return related.links || [];
   if (lower === "cadences") return related.cadences || [];
   return [];
+}
+
+function renderRelatedRecord(record: any, navigate: ReturnType<typeof useNavigate>) {
+  const label = record.label || record.title || record.subject || record.name || record.fileName || record.recordType || record.content;
+  return (
+    <div key={record.id} className="rounded-md border border-slate-200 p-3 text-sm text-slate-700">
+      <div className="break-words">
+        {record.route ? (
+          <button
+            type="button"
+            onClick={() => navigate(record.route)}
+            className="text-left font-medium text-blue-600 hover:underline"
+          >
+            {label}
+          </button>
+        ) : (
+          label
+        )}
+      </div>
+      {(record.meta || record.status || record.createdAt || record.sentAt) && (
+        <div className="mt-1 break-all text-xs text-slate-500">
+          {record.meta || record.status || record.createdAt || record.sentAt}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function InventoryDetailPage({ moduleKey }: InventoryDetailPageProps) {
@@ -60,6 +87,14 @@ export default function InventoryDetailPage({ moduleKey }: InventoryDetailPagePr
   const [activeTab, setActiveTab] = useState<"overview" | "timeline">("overview");
   const [activeRelatedItem, setActiveRelatedItem] = useState(meta.relatedListItems[0] || "Notes");
   const [payload, setPayload] = useState<any | null>(null);
+
+  const headerActions = useMemo(() => {
+    if (moduleKey === "quotes") return ["Convert to Sales Order", "Edit"];
+    if (moduleKey === "sales-orders") return ["Create Invoice", "Create Project", "Schedule Service", "Edit"];
+    if (moduleKey === "invoices") return ["Create Project", "Schedule Service", "Edit"];
+    if (moduleKey === "vendors") return ["Send Email", "Edit", "Assign", "New", "Attach"];
+    return ["Edit"];
+  }, [moduleKey]);
 
   useEffect(() => {
     if (!id) return;
@@ -99,8 +134,55 @@ export default function InventoryDetailPage({ moduleKey }: InventoryDetailPagePr
           title={detail.name}
           subtitle={detail.subtitle}
           avatar={detail.avatar}
-          actions={moduleKey === "vendors" ? ["Send Email", "Edit", "Assign", "New", "Attach"] : ["Edit"]}
+          actions={headerActions}
           onBack={() => navigate(meta.baseRoute)}
+          onAction={async (action) => {
+            if (action === "Edit" && id) {
+              navigate(`${meta.baseRoute}/${id}/edit`);
+              return;
+            }
+
+            if (!id) return;
+
+            if (action === "Convert to Sales Order" && moduleKey === "quotes") {
+              const response = await convertQuoteToSalesOrder(id);
+              navigate(`/sales-orders/${response.id}`);
+              return;
+            }
+
+            if (action === "Create Invoice" && moduleKey === "sales-orders") {
+              const response = await convertSalesOrderToInvoice(id);
+              navigate(`/invoices/${response.id}`);
+              return;
+            }
+
+            if (action === "Create Project" && (moduleKey === "sales-orders" || moduleKey === "invoices")) {
+              const fieldMap = Object.fromEntries((detail.fields || []).map((field: any) => [String(field.label), String(field.value || "")]));
+              const owner = detail.summary?.find((item: any) => String(item.label) === "Owner")?.value || "";
+              const params = new URLSearchParams({
+                sourceModule: moduleKey,
+                sourceId: id,
+                sourceLabel: detail.name || detail.subtitle || meta.singular,
+                name: detail.name || meta.singular,
+                accountName: fieldMap["Account Name"] || "",
+                contactName: fieldMap["Contact Name"] || "",
+                dealName: fieldMap["Deal Name"] || "",
+                owner,
+                dueDate: fieldMap["Due Date"] || "",
+              });
+              navigate(`/projects/create?${params.toString()}`);
+              return;
+            }
+
+            if (action === "Schedule Service" && moduleKey === "sales-orders") {
+              navigate(`/services/appointments/create?salesOrder=${encodeURIComponent(id)}`);
+              return;
+            }
+
+            if (action === "Schedule Service" && moduleKey === "invoices") {
+              navigate(`/services/appointments/create?invoice=${encodeURIComponent(id)}`);
+            }
+          }}
         />
 
         <CRMTabs activeTab={activeTab} onChange={setActiveTab} />
@@ -227,18 +309,27 @@ export default function InventoryDetailPage({ moduleKey }: InventoryDetailPagePr
                 <section key={section.id} id={section.id} className="scroll-mt-24">
                   <CRMSectionCard title={section.label}>
                     {section.records.length ? (
-                      <div className="space-y-2">
-                        {section.records.map((record: any) => (
-                          <div key={record.id} className="rounded-md border border-slate-200 p-3 text-sm text-slate-700">
-                            <div className="break-words">{record.label || record.title || record.subject || record.name || record.fileName || record.recordType || record.content}</div>
-                            {(record.meta || record.status || record.createdAt || record.sentAt) && (
-                              <div className="mt-1 break-all text-xs text-slate-500">
-                                {record.meta || record.status || record.createdAt || record.sentAt}
+                      section.label === "Services" ? (
+                        <div className="space-y-4">
+                          {[
+                            { title: "Appointments", items: section.records.filter((record: any) => record.kind === "appointment") },
+                            { title: "Job Sheets", items: section.records.filter((record: any) => record.kind === "job-sheet") },
+                          ]
+                            .filter((group) => group.items.length)
+                            .map((group) => (
+                              <div key={group.title}>
+                                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{group.title}</div>
+                                <div className="space-y-2">
+                                  {group.items.map((record: any) => renderRelatedRecord(record, navigate))}
+                                </div>
                               </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
+                            ))}
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {section.records.map((record: any) => renderRelatedRecord(record, navigate))}
+                        </div>
+                      )
                     ) : (
                       <CRMEmptyState message={`No ${section.label.toLowerCase()} available.`} />
                     )}

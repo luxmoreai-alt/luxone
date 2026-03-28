@@ -77,6 +77,30 @@ export function getRefreshToken(): string | null {
   return localStorage.getItem(AUTH_KEYS.refreshToken);
 }
 
+function extractErrorMessage(value: unknown): string | null {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed || null;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const nested = extractErrorMessage(item);
+      if (nested) return nested;
+    }
+    return null;
+  }
+
+  if (value && typeof value === "object") {
+    for (const nestedValue of Object.values(value as Record<string, unknown>)) {
+      const nested = extractErrorMessage(nestedValue);
+      if (nested) return nested;
+    }
+  }
+
+  return null;
+}
+
 async function apiPost<T>(path: string, body: unknown, token?: string): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
@@ -97,8 +121,9 @@ async function apiPost<T>(path: string, body: unknown, token?: string): Promise<
 
   if (!res.ok) {
     const msg =
-      (data as { message?: string; detail?: string })?.message ||
-      (data as { detail?: string })?.detail ||
+      extractErrorMessage((data as { message?: unknown })?.message) ||
+      extractErrorMessage((data as { detail?: unknown })?.detail) ||
+      extractErrorMessage(data) ||
       `Request failed (${res.status})`;
     throw new Error(msg);
   }

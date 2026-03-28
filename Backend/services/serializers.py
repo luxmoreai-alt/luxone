@@ -411,6 +411,9 @@ class AppointmentSerializer(serializers.ModelSerializer):
     product_name = serializers.SerializerMethodField()
     sales_order_subject = serializers.SerializerMethodField()
     invoice_subject = serializers.SerializerMethodField()
+    completion_proof_file_url = serializers.SerializerMethodField()
+    completion_proof_file_name = serializers.SerializerMethodField()
+    clear_completion_proof_file = serializers.BooleanField(required=False, write_only=True, default=False)
 
     class Meta:
         model = ServiceAppointment
@@ -448,6 +451,10 @@ class AppointmentSerializer(serializers.ModelSerializer):
             "notes",
             "completion_notes",
             "completion_proof_url",
+            "completion_proof_file",
+            "completion_proof_file_url",
+            "completion_proof_file_name",
+            "clear_completion_proof_file",
             "completed_at",
             "public_booking_url",
             "created_by",
@@ -467,6 +474,8 @@ class AppointmentSerializer(serializers.ModelSerializer):
             "product_name",
             "sales_order_subject",
             "invoice_subject",
+            "completion_proof_file_url",
+            "completion_proof_file_name",
             "appointment_for_display",
             "public_booking_url",
             "created_by",
@@ -477,6 +486,7 @@ class AppointmentSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         instance = self.instance
+        clear_completion_proof_file = attrs.pop("clear_completion_proof_file", False)
         service = attrs.get("service", getattr(instance, "service", None))
         appointment_date = attrs.get("appointment_date", getattr(instance, "appointment_date", None))
         start_time = attrs.get("appointment_start_time", getattr(instance, "appointment_start_time", None))
@@ -640,6 +650,9 @@ class AppointmentSerializer(serializers.ModelSerializer):
         if "completion_notes" in attrs:
             attrs["completion_notes"] = completion_notes or None
 
+        if clear_completion_proof_file:
+            attrs["completion_proof_file"] = None
+
         if status_value in {
             ServiceAppointment.Status.COMPLETED,
             ServiceAppointment.Status.CLOSED,
@@ -684,6 +697,15 @@ class AppointmentSerializer(serializers.ModelSerializer):
 
     def get_invoice_subject(self, obj):
         return getattr(obj.invoice, "subject", None)
+
+    def get_completion_proof_file_url(self, obj):
+        request = self.context.get("request")
+        if obj.completion_proof_file and request:
+            return request.build_absolute_uri(obj.completion_proof_file.url)
+        return str(obj.completion_proof_file) if obj.completion_proof_file else None
+
+    def get_completion_proof_file_name(self, obj):
+        return obj.completion_proof_file.name.split("/")[-1] if obj.completion_proof_file else None
 
     def get_appointment_for_display(self, obj):
         model_map = {

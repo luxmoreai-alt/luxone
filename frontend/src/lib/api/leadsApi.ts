@@ -1,4 +1,5 @@
 import { buildApiUrl } from "../../api/config";
+import { apiRequest } from "../../api/client";
 import type { ConnectedRecord, EmailRecord, LeadRecord, Note, TimelineItem } from "../shared/crmTypes";
 
 const API_BASE = buildApiUrl("").replace(/\/$/, "");
@@ -42,6 +43,7 @@ type BackendLeadDetail = BackendLeadList & {
   state?: string | null;
   country?: string | null;
   zip_code?: string | null;
+  skype_id?: string | null;
   secondary_email?: string | null;
   description?: string | null;
   updated_at?: string;
@@ -135,6 +137,7 @@ function normalizeLeadList(item: BackendLeadList): LeadRecord {
     state: "",
     zipCode: "",
     country: "",
+    skypeId: "",
     description: "",
     createdBy: "",
     createdAt: item.created_at ?? "",
@@ -171,6 +174,7 @@ function normalizeLeadDetail(item: BackendLeadDetail): LeadRecord {
     state: item.state ?? "",
     zipCode: item.zip_code ?? "",
     country: item.country ?? "",
+    skypeId: item.skype_id ?? "",
     description: item.description ?? "",
     createdBy: "",
     createdAt: item.created_at ?? "",
@@ -186,22 +190,71 @@ function normalizeLeadDetail(item: BackendLeadDetail): LeadRecord {
   };
 }
 
-export async function getLeads(): Promise<LeadRecord[]> {
-  const allLeads: BackendLeadList[] = [];
-  let nextUrl: string | null = api("/leads?page_size=100");
+function buildLeadPayload(payload: any) {
+  const body: Record<string, unknown> = {
+    first_name: payload.firstName ?? "",
+    last_name: payload.lastName ?? "",
+    company: payload.company ?? "",
+    email: payload.email ?? "",
+  };
 
-  while (nextUrl) {
-    const res = await fetch(nextUrl, { headers: buildHeaders() });
-    if (!res.ok) throw new Error("Failed to load leads");
-    const data = (await res.json()) as BackendLeadList[] | PaginatedResponse<BackendLeadList>;
+  const optionalMappings: Array<[string, unknown]> = [
+    ["title", payload.title],
+    ["phone", payload.phone],
+    ["mobile", payload.mobile],
+    ["website", payload.website],
+    ["lead_source", payload.leadSource],
+    ["lead_status", payload.leadStatus],
+    ["industry", payload.industry],
+    ["rating", payload.rating],
+    ["street", payload.street || payload.address],
+    ["city", payload.city],
+    ["state", payload.state],
+    ["country", payload.country],
+    ["zip_code", payload.zipCode],
+    ["skype_id", payload.skypeId],
+    ["secondary_email", payload.secondaryEmail],
+    ["description", payload.description],
+  ];
+
+  optionalMappings.forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      body[key] = value;
+    }
+  });
+
+  if (payload.noOfEmployees !== undefined && payload.noOfEmployees !== null && payload.noOfEmployees !== "") {
+    body.employee_count = Number(payload.noOfEmployees);
+  }
+
+  if (payload.annualRevenue !== undefined && payload.annualRevenue !== null && payload.annualRevenue !== "") {
+    body.annual_revenue = Number(payload.annualRevenue);
+  }
+
+  return body;
+}
+
+export async function getLeads(options?: { pageSize?: number; maxPages?: number; cacheTtlMs?: number }): Promise<LeadRecord[]> {
+  const allLeads: BackendLeadList[] = [];
+  const pageSize = options?.pageSize ?? 100;
+  const maxPages = options?.maxPages ?? Number.POSITIVE_INFINITY;
+  let pagesLoaded = 0;
+  let nextUrl: string | null = `/leads?page_size=${pageSize}`;
+
+  while (nextUrl && pagesLoaded < maxPages) {
+    const data: BackendLeadList[] | PaginatedResponse<BackendLeadList> = await apiRequest(nextUrl, {
+      cacheTtlMs: options?.cacheTtlMs,
+    });
 
     if (Array.isArray(data)) {
       allLeads.push(...data);
       nextUrl = null;
     } else {
       allLeads.push(...(data.results ?? []));
-      nextUrl = data.next ?? null;
+      nextUrl = data.next ? data.next.replace(/^https?:\/\/[^/]+\/api/i, "") : null;
     }
+
+    pagesLoaded += 1;
   }
 
   return allLeads.map(normalizeLeadList);
@@ -216,17 +269,7 @@ export async function getLeadById(id: string): Promise<LeadRecord | null> {
 }
 
 export async function createLead(payload: any): Promise<LeadRecord> {
-  const body: Record<string, unknown> = {
-    first_name: payload.firstName,
-    last_name: payload.lastName,
-    company: payload.company,
-    email: payload.email,
-  };
-
-  if (payload.phone) body.phone = payload.phone;
-  if (payload.mobile) body.mobile = payload.mobile;
-  if (payload.website) body.website = payload.website;
-  if (payload.leadSource) body.lead_source = payload.leadSource;
+  const body = buildLeadPayload(payload);
 
   const res = await fetch(api("/leads"), {
     method: "POST",
@@ -235,15 +278,16 @@ export async function createLead(payload: any): Promise<LeadRecord> {
   });
 
   if (!res.ok) throw new Error(await res.text());
-  const data = await res.json();
-  return getLeadById(String(data.id)) as Promise<LeadRecord>;
+  const data = (await res.json()) as BackendLeadDetail;
+  return normalizeLeadDetail(data);
 }
 
 export async function updateLead(id: string, payload: any) {
+  const body = buildLeadPayload(payload);
   const res = await fetch(api(`/leads/${id}`), {
     method: "PATCH",
     headers: buildHeaders(),
-    body: JSON.stringify(payload),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();

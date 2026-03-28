@@ -124,8 +124,11 @@ function toBackendPayload(payload: Partial<CreateAccountPayload>): Record<string
   return body;
 }
 
-export async function getAccounts(): Promise<AccountRecord[]> {
-  const data = await apiRequest<BackendAccount[] | Paginated<BackendAccount>>(endpoint("/accounts"));
+export async function getAccounts(options?: { pageSize?: number; cacheTtlMs?: number }): Promise<AccountRecord[]> {
+  const data = await apiRequest<BackendAccount[] | Paginated<BackendAccount>>(endpoint("/accounts"), {
+    query: options?.pageSize ? { page_size: options.pageSize } : undefined,
+    cacheTtlMs: options?.cacheTtlMs,
+  });
   return toList(data).map(normalizeAccount);
 }
 

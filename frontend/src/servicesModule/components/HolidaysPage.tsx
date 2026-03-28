@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import CRMSectionCard from "../../components/crm/CRMSectionCard";
-import { createHoliday, deleteHoliday, listHolidays, updateHoliday } from "../api";
+import { createHoliday, deleteHoliday, listAppointments, listHolidays, updateHoliday } from "../api";
 import type { Holiday } from "../types";
 
 const inputClass = "h-[38px] w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-blue-500";
@@ -13,11 +13,20 @@ export default function HolidaysPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [appointmentsByDate, setAppointmentsByDate] = useState<Record<string, number>>({});
 
   const load = async () => {
     try {
       setLoading(true);
-      setRows(await listHolidays());
+      const [holidayRows, appointments] = await Promise.all([listHolidays(), listAppointments()]);
+      const nextAppointmentsByDate = appointments.reduce<Record<string, number>>((acc, appointment) => {
+        const key = appointment.appointmentDate;
+        if (!key) return acc;
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+      }, {});
+      setRows(holidayRows);
+      setAppointmentsByDate(nextAppointmentsByDate);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load holidays.");
     } finally {
@@ -77,6 +86,9 @@ export default function HolidaysPage() {
                   <div>
                     <div className="text-sm font-medium text-slate-800">{row.name}</div>
                     <div className="mt-1 text-xs text-slate-500">{row.date}</div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      Affected appointments: {appointmentsByDate[row.date] || 0}
+                    </div>
                     {row.description ? <div className="mt-1 text-sm text-slate-600">{row.description}</div> : null}
                   </div>
                   <div className="flex gap-2">

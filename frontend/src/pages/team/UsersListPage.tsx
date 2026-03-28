@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { apiRequest } from "../../api/client";
 import { useAuth } from "../../hooks/useAuth";
+import { readDashboardCache, writeDashboardCache } from "../../lib/dashboardCache";
 
 type UserStatus = "active" | "inactive" | "terminated";
 
@@ -19,7 +20,6 @@ type CRMUser = {
   status_display: string;
   is_active: boolean;
   manager_email: string | null;
-  organization_name: string | null;
   created_at: string;
 };
 
@@ -46,12 +46,16 @@ type ConfirmAction = {
   action: "deactivate" | "reactivate" | "terminate";
 };
 
+const USERS_LIST_CACHE_KEY = "users-list-cache-v1";
+const USERS_LIST_CACHE_TTL_MS = 5 * 60 * 1000;
+
 export default function UsersListPage() {
   const navigate = useNavigate();
   const { isAdmin } = useAuth();
+  const [initialCache] = useState(() => readDashboardCache<CRMUser[]>(USERS_LIST_CACHE_KEY, USERS_LIST_CACHE_TTL_MS));
 
-  const [users, setUsers] = useState<CRMUser[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [users, setUsers] = useState<CRMUser[]>(initialCache?.state ?? []);
+  const [loading, setLoading] = useState(!initialCache?.state);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | UserStatus>("all");
   const [confirm, setConfirm] = useState<ConfirmAction | null>(null);
@@ -61,12 +65,22 @@ export default function UsersListPage() {
   const loadUsers = () => {
     setLoading(true);
     apiRequest<CRMUser[]>("/auth/manage-users/")
-      .then((data) => setUsers(Array.isArray(data) ? data : []))
+      .then((data) => {
+        const nextUsers = Array.isArray(data) ? data : [];
+        setUsers(nextUsers);
+        writeDashboardCache(USERS_LIST_CACHE_KEY, nextUsers);
+      })
       .catch(() => setUsers([]))
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { loadUsers(); }, []);
+  useEffect(() => {
+    if (initialCache?.state) {
+      setLoading(false);
+      return;
+    }
+    loadUsers();
+  }, [initialCache?.state]);
 
   const filtered = users.filter((u) => {
     const matchSearch =

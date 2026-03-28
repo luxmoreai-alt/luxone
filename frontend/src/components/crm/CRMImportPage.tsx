@@ -1,18 +1,18 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import Papa from "papaparse";
-import { FileText } from "lucide-react";
+import { CheckCircle2, FileText, Search } from "lucide-react";
 import DashboardLayout from "../layout/DashboardLayout";
 import { apiRequest } from "../../api/client";
-import JSZip from "jszip";
-import { GlobalWorkerOptions, getDocument } from "pdfjs-dist/legacy/build/pdf";
-import * as XLSX from "xlsx";
+import { addLeadNote, getLeads } from "../../lib/api/leadsApi";
+import type { LeadRecord } from "../../lib/shared/crmTypes";
+import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 
 type CRMImportPageProps = {
   pageTitle: string;
   moduleLabel: string;
   mode: "module" | "notes";
   backPath: string;
+  initialTargetRecordId?: string;
 };
 
 type ModuleField = {
@@ -38,10 +38,32 @@ const MAX_ROWS = 5000;
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 const PREVIEW_ROWS = 5;
 
-GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/legacy/build/pdf.worker.min.js",
-  import.meta.url
-).toString();
+let papaModulePromise: Promise<typeof import("papaparse")> | null = null;
+let jsZipModulePromise: Promise<unknown> | null = null;
+let pdfModulePromise: Promise<typeof import("pdfjs-dist/legacy/build/pdf")> | null = null;
+let xlsxModulePromise: Promise<typeof import("xlsx")> | null = null;
+
+const loadPapaModule = async () => {
+  papaModulePromise ??= import("papaparse");
+  return papaModulePromise;
+};
+
+const loadJsZipModule = async () => {
+  jsZipModulePromise ??= import("jszip");
+  return jsZipModulePromise;
+};
+
+const loadPdfModule = async () => {
+  pdfModulePromise ??= import("pdfjs-dist/legacy/build/pdf");
+  const pdfModule = await pdfModulePromise;
+  pdfModule.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+  return pdfModule;
+};
+
+const loadXlsxModule = async () => {
+  xlsxModulePromise ??= import("xlsx");
+  return xlsxModulePromise;
+};
 
 const normalizeKey = (value: string) =>
   value
@@ -85,6 +107,33 @@ const similarity = (a: string, b: string) => {
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 const phonePattern = /^\+?[0-9\-().\s]{7,20}$/;
+
+const buildNotesConfig = (moduleKey: string): ModuleConfig | null => {
+  if (moduleKey !== "leads") return null;
+
+  return {
+    endpoint: "",
+    fields: [
+      { key: "title", label: "Title" },
+      { key: "note", label: "Note", required: true },
+    ],
+    aliasDictionary: {
+      note: "note",
+      notes: "note",
+      content: "note",
+      body: "note",
+      description: "note",
+      title: "title",
+      subject: "title",
+      heading: "title",
+    },
+    emailFields: new Set<string>(),
+    phoneFields: new Set<string>(),
+    numberFields: new Set<string>(),
+    integerFields: new Set<string>(),
+    dateFields: new Set<string>(),
+  };
+};
 
 const buildModuleConfig = (moduleKey: string): ModuleConfig | null => {
   if (moduleKey === "leads") {
@@ -503,7 +552,7 @@ type ImportErrorItem = {
   errors?: Record<string, unknown>;
 };
 
-const SUPPORTED_EXTENSIONS = ["csv", "xml", "docx", "pdf", "xlsx"] as const;
+const SUPPORTED_EXTENSIONS = ["csv", "xml", "docx", "pdf", "xlsx", "txt"] as const;
 
 const getFileExtension = (file: File) => file.name.split(".").pop()?.toLowerCase() ?? "";
 
@@ -605,6 +654,9 @@ const parseXmlRecords = (text: string): ParsedFile => {
 
 const extractDocxText = async (file: File) => {
   const buffer = await file.arrayBuffer();
+  const jsZipModule = await loadJsZipModule();
+  const JSZip = (jsZipModule as { default?: { loadAsync: (data: ArrayBuffer) => Promise<any> } }).default
+    ?? (jsZipModule as { loadAsync: (data: ArrayBuffer) => Promise<any> });
   const zip = await JSZip.loadAsync(buffer);
   const documentFile = zip.file("word/document.xml");
   if (!documentFile) {
@@ -633,6 +685,7 @@ const extractDocxText = async (file: File) => {
 
 const extractPdfText = async (file: File) => {
   const arrayBuffer = await file.arrayBuffer();
+  const { getDocument } = await loadPdfModule();
   const loadingTask = getDocument({ data: arrayBuffer });
   const pdf = await loadingTask.promise;
   const textChunks: string[] = [];
@@ -654,6 +707,7 @@ const extractPdfText = async (file: File) => {
 
 const parseCsvFile = async (file: File): Promise<ParsedFile> => {
   const content = await file.text();
+  const Papa = await loadPapaModule();
   const parsed = Papa.parse<Record<string, unknown>>(content, {
     header: true,
     skipEmptyLines: "greedy",
@@ -677,6 +731,7 @@ const parseCsvFile = async (file: File): Promise<ParsedFile> => {
 
 const parseXlsxFile = async (file: File): Promise<ParsedFile> => {
   const buffer = await file.arrayBuffer();
+  const XLSX = await loadXlsxModule();
   const workbook = XLSX.read(buffer, { type: "array" });
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) {
@@ -701,8 +756,12 @@ const parseXlsxFile = async (file: File): Promise<ParsedFile> => {
 
   const rows = rawRows
     .slice(1)
-    .map((row) => {
-      const cells = Array.isArray(row) ? row : Object.values(row);
+    .map((row: unknown) => {
+      const cells = Array.isArray(row)
+        ? row
+        : row && typeof row === "object"
+          ? Object.values(row)
+          : [];
       const record: Record<string, unknown> = {};
       headers.forEach((header, index) => {
         const cell = cells[index];
@@ -719,6 +778,18 @@ const parseXlsxFile = async (file: File): Promise<ParsedFile> => {
   }
 
   return { headers, rows };
+};
+
+const extractRawTextFromFile = async (file: File): Promise<string> => {
+  const ext = getFileExtension(file);
+  switch (ext) {
+    case "docx":
+      return extractDocxText(file);
+    case "pdf":
+      return extractPdfText(file);
+    default:
+      return file.text();
+  }
 };
 
 const parseFileByExtension = async (file: File): Promise<ParsedFile> => {
@@ -740,6 +811,8 @@ const parseFileByExtension = async (file: File): Promise<ParsedFile> => {
       return parseTextRows(await extractPdfText(file));
     case "xlsx":
       return parseXlsxFile(file);
+    case "txt":
+      return parseTextRows(await file.text());
     default:
       throw new Error("Unsupported file format.");
   }
@@ -750,6 +823,7 @@ export default function CRMImportPage({
   moduleLabel,
   mode,
   backPath,
+  initialTargetRecordId,
 }: CRMImportPageProps) {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -762,17 +836,75 @@ export default function CRMImportPage({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [importSummary, setImportSummary] = useState<Record<string, unknown> | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [leadOptions, setLeadOptions] = useState<LeadRecord[]>([]);
+  const [leadSearch, setLeadSearch] = useState("");
+  const [selectedLeadId, setSelectedLeadId] = useState(initialTargetRecordId ?? "");
+  const [leadOptionsLoading, setLeadOptionsLoading] = useState(false);
+  const [noteText, setNoteText] = useState("");
 
   const moduleKey = useMemo(
     () => backPath.replace("/", "").toLowerCase(),
     [backPath]
   );
 
-  const moduleConfig = useMemo(() => buildModuleConfig(moduleKey), [moduleKey]);
+  const isNotesMode = mode === "notes";
+
+  const moduleConfig = useMemo(
+    () => (isNotesMode ? buildNotesConfig(moduleKey) : buildModuleConfig(moduleKey)),
+    [isNotesMode, moduleKey]
+  );
 
   const fieldOptions = useMemo(() => moduleConfig?.fields ?? [], [moduleConfig]);
 
   const mappedFieldKeys = useMemo(() => new Set(Object.values(mapping).filter(Boolean)), [mapping]);
+
+  useEffect(() => {
+    if (!isNotesMode || moduleKey !== "leads") return;
+
+    let cancelled = false;
+    const loadLeadOptions = async () => {
+      try {
+        setLeadOptionsLoading(true);
+        const records = await getLeads({ pageSize: 200, maxPages: 5, cacheTtlMs: 60_000 });
+        if (!cancelled) {
+          setLeadOptions(records);
+          if (initialTargetRecordId && records.some((record) => record.id === initialTargetRecordId)) {
+            setSelectedLeadId(initialTargetRecordId);
+          }
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setErrorMsg(error instanceof Error ? error.message : "Failed to load leads.");
+        }
+      } finally {
+        if (!cancelled) {
+          setLeadOptionsLoading(false);
+        }
+      }
+    };
+
+    void loadLeadOptions();
+    return () => {
+      cancelled = true;
+    };
+  }, [initialTargetRecordId, isNotesMode, moduleKey]);
+
+  const filteredLeadOptions = useMemo(() => {
+    if (!leadSearch.trim()) return leadOptions.slice(0, 12);
+    const query = leadSearch.trim().toLowerCase();
+    return leadOptions
+      .filter((lead) =>
+        [lead.leadName, lead.company, lead.email]
+          .filter(Boolean)
+          .some((value) => value.toLowerCase().includes(query))
+      )
+      .slice(0, 12);
+  }, [leadOptions, leadSearch]);
+
+  const selectedLead = useMemo(
+    () => leadOptions.find((lead) => lead.id === selectedLeadId) ?? null,
+    [leadOptions, selectedLeadId]
+  );
 
   const mapHeaderToField = (header: string) => {
     if (!moduleConfig) return "";
@@ -848,25 +980,36 @@ export default function CRMImportPage({
 
     setIsProcessing(true);
     try {
-      const parsedFile = await parseFileByExtension(file);
-      const parsedHeaders = parsedFile.headers;
-      const parsedRows = parsedFile.rows;
+      if (isNotesMode) {
+        const rawText = await extractRawTextFromFile(file);
+        if (!rawText.trim()) {
+          throw new Error("The file appears to be empty.");
+        }
+        setSelectedFile(file);
+        setNoteText(rawText.trim());
+        setStep(2);
+        setSuccessMsg("File uploaded successfully.");
+      } else {
+        const parsedFile = await parseFileByExtension(file);
+        const parsedHeaders = parsedFile.headers;
+        const parsedRows = parsedFile.rows;
 
-      if (parsedRows.length > MAX_ROWS) {
-        throw new Error(`File exceeds the limit of ${MAX_ROWS} rows.`);
+        if (parsedRows.length > MAX_ROWS) {
+          throw new Error(`File exceeds the limit of ${MAX_ROWS} rows.`);
+        }
+
+        const initialMapping: Record<string, string> = {};
+        parsedHeaders.forEach((header) => {
+          initialMapping[header] = mapHeaderToField(header);
+        });
+
+        setSelectedFile(file);
+        setHeaders(parsedHeaders);
+        setRows(parsedRows);
+        setMapping(initialMapping);
+        setStep(2);
+        setSuccessMsg("File uploaded successfully.");
       }
-
-      const initialMapping: Record<string, string> = {};
-      parsedHeaders.forEach((header) => {
-        initialMapping[header] = mapHeaderToField(header);
-      });
-
-      setSelectedFile(file);
-      setHeaders(parsedHeaders);
-      setRows(parsedRows);
-      setMapping(initialMapping);
-      setStep(2);
-      setSuccessMsg("File uploaded successfully.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to read file.";
       setErrorMsg(message);
@@ -1001,11 +1144,52 @@ export default function CRMImportPage({
     setIsProcessing(true);
 
     try {
+      if (isNotesMode) {
+        if (moduleKey !== "leads") {
+          throw new Error("Notes import is currently available only for leads.");
+        }
+        if (!selectedLeadId) {
+          throw new Error("Please choose which lead should receive these notes.");
+        }
+        if (!noteText.trim()) {
+          throw new Error("Note content is empty.");
+        }
+
+        let imported = 0;
+        const errors: ImportErrorItem[] = [];
+
+        try {
+          await addLeadNote(selectedLeadId, noteText.trim());
+          imported = 1;
+        } catch (error) {
+          errors.push({
+            row: 1,
+            errors: { note: error instanceof Error ? error.message : "Failed to import note." },
+          });
+        }
+
+        setImportSummary({
+          total: 1,
+          imported,
+          skipped: 0,
+          errors: errors.length,
+          errorDetails: errors,
+          targetRecordName: selectedLead?.leadName ?? "Selected lead",
+        });
+
+        setStep(4);
+        window.dispatchEvent(
+          new CustomEvent("crm:imported", {
+            detail: { module: moduleKey, recordId: selectedLeadId, importType: "notes" },
+          })
+        );
+        return;
+      }
+
       const records = buildRecords();
       if (records.length === 0) {
         throw new Error("No valid records found.");
       }
-
       if (records.length > MAX_ROWS) {
         throw new Error(`CSV exceeds the limit of ${MAX_ROWS} rows.`);
       }
@@ -1123,6 +1307,77 @@ export default function CRMImportPage({
               </div>
             )}
 
+            {isNotesMode && moduleKey === "leads" && (
+              <div className="mb-6 rounded-[14px] border border-[#d6def2] bg-white p-5 shadow-sm">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <p className="text-[15px] font-semibold text-[#1f2d3d]">Choose the lead for these imported notes</p>
+                    <p className="mt-1 text-[13px] text-slate-500">
+                      Every imported row will be attached to the lead you select here.
+                    </p>
+                  </div>
+                  {selectedLead ? (
+                    <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[12px] font-medium text-emerald-700">
+                      <CheckCircle2 size={14} />
+                      {selectedLead.leadName}
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="mt-4 rounded-[12px] border border-slate-200 bg-slate-50/80 p-4">
+                  <label className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    Search Lead
+                  </label>
+                  <div className="flex items-center gap-2 rounded-[10px] border border-slate-200 bg-white px-3 py-2">
+                    <Search size={16} className="text-slate-400" />
+                    <input
+                      value={leadSearch}
+                      onChange={(e) => setLeadSearch(e.target.value)}
+                      placeholder="Search by name, company, or email"
+                      className="w-full bg-transparent text-sm text-slate-700 outline-none"
+                    />
+                  </div>
+
+                  <div className="mt-3 grid gap-2 md:grid-cols-2">
+                    {leadOptionsLoading ? (
+                      <div className="rounded-[10px] border border-slate-200 bg-white px-3 py-3 text-sm text-slate-500">
+                        Loading leads...
+                      </div>
+                    ) : filteredLeadOptions.length > 0 ? (
+                      filteredLeadOptions.map((lead) => {
+                        const isSelected = lead.id === selectedLeadId;
+                        return (
+                          <button
+                            key={lead.id}
+                            type="button"
+                            onClick={() => setSelectedLeadId(lead.id)}
+                            className={`rounded-[12px] border px-4 py-3 text-left transition ${
+                              isSelected
+                                ? "border-blue-500 bg-blue-50 shadow-sm"
+                                : "border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50/40"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-slate-800">{lead.leadName}</p>
+                                <p className="mt-1 truncate text-xs text-slate-500">{lead.company || "No company"}</p>
+                                <p className="mt-1 truncate text-xs text-slate-400">{lead.email || "No email"}</p>
+                              </div>
+                              {isSelected ? <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-blue-600" /> : null}
+                            </div>
+                          </button>
+                        );
+                      })
+                    ) : (
+                      <div className="rounded-[10px] border border-dashed border-slate-300 bg-white px-3 py-3 text-sm text-slate-500">
+                        No leads matched your search.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {step === 1 && (
               <div
                 className="rounded-[8px] border border-dashed border-[#cfd7e6] bg-white px-8 py-10 text-center"
@@ -1133,7 +1388,9 @@ export default function CRMImportPage({
                   <FileText size={20} />
                 </div>
                 <p className="mb-2 text-[14px] text-slate-600">
-                  Upload CSV, XML, DOCX, XLSX, or PDF file (max 10MB)
+                  {isNotesMode
+                    ? "Upload TXT, DOCX, or PDF file (max 10MB)"
+                    : "Upload CSV, XML, DOCX, XLSX, PDF, or TXT file (max 10MB)"}
                 </p>
                 <p className="mb-3 text-[13px] text-slate-500">Drag & drop or</p>
                 <button
@@ -1148,7 +1405,7 @@ export default function CRMImportPage({
                   ref={fileInputRef}
                   type="file"
                   className="hidden"
-                  accept=".csv,.xml,.docx,.xlsx,.pdf"
+                  accept=".csv,.xml,.docx,.xlsx,.pdf,.txt"
                   onChange={handleFileChange}
                 />
                 {selectedFile && (
@@ -1162,7 +1419,39 @@ export default function CRMImportPage({
               </div>
             )}
 
-            {step === 2 && (
+            {step === 2 && isNotesMode && (
+              <div className="rounded-[8px] border border-[#e2e8f0] bg-white p-6">
+                <h3 className="mb-1 text-[15px] font-semibold text-slate-700">Note Preview</h3>
+                <p className="mb-4 text-[13px] text-slate-500">
+                  Review the content below. Edit if needed, then click Import.
+                </p>
+                <textarea
+                  className="w-full rounded-[6px] border border-[#cfd7e6] bg-slate-50 p-3 text-[13px] text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  rows={14}
+                  value={noteText}
+                  onChange={(e) => setNoteText(e.target.value)}
+                />
+                <div className="mt-6 flex justify-between">
+                  <button
+                    type="button"
+                    className="rounded-[6px] border border-[#cfd7e6] bg-white px-6 py-2 text-[13px] text-slate-600"
+                    onClick={() => setStep(1)}
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-[6px] bg-[#4d76ff] px-6 py-2 text-[13px] font-medium text-white disabled:opacity-70"
+                    disabled={isProcessing || !noteText.trim()}
+                    onClick={handleImport}
+                  >
+                    {isProcessing ? "Importing..." : "Import"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {step === 2 && !isNotesMode && (
               <div className="rounded-[8px] border border-[#e2e8f0] bg-white p-6">
                 <h3 className="mb-4 text-[15px] font-semibold text-slate-700">
                   Field Mapping
@@ -1289,6 +1578,12 @@ export default function CRMImportPage({
                 </h3>
                 {importSummary ? (
                   <div className="space-y-5">
+                    {"targetRecordName" in importSummary ? (
+                      <div className="rounded-[8px] border border-blue-100 bg-blue-50 px-4 py-3 text-[13px] text-blue-700">
+                        Notes were imported into{" "}
+                        <span className="font-semibold">{String(importSummary.targetRecordName ?? "")}</span>.
+                      </div>
+                    ) : null}
                     <div className="grid grid-cols-2 gap-4 text-[13px] text-slate-700">
                       <div>Total Records: {String(importSummary.total ?? 0)}</div>
                       <div>Imported: {String(importSummary.imported ?? 0)}</div>
@@ -1332,9 +1627,9 @@ export default function CRMImportPage({
               </div>
             )}
 
-            {mode !== "module" && (
+            {mode !== "module" && moduleKey !== "leads" && (
               <div className="mt-6 text-[12px] text-slate-500">
-                Notes import is not supported in this flow.
+                Notes import is currently available only for leads.
               </div>
             )}
 

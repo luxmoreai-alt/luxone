@@ -169,6 +169,7 @@ class Meeting(models.Model):
     start_date = models.DateTimeField()
     end_date = models.DateTimeField(null=True, blank=True)
     location = models.CharField(max_length=255, blank=True)
+    meeting_link = models.URLField(max_length=500, blank=True, null=True)
     host = models.CharField(max_length=255, blank=True)
     participants = models.JSONField(default=list, blank=True)
     related_to = models.CharField(max_length=32, blank=True, default="None")

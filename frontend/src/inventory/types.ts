@@ -73,6 +73,15 @@ export type InventoryBaseDetail = {
   relatedSummary?: Record<string, number>;
 };
 
+export type InventoryRelatedListItem = {
+  id: string;
+  label: string;
+  meta?: string;
+  createdAt?: string;
+  route?: string;
+  kind?: "appointment" | "job-sheet";
+};
+
 export type InventoryRelatedData = {
   notes: Note[];
   openActivities: Activity[];
@@ -80,21 +89,22 @@ export type InventoryRelatedData = {
   attachments: Attachment[];
   emails: EmailRecord[];
   connectedRecords: ConnectedRecord[];
-  products?: Array<{ id: string; label: string; meta?: string }>;
-  vendors?: Array<{ id: string; label: string; meta?: string }>;
-  priceBooks?: Array<{ id: string; label: string; meta?: string }>;
-  quotes?: Array<{ id: string; label: string; meta?: string }>;
-  salesOrders?: Array<{ id: string; label: string; meta?: string }>;
-  purchaseOrders?: Array<{ id: string; label: string; meta?: string }>;
-  invoices?: Array<{ id: string; label: string; meta?: string }>;
-  contacts?: Array<{ id: string; label: string; meta?: string }>;
-  accounts?: Array<{ id: string; label: string; meta?: string }>;
-  deals?: Array<{ id: string; label: string; meta?: string }>;
-  leads?: Array<{ id: string; label: string; meta?: string }>;
-  cases?: Array<{ id: string; label: string; meta?: string }>;
-  solutions?: Array<{ id: string; label: string; meta?: string }>;
-  links?: Array<{ id: string; label: string; meta?: string }>;
-  cadences?: Array<{ id: string; label: string; meta?: string }>;
+  services?: InventoryRelatedListItem[];
+  products?: InventoryRelatedListItem[];
+  vendors?: InventoryRelatedListItem[];
+  priceBooks?: InventoryRelatedListItem[];
+  quotes?: InventoryRelatedListItem[];
+  salesOrders?: InventoryRelatedListItem[];
+  purchaseOrders?: InventoryRelatedListItem[];
+  invoices?: InventoryRelatedListItem[];
+  contacts?: InventoryRelatedListItem[];
+  accounts?: InventoryRelatedListItem[];
+  deals?: InventoryRelatedListItem[];
+  leads?: InventoryRelatedListItem[];
+  cases?: InventoryRelatedListItem[];
+  solutions?: InventoryRelatedListItem[];
+  links?: InventoryRelatedListItem[];
+  cadences?: InventoryRelatedListItem[];
 };
 
 export type InventoryDetailResponse = InventoryBaseDetail &

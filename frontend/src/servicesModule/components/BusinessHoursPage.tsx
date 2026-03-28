@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import CRMSectionCard from "../../components/crm/CRMSectionCard";
-import { deleteBusinessHours, listBusinessHours, setDefaultBusinessHours } from "../api";
+import { deleteBusinessHours, listAppointments, listBusinessHours, listServices, setDefaultBusinessHours } from "../api";
 import type { BusinessHours } from "../types";
 import { businessHoursDayOrder } from "../config";
 import { formatTimeValue } from "../utils";
@@ -15,13 +15,27 @@ export default function BusinessHoursPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<BusinessHours | null>(null);
+  const [usageByHours, setUsageByHours] = useState<Record<string, { services: number; appointments: number }>>({});
   const isModalOpen = location.pathname.endsWith("/new") || Boolean(selected);
 
   const load = async () => {
     try {
       setLoading(true);
       setError(null);
-      setRows(await listBusinessHours());
+      const [businessHoursRows, services, appointments] = await Promise.all([
+        listBusinessHours(),
+        listServices(),
+        listAppointments(),
+      ]);
+      const usage = businessHoursRows.reduce<Record<string, { services: number; appointments: number }>>((acc, row) => {
+        acc[row.id] = {
+          services: services.filter((service) => service.businessHours === row.id).length,
+          appointments: appointments.filter((appointment) => appointment.businessHoursName === row.name).length,
+        };
+        return acc;
+      }, {});
+      setRows(businessHoursRows);
+      setUsageByHours(usage);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load business hours.");
     } finally {
@@ -79,6 +93,16 @@ export default function BusinessHoursPage() {
             >
               <div className="space-y-3">
                 <div className="text-sm text-slate-600">{row.timezone}</div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                    <div className="text-xs uppercase tracking-wide text-slate-500">Linked Services</div>
+                    <div className="mt-1 text-lg font-semibold text-slate-900">{usageByHours[row.id]?.services || 0}</div>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                    <div className="text-xs uppercase tracking-wide text-slate-500">Appointments Using This Schedule</div>
+                    <div className="mt-1 text-lg font-semibold text-slate-900">{usageByHours[row.id]?.appointments || 0}</div>
+                  </div>
+                </div>
                 <div className="space-y-2">
                   {businessHoursDayOrder.map((day) => (
                     <div key={day} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm">

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import { apiRequest } from "../../api/client";
 import type { CreateProjectPayload, Project } from "./types";
@@ -10,6 +10,9 @@ const emptyForm: CreateProjectPayload = {
   account_name: "",
   contact_name: "",
   deal_name: "",
+  source_module: "",
+  source_record_id: "",
+  source_record_label: "",
   owner: "",
   status: "Planning",
   priority: "Medium",
@@ -22,6 +25,7 @@ const emptyForm: CreateProjectPayload = {
 export default function CreateProjectPage() {
   const navigate = useNavigate();
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const isEdit = Boolean(id);
 
   const [loading, setLoading] = useState(false);
@@ -32,9 +36,30 @@ export default function CreateProjectPage() {
   useEffect(() => {
     if (isEdit) return;
     apiRequest<{ project_code: string }>("/projects/next-code/")
-      .then((data) => setFormData((prev) => ({ ...prev, project_code: data.project_code })))
+      .then((data) =>
+        setFormData((prev) => ({
+          ...prev,
+          project_code: data.project_code,
+          name: prev.name || searchParams.get("name") || "",
+          account_name: prev.account_name || searchParams.get("accountName") || "",
+          contact_name: prev.contact_name || searchParams.get("contactName") || "",
+          deal_name: prev.deal_name || searchParams.get("dealName") || "",
+          source_module: prev.source_module || searchParams.get("sourceModule") || "",
+          source_record_id:
+            prev.source_record_id ||
+            (searchParams.get("sourceId") ? Number(searchParams.get("sourceId")) : ""),
+          source_record_label: prev.source_record_label || searchParams.get("sourceLabel") || searchParams.get("name") || "",
+          owner: prev.owner || searchParams.get("owner") || "",
+          due_date: prev.due_date || searchParams.get("dueDate") || "",
+          description:
+            prev.description ||
+            (searchParams.get("sourceModule")
+              ? `Created from ${searchParams.get("sourceModule")} #${searchParams.get("sourceId") || ""}`.trim()
+              : ""),
+        }))
+      )
       .catch(() => {});
-  }, [isEdit]);
+  }, [isEdit, searchParams]);
 
   useEffect(() => {
     if (!isEdit) return;
@@ -47,6 +72,9 @@ export default function CreateProjectPage() {
           account_name: project.account_name ?? "",
           contact_name: project.contact_name ?? "",
           deal_name: project.deal_name ?? "",
+          source_module: project.source_module ?? "",
+          source_record_id: project.source_record_id ?? "",
+          source_record_label: project.source_record_label ?? "",
           owner: project.owner ?? "",
           status: project.status,
           priority: project.priority,
@@ -82,22 +110,27 @@ export default function CreateProjectPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.project_code || !formData.name) {
-      setError("Project code and project name are required");
+      setError("Project name is required");
       return;
     }
+    const payload = {
+      ...formData,
+      source_record_id: formData.source_record_id === "" ? null : Number(formData.source_record_id),
+      estimated_hours: formData.estimated_hours === "" ? 0 : formData.estimated_hours,
+    };
     try {
       setLoading(true);
       setError(null);
       if (isEdit) {
         await apiRequest(`/projects/${id}/`, {
           method: "PATCH",
-          body: JSON.stringify(formData),
+          body: JSON.stringify(payload),
         });
         navigate(`/projects/${id}`);
       } else {
         const response = await apiRequest("/projects/", {
           method: "POST",
-          body: JSON.stringify(formData),
+          body: JSON.stringify(payload),
         });
         const created = response as { id: string | number };
         navigate(`/projects/${created.id}`);
@@ -130,7 +163,7 @@ export default function CreateProjectPage() {
             <p className="mt-1 text-sm text-slate-500">
               {isEdit
                 ? "Update the project details below."
-                : "Add a new project linked to account, contact, and deal."}
+                : "Add a new project with the core planning details."}
             </p>
           </div>
 
@@ -140,6 +173,13 @@ export default function CreateProjectPage() {
                 {error}
               </div>
             )}
+
+            {formData.source_module && formData.source_record_id ? (
+              <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                Linked source: {formData.source_module.replace(/-/g, " ")} #{formData.source_record_id}
+                {formData.source_record_label ? ` - ${formData.source_record_label}` : ""}
+              </div>
+            ) : null}
 
             <div className="grid gap-5 md:grid-cols-2">
               <FormField label="Project Code">
@@ -153,7 +193,7 @@ export default function CreateProjectPage() {
                   className={`w-full rounded-lg border px-3 py-2.5 text-sm outline-none ${
                     isEdit
                       ? "border-slate-300 focus:border-blue-500"
-                      : "border-slate-200 bg-slate-50 text-slate-500 cursor-default"
+                      : "cursor-default border-slate-200 bg-slate-50 text-slate-500"
                   }`}
                   required
                 />
@@ -171,46 +211,13 @@ export default function CreateProjectPage() {
                 />
               </FormField>
 
-              <FormField label="Account">
-                <input
-                  type="text"
-                  name="account_name"
-                  value={formData.account_name}
-                  onChange={handleChange}
-                  placeholder="Enter account name"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
-                />
-              </FormField>
-
-              <FormField label="Contact">
-                <input
-                  type="text"
-                  name="contact_name"
-                  value={formData.contact_name}
-                  onChange={handleChange}
-                  placeholder="Enter contact name"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
-                />
-              </FormField>
-
-              <FormField label="Deal">
-                <input
-                  type="text"
-                  name="deal_name"
-                  value={formData.deal_name}
-                  onChange={handleChange}
-                  placeholder="Enter deal name"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
-                />
-              </FormField>
-
-              <FormField label="Owner">
+              <FormField label="Assigned Manager">
                 <input
                   type="text"
                   name="owner"
                   value={formData.owner}
                   onChange={handleChange}
-                  placeholder="Enter owner name"
+                  placeholder="Enter assigned manager"
                   className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
                 />
               </FormField>
@@ -235,7 +242,7 @@ export default function CreateProjectPage() {
                   onChange={handleChange}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
                 >
-                  {["Low", "Medium", "High", "Critical"].map((p) => (
+                  {["Low", "Medium", "High"].map((p) => (
                     <option key={p} value={p}>{p}</option>
                   ))}
                 </select>
@@ -261,20 +268,30 @@ export default function CreateProjectPage() {
                 />
               </FormField>
 
-              <FormField label="Estimated Hours">
+              <FormField label="Source Module">
                 <input
-                  type="number"
-                  name="estimated_hours"
-                  value={formData.estimated_hours}
-                  onChange={handleChange}
-                  placeholder="120"
-                  min={0}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
+                  type="text"
+                  value={formData.source_module || ""}
+                  readOnly
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-500 outline-none"
+                />
+              </FormField>
+
+              <FormField label="Source Record">
+                <input
+                  type="text"
+                  value={
+                    formData.source_record_id
+                      ? `${formData.source_record_label || "Record"} (#${formData.source_record_id})`
+                      : ""
+                  }
+                  readOnly
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-500 outline-none"
                 />
               </FormField>
             </div>
 
-            <FormField label="Description">
+            <FormField label="Project Description">
               <textarea
                 name="description"
                 value={formData.description}

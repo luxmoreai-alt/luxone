@@ -354,6 +354,11 @@ class ContactLogCallSerializer(serializers.Serializer):
     call_outcome = serializers.CharField(max_length=255, required=False, allow_blank=True)
 
 
+class ContactMeetingSerializer(serializers.Serializer):
+    meeting_subject = serializers.CharField(max_length=255)
+    agenda = serializers.CharField(required=False, allow_blank=True)
+
+
 class ContactSendEmailSerializer(serializers.Serializer):
     subject = serializers.CharField(max_length=255)
     body = serializers.CharField()

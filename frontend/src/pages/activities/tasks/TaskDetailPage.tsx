@@ -103,7 +103,6 @@ export default function TaskDetailPage() {
       { label: "Priority", value: task.priority || "N/A" },
       { label: "Due date", value: formatDate(task.due_date) },
       { label: "Created", value: formatDate(task.created_at) },
-      { label: "Updated", value: formatDate(task.updated_at) },
     ];
   }, [task]);
 

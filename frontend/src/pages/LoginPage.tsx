@@ -5,6 +5,30 @@ import { getResolvedApiBaseUrl } from "../api/config";
 
 type Step = "login" | "forgot-email" | "forgot-otp" | "forgot-reset";
 
+function extractErrorMessage(value: unknown): string | null {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed || null;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const nested = extractErrorMessage(item);
+      if (nested) return nested;
+    }
+    return null;
+  }
+
+  if (value && typeof value === "object") {
+    for (const nestedValue of Object.values(value as Record<string, unknown>)) {
+      const nested = extractErrorMessage(nestedValue);
+      if (nested) return nested;
+    }
+  }
+
+  return null;
+}
+
 async function authPost<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${getResolvedApiBaseUrl()}${path}`, {
     method: "POST",
@@ -16,8 +40,9 @@ async function authPost<T>(path: string, body: unknown): Promise<T> {
   try { data = text ? JSON.parse(text) : null; } catch { data = text; }
   if (!res.ok) {
     const msg =
-      (data as { message?: string; detail?: string })?.message ||
-      (data as { detail?: string })?.detail ||
+      extractErrorMessage((data as { message?: unknown })?.message) ||
+      extractErrorMessage((data as { detail?: unknown })?.detail) ||
+      extractErrorMessage(data) ||
       `Request failed (${res.status})`;
     throw new Error(msg);
   }

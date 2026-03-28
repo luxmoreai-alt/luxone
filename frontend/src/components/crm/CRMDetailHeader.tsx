@@ -80,7 +80,7 @@ export default function CRMDetailHeader({
 
               {moreOpen && (
                 <div className="absolute right-0 z-30 mt-1 w-44 rounded-lg border border-slate-200 bg-white shadow-lg">
-                  {["Clone", "Delete"].map((item) => (
+                  {["Convert to Deal", "Clone", "Delete"].map((item) => (
                     <button
                       key={item}
                       type="button"
@@ -89,7 +89,7 @@ export default function CRMDetailHeader({
                         handleAction(item);
                       }}
                       className={`w-full px-4 py-2.5 text-left text-sm transition hover:bg-slate-50 ${
-                        item === "Delete" ? "text-red-600 hover:bg-red-50" : "text-slate-700"
+                        item === "Delete" ? "text-red-600 hover:bg-red-50" : item === "Convert to Deal" ? "text-blue-700 hover:bg-blue-50" : "text-slate-700"
                       }`}
                     >
                       {item}

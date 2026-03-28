@@ -158,6 +158,7 @@ export default function CreateMeetingPage() {
     description: "",
     meeting_venue: "In-office" as VenueType,
     location: "",
+    meeting_link: "",
     all_day: false,
     from_date: formatDateForInput(start),
     from_time: formatTimeForInput(start),
@@ -203,6 +204,7 @@ export default function CreateMeetingPage() {
           description: meeting.description ?? "",
           meeting_venue: meeting.meeting_venue ?? "In-office",
           location: meeting.location ?? "",
+          meeting_link: (meeting as any).meeting_link ?? "",
           all_day: Boolean(meeting.all_day),
           from_date: formatDateForInput(startDate),
           from_time: formatTimeForInput(startDate),
@@ -297,6 +299,7 @@ export default function CreateMeetingPage() {
       start_date: startDateTime,
       end_date: endDateTime,
       location: formData.location,
+      meeting_link: formData.meeting_venue === "Online" ? formData.meeting_link : "",
       status: formData.status,
       meeting_venue: formData.meeting_venue,
       all_day: formData.all_day,
@@ -392,6 +395,22 @@ export default function CreateMeetingPage() {
                     className="w-full border-0 border-b border-slate-300 bg-transparent px-0 py-1 text-[15px] text-slate-900 outline-none focus:border-blue-600"
                   />
                 </Field>
+
+                {formData.meeting_venue === "Online" && (
+                  <Field label="Meeting Link">
+                    <input
+                      type="url"
+                      name="meeting_link"
+                      value={formData.meeting_link}
+                      onChange={handleFieldChange}
+                      placeholder="https://meet.google.com/..."
+                      className="w-full border-0 border-b border-slate-300 bg-transparent px-0 py-1 text-[15px] text-slate-900 outline-none focus:border-blue-600"
+                    />
+                    <p className="mt-1 text-[12px] text-slate-400">
+                      This link will be emailed to all participants.
+                    </p>
+                  </Field>
+                )}
 
                 <Field label="All day">
                   <label className="inline-flex items-center">

@@ -265,6 +265,40 @@ class IntegrationLinkingTests(APITestCase):
         self.assertEqual(response.data[0]["body_text"], "Interested to buy crms software")
         self.assertEqual(response.data[0]["preview_text"], "Interested to buy crms software")
 
+    def test_unrelated_external_job_mail_does_not_auto_create_placeholder_lead(self):
+        before_count = Lead.objects.count()
+
+        message = create_synced_email_message(
+            provider_integration=self.provider,
+            payload={
+                "external_message_id": "gmail-job-junk-1",
+                "subject": "Hiring now: opportunities at Teamware Solutions and more",
+                "from_email": "student@internshala.com",
+                "to_emails": ["crm@zora.com"],
+                "body_text": "Explore internships and job openings curated for candidates.",
+            },
+            owner=self.user,
+        )
+
+        self.assertIsNone(message.lead_id)
+        self.assertEqual(Lead.objects.count(), before_count)
+
+    def test_relevant_outside_business_mail_can_auto_create_placeholder_lead(self):
+        message = create_synced_email_message(
+            provider_integration=self.provider,
+            payload={
+                "external_message_id": "gmail-new-lead-1",
+                "subject": "Need CRM pricing",
+                "from_email": "prospect@example.com",
+                "to_emails": ["crm@zora.com"],
+                "body_text": "Hi, I need CRM pricing for 15 users.",
+            },
+            owner=self.user,
+        )
+
+        self.assertIsNotNone(message.lead_id)
+        self.assertEqual(message.lead.email, "prospect@example.com")
+
     def test_contact_email_list_does_not_include_other_account_contact_emails(self):
         sibling_contact = Contact.objects.create(
             first_name="Kanmani",

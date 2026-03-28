@@ -66,11 +66,11 @@ class SupportCaseFilter(django_filters.FilterSet):
 
 
 class SupportSolutionFilter(django_filters.FilterSet):
-    account = django_filters.NumberFilter(field_name="linked_records__account_id")
-    contact = django_filters.NumberFilter(field_name="linked_records__contact_id")
+    account = django_filters.NumberFilter(method="filter_account")
+    contact = django_filters.NumberFilter(method="filter_contact")
     connected_to = django_filters.CharFilter(method="filter_connected_to")
     created_by = django_filters.NumberFilter(field_name="created_by_id")
-    deal = django_filters.NumberFilter(field_name="linked_records__deal_id")
+    deal = django_filters.NumberFilter(method="filter_deal")
     created_time = django_filters.DateFromToRangeFilter(field_name="created_at")
     last_activity_time = django_filters.DateFromToRangeFilter(field_name="last_activity_at")
     modified_by = django_filters.NumberFilter(field_name="updated_by_id")
@@ -81,6 +81,7 @@ class SupportSolutionFilter(django_filters.FilterSet):
     solution_number = django_filters.CharFilter(field_name="solution_number", lookup_expr="icontains")
     solution_owner = django_filters.NumberFilter(field_name="owner_id")
     solution_title = django_filters.CharFilter(field_name="solution_title", lookup_expr="icontains")
+    source_case = django_filters.NumberFilter(field_name="source_case_id")
     status = django_filters.CharFilter(field_name="status", lookup_expr="iexact")
     vendor = django_filters.NumberFilter(field_name="linked_records__vendor_id")
 
@@ -102,6 +103,7 @@ class SupportSolutionFilter(django_filters.FilterSet):
             "solution_number",
             "solution_owner",
             "solution_title",
+            "source_case",
             "status",
             "vendor",
         ]
@@ -118,4 +120,25 @@ class SupportSolutionFilter(django_filters.FilterSet):
             | Q(linked_records__vendor__vendor_name__icontains=value)
             | Q(linked_records__lead__first_name__icontains=value)
             | Q(linked_records__lead__last_name__icontains=value)
+        ).distinct()
+
+    def filter_account(self, queryset, name, value):
+        if not value:
+            return queryset
+        return queryset.filter(
+            Q(linked_records__account_id=value) | Q(source_case__account_id=value)
+        ).distinct()
+
+    def filter_contact(self, queryset, name, value):
+        if not value:
+            return queryset
+        return queryset.filter(
+            Q(linked_records__contact_id=value) | Q(source_case__related_contact_id=value)
+        ).distinct()
+
+    def filter_deal(self, queryset, name, value):
+        if not value:
+            return queryset
+        return queryset.filter(
+            Q(linked_records__deal_id=value) | Q(source_case__deal_id=value)
         ).distinct()

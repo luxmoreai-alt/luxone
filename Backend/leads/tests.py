@@ -5,6 +5,7 @@ from rest_framework.test import APITestCase
 from accounts.models import Account
 from contacts.models import Contact
 from deals.models import Deal
+from integrations.models import EmailProviderIntegration
 
 from .models import Lead
 
@@ -185,3 +186,51 @@ class LeadDetailActionsTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["detail"], "Account creation requires company.")
+
+    def test_list_hides_bare_email_generated_placeholder_leads(self):
+        placeholder = Lead.objects.create(
+            first_name="Newsletter",
+            last_name="Bot",
+            company="Email Inbox",
+            email="newsletter@example.com",
+            owner=self.user,
+            lead_source="Integration",
+            lead_status="New",
+        )
+        placeholder.integration_source_events.create(
+            source_type="email",
+            source_reference="msg-1",
+            payload={"subject": "Weekly newsletter"},
+            status="processed",
+        )
+
+        response = self.client.get("/api/leads")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        returned_ids = {item["id"] for item in response.data["results"]}
+        self.assertNotIn(placeholder.id, returned_ids)
+        self.assertIn(self.lead.id, returned_ids)
+
+    def test_list_keeps_enriched_integration_leads_visible(self):
+        lead = Lead.objects.create(
+            first_name="Prospect",
+            last_name="One",
+            company="Acme",
+            email="prospect@example.com",
+            owner=self.user,
+            lead_source="Integration",
+            lead_status="New",
+            phone="9999999999",
+        )
+        lead.integration_source_events.create(
+            source_type="email",
+            source_reference="msg-2",
+            payload={"subject": "Need CRM pricing"},
+            status="processed",
+        )
+
+        response = self.client.get("/api/leads")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        returned_ids = {item["id"] for item in response.data["results"]}
+        self.assertIn(lead.id, returned_ids)

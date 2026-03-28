@@ -49,10 +49,32 @@ type EmployeeInfo = {
   status_display?: string;
   is_active: boolean;
   must_change_password?: boolean;
+  manager?: number | null;
   manager_email: string | null;
-  organization_name: string | null;
   created_at?: string;
 };
+
+type UserRole = "admin" | "sub_admin" | "hr" | "manager" | "team_lead" | "employee";
+type UserDepartment = "sales" | "business_development" | "software_development" | "support" | "";
+type ManagerOption = { id: number; email: string; role: string; name?: string; department?: string };
+
+const ORGANIZATION_LABEL = "Zora Global AI Technologies";
+const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
+  { value: "admin", label: "Admin" },
+  { value: "sub_admin", label: "Sub Admin" },
+  { value: "hr", label: "HR" },
+  { value: "manager", label: "Manager" },
+  { value: "team_lead", label: "Team Lead" },
+  { value: "employee", label: "Employee" },
+];
+const DEPARTMENT_OPTIONS: { value: UserDepartment; label: string }[] = [
+  { value: "sales", label: "Sales" },
+  { value: "business_development", label: "Business Development" },
+  { value: "software_development", label: "Software Development" },
+  { value: "support", label: "Support" },
+];
+const inputCls =
+  "w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100";
 
 type ApiList<T> = T[] | { results?: T[]; data?: T[] };
 
@@ -78,6 +100,14 @@ function getLeadName(lead: Lead) {
 }
 
 const PAGE_SIZE = 8;
+
+function isAdminRole(role?: string | null) {
+  return (role || "").trim().toLowerCase() === "admin";
+}
+
+function isManagerRole(role?: string | null) {
+  return (role || "").trim().toLowerCase() === "manager";
+}
 
 function usePagination<T>(items: T[]) {
   const [page, setPage] = useState(1);
@@ -156,13 +186,30 @@ export default function EmployeeProfilePage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingLeads, setLoadingLeads] = useState(false);
+  const [loadingTasks, setLoadingTasks] = useState(false);
+  const [loadingMeetings, setLoadingMeetings] = useState(false);
 
   // Manager assignment state
-  const [managers, setManagers] = useState<{ id: number; email: string }[]>([]);
+  const [managers, setManagers] = useState<ManagerOption[]>([]);
   const [editingManager, setEditingManager] = useState(false);
   const [selectedManager, setSelectedManager] = useState("");
   const [savingManager, setSavingManager] = useState(false);
   const [managerError, setManagerError] = useState("");
+  const [editingDetails, setEditingDetails] = useState(false);
+  const [savingDetails, setSavingDetails] = useState(false);
+  const [detailsError, setDetailsError] = useState("");
+  const [editForm, setEditForm] = useState<{
+    name: string;
+    role: UserRole;
+    department: UserDepartment;
+    manager_id: string;
+  }>({
+    name: "",
+    role: "employee",
+    department: "",
+    manager_id: "",
+  });
 
   // Offboarding state
   const [offboardAction, setOffboardAction] = useState<"deactivate" | "reactivate" | "terminate" | null>(null);
@@ -179,38 +226,76 @@ export default function EmployeeProfilePage() {
     if (!id) return;
     let active = true;
     setLoading(true);
+    setLeads([]);
+    setTasks([]);
+    setMeetings([]);
 
-    const fetchAll = async () => {
-      try {
-        const [empRes, leadsRes, tasksRes, meetingsRes] = await Promise.allSettled([
-          apiRequest<EmployeeInfo>(`/auth/manage-users/${id}/`),
-          apiRequest<ApiList<Lead>>("/leads/", { query: { owner_id: id } }),
-          apiRequest<ApiList<Task>>("/tasks/", { query: { user_id: id } }),
-          apiRequest<ApiList<Meeting>>("/meetings/", { query: { owner_id: id } }),
-        ]);
-        if (!active) return;
-        if (empRes.status === "fulfilled") setEmployee(empRes.value);
-        if (leadsRes.status === "fulfilled") setLeads(extractList(leadsRes.value));
-        if (tasksRes.status === "fulfilled") setTasks(extractList(tasksRes.value));
-        if (meetingsRes.status === "fulfilled") setMeetings(extractList(meetingsRes.value));
-      } finally {
+    void apiRequest<EmployeeInfo>(`/auth/manage-users/${id}/`)
+      .then((data) => {
+        if (active) setEmployee(data);
+      })
+      .finally(() => {
         if (active) setLoading(false);
-      }
-    };
+      });
 
-    void fetchAll();
+    setLoadingLeads(true);
+    void apiRequest<ApiList<Lead>>("/leads/", { query: { owner_id: id } })
+      .then((data) => {
+        if (active) setLeads(extractList(data));
+      })
+      .catch(() => {
+        if (active) setLeads([]);
+      })
+      .finally(() => {
+        if (active) setLoadingLeads(false);
+      });
+
+    setLoadingTasks(true);
+    void apiRequest<ApiList<Task>>("/tasks/", { query: { user_id: id } })
+      .then((data) => {
+        if (active) setTasks(extractList(data));
+      })
+      .catch(() => {
+        if (active) setTasks([]);
+      })
+      .finally(() => {
+        if (active) setLoadingTasks(false);
+      });
+
+    setLoadingMeetings(true);
+    void apiRequest<ApiList<Meeting>>("/meetings/", { query: { owner_id: id } })
+      .then((data) => {
+        if (active) setMeetings(extractList(data));
+      })
+      .catch(() => {
+        if (active) setMeetings([]);
+      })
+      .finally(() => {
+        if (active) setLoadingMeetings(false);
+      });
+
     return () => { active = false; };
   }, [id]);
 
   // Fetch managers for admin reassignment
   useEffect(() => {
     if (!isAdmin) return;
-    apiRequest<{ id: number; email: string; role: string }[]>("/auth/manage-users/")
+    apiRequest<ManagerOption[]>("/auth/manage-users/")
       .then((data) => {
-        setManagers((Array.isArray(data) ? data : []).filter((u) => u.role === "manager"));
+        setManagers((Array.isArray(data) ? data : []).filter((u) => u.role === "manager" || u.role === "team_lead"));
       })
       .catch(() => {});
   }, [isAdmin]);
+
+  useEffect(() => {
+    if (!employee) return;
+    setEditForm({
+      name: employee.name || "",
+      role: (employee.role as UserRole) || "employee",
+      department: (employee.department as UserDepartment) || "",
+      manager_id: employee.manager ? String(employee.manager) : "",
+    });
+  }, [employee]);
 
   const handleAssignManager = async () => {
     if (!selectedManager || !id) return;
@@ -228,6 +313,30 @@ export default function EmployeeProfilePage() {
       setManagerError(err instanceof Error ? err.message : "Failed to assign.");
     } finally {
       setSavingManager(false);
+    }
+  };
+
+  const handleSaveDetails = async () => {
+    if (!id) return;
+    setSavingDetails(true);
+    setDetailsError("");
+    try {
+      const payload: Record<string, unknown> = {
+        name: editForm.name.trim(),
+        role: editForm.role,
+        department: editForm.role === "admin" ? "" : editForm.department,
+        manager: editForm.manager_id ? Number(editForm.manager_id) : null,
+      };
+      const updated = await apiRequest<EmployeeInfo>(`/auth/manage-users/${id}/`, {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      });
+      setEmployee(updated);
+      setEditingDetails(false);
+    } catch (err) {
+      setDetailsError(err instanceof Error ? err.message : "Failed to update details.");
+    } finally {
+      setSavingDetails(false);
     }
   };
 
@@ -286,6 +395,9 @@ export default function EmployeeProfilePage() {
     );
   }
 
+  const showDepartment = !isAdminRole(employee.role);
+  const showManagerField = Boolean(employee.manager_email) || !isManagerRole(employee.role);
+
   const statusBanner = employee.status === "terminated"
     ? { bg: "bg-red-50 border-red-200", icon: <Trash2 size={14} className="text-red-500 shrink-0" />, text: "text-red-700", label: "This account has been terminated. The user cannot log in." }
     : employee.status === "inactive"
@@ -326,9 +438,10 @@ export default function EmployeeProfilePage() {
               <h1 className="text-xl font-bold text-slate-900">{employee.name || employee.email}</h1>
               {employee.name && <p className="text-xs text-slate-400">{employee.email}</p>}
             </div>
-            {/* Offboarding actions (admin only) */}
-            {isAdmin && (
-              <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Offboarding actions (admin only) */}
+              {isAdmin && (
+                <>
                 {employee.status === "active" && (
                   <>
                     <button
@@ -365,19 +478,20 @@ export default function EmployeeProfilePage() {
                     <Trash2 size={13} /> Delete User
                   </button>
                 )}
-              </div>
-            )}
+                </>
+              )}
+            </div>
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-3 text-xs text-slate-500">
             <span className="capitalize rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5 font-semibold">
               {employee.role_display || employee.role}
             </span>
-            {employee.department && (
+            {showDepartment && employee.department && (
               <span className="rounded-full bg-violet-100 text-violet-700 px-2 py-0.5 font-semibold">
                 {employee.department_display || employee.department}
               </span>
             )}
-            {employee.organization_name && <span>{employee.organization_name}</span>}
+            <span>{ORGANIZATION_LABEL}</span>
             {employee.status && (
               <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold ${
                 employee.status === "active" ? "bg-green-100 text-green-700"
@@ -395,7 +509,7 @@ export default function EmployeeProfilePage() {
           </div>
 
           {/* Manager info + reassign (admin only) */}
-          {isAdmin && (
+          {isAdmin && showManagerField && (
             <div className="mt-3">
               {!editingManager ? (
                 <div className="flex items-center gap-2">
@@ -465,45 +579,168 @@ export default function EmployeeProfilePage() {
 
       {/* User details card */}
       <div className="mb-6 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div className="border-b border-slate-100 px-5 py-3">
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
           <h2 className="text-sm font-semibold text-slate-800">User Details</h2>
+          {isAdmin && (
+            !editingDetails ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingDetails(true);
+                  setDetailsError("");
+                }}
+                className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-violet-100 hover:text-violet-700"
+              >
+                <Pencil size={12} />
+                Edit Details
+              </button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleSaveDetails()}
+                  disabled={savingDetails}
+                  className="inline-flex items-center gap-1 rounded-md bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-violet-700 disabled:opacity-60"
+                >
+                  {savingDetails ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                  {savingDetails ? "Saving..." : "Save"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingDetails(false);
+                    setDetailsError("");
+                    setEditForm({
+                      name: employee.name || "",
+                      role: (employee.role as UserRole) || "employee",
+                      department: (employee.department as UserDepartment) || "",
+                      manager_id: employee.manager ? String(employee.manager) : "",
+                    });
+                  }}
+                  className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  <X size={12} />
+                  Cancel
+                </button>
+              </div>
+            )
+          )}
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-0 divide-y sm:divide-y-0 sm:divide-x divide-slate-100">
-          {[
-            { label: "Full Name", value: employee.name || "—" },
-            { label: "Email", value: employee.email },
-            { label: "Role", value: employee.role_display || employee.role || "—" },
-            { label: "Department", value: employee.department_display || employee.department || "—" },
-            { label: "Organization", value: employee.organization_name || "—" },
-            { label: "Manager", value: employee.manager_email || "Unassigned" },
-            {
-              label: "Status",
-              value: employee.status_display || employee.status || "—",
-              badge: employee.status === "active"
-                ? "bg-green-100 text-green-700"
-                : employee.status === "inactive"
-                ? "bg-amber-100 text-amber-700"
-                : employee.status === "terminated"
-                ? "bg-red-100 text-red-700"
-                : undefined,
-            },
-            {
-              label: "Account Active",
-              value: employee.is_active ? "Yes" : "No",
-              badge: employee.is_active ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700",
-            },
-            { label: "Member Since", value: formatDate(employee.created_at) },
-          ].map(({ label, value, badge }) => (
-            <div key={label} className="px-5 py-4">
-              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
-              {badge ? (
-                <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${badge}`}>{value}</span>
-              ) : (
-                <p className="text-sm font-medium text-slate-800 break-words">{value}</p>
+        {editingDetails ? (
+          <div className="space-y-4 px-5 py-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">Full Name</label>
+                <input
+                  type="text"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">Email</label>
+                <input type="text" value={employee.email} disabled className={`${inputCls} bg-slate-50 text-slate-500`} />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">Role</label>
+                <select
+                  value={editForm.role}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({
+                      ...prev,
+                      role: e.target.value as UserRole,
+                      department: e.target.value === "admin" ? "" : prev.department,
+                    }))
+                  }
+                  className={inputCls}
+                >
+                  {ROLE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {editForm.role !== "admin" && (
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Department</label>
+                  <select
+                    value={editForm.department}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, department: e.target.value as UserDepartment }))}
+                    className={inputCls}
+                  >
+                    <option value="">- None -</option>
+                    {DEPARTMENT_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {editForm.role !== "admin" && (
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Manager / Team Lead</label>
+                  <select
+                    value={editForm.manager_id}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, manager_id: e.target.value }))}
+                    className={inputCls}
+                  >
+                    <option value="">- Unassigned -</option>
+                    {managers
+                      .filter((mgr) => mgr.id !== employee.id)
+                      .map((mgr) => (
+                        <option key={mgr.id} value={mgr.id}>
+                          {mgr.name || mgr.email}
+                        </option>
+                      ))}
+                  </select>
+                </div>
               )}
             </div>
-          ))}
-        </div>
+            {detailsError && (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{detailsError}</p>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-0 divide-y divide-slate-100 sm:grid-cols-2 sm:divide-x sm:divide-y-0 lg:grid-cols-3">
+            {[
+              { label: "Full Name", value: employee.name || "???" },
+              { label: "Email", value: employee.email },
+              { label: "Role", value: employee.role_display || employee.role || "N/A" },
+              ...(showDepartment ? [{ label: "Department", value: employee.department_display || employee.department || "N/A" }] : []),
+              { label: "Organization", value: ORGANIZATION_LABEL },
+              ...(showManagerField ? [{ label: "Manager", value: employee.manager_email || "Unassigned" }] : []),
+              {
+                label: "Status",
+                value: employee.status_display || employee.status || "???",
+                badge: employee.status === "active"
+                  ? "bg-green-100 text-green-700"
+                  : employee.status === "inactive"
+                  ? "bg-amber-100 text-amber-700"
+                  : employee.status === "terminated"
+                  ? "bg-red-100 text-red-700"
+                  : undefined,
+              },
+              {
+                label: "Account Active",
+                value: employee.is_active ? "Yes" : "No",
+                badge: employee.is_active ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700",
+              },
+              { label: "Member Since", value: formatDate(employee.created_at) },
+            ].map(({ label, value, badge }) => (
+              <div key={label} className="px-5 py-4">
+                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+                {badge ? (
+                  <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${badge}`}>{value}</span>
+                ) : (
+                  <p className="text-sm font-medium text-slate-800 break-words">{value}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Stat summary */}
@@ -545,7 +782,9 @@ export default function EmployeeProfilePage() {
             onPrev={() => leadPag.setPage((p) => Math.max(1, p - 1))}
             onNext={() => leadPag.setPage((p) => Math.min(leadPag.totalPages, p + 1))}
           />
-          {leadPag.total === 0 ? (
+          {loadingLeads ? (
+            <p className="px-5 py-8 text-center text-sm text-slate-400">Loading leads...</p>
+          ) : leadPag.total === 0 ? (
             <p className="px-5 py-8 text-center text-sm text-slate-400">No leads found.</p>
           ) : (
             <table className="w-full text-sm">
@@ -584,7 +823,9 @@ export default function EmployeeProfilePage() {
             onPrev={() => taskPag.setPage((p) => Math.max(1, p - 1))}
             onNext={() => taskPag.setPage((p) => Math.min(taskPag.totalPages, p + 1))}
           />
-          {taskPag.total === 0 ? (
+          {loadingTasks ? (
+            <p className="px-5 py-8 text-center text-sm text-slate-400">Loading tasks...</p>
+          ) : taskPag.total === 0 ? (
             <p className="px-5 py-8 text-center text-sm text-slate-400">No tasks found.</p>
           ) : (
             <table className="w-full text-sm">
@@ -623,7 +864,9 @@ export default function EmployeeProfilePage() {
             onPrev={() => meetPag.setPage((p) => Math.max(1, p - 1))}
             onNext={() => meetPag.setPage((p) => Math.min(meetPag.totalPages, p + 1))}
           />
-          {meetPag.total === 0 ? (
+          {loadingMeetings ? (
+            <p className="px-5 py-8 text-center text-sm text-slate-400">Loading meetings...</p>
+          ) : meetPag.total === 0 ? (
             <p className="px-5 py-8 text-center text-sm text-slate-400">No meetings found.</p>
           ) : (
             <table className="w-full text-sm">

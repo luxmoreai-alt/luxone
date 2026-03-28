@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../layout/DashboardLayout";
 import { ChevronDown } from "lucide-react";
-import { Country, State } from "country-state-city";
+
+type CountryModule = Awaited<typeof import("country-state-city/lib/country")>;
+type StateModule = Awaited<typeof import("country-state-city/lib/state")>;
 
 export type CRMCreateFieldType =
   | "text"
@@ -93,10 +95,43 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState<T>(initialValues);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [countryModule, setCountryModule] = useState<CountryModule | null>(null);
+  const [stateModule, setStateModule] = useState<StateModule | null>(null);
+  const [isDirty, setIsDirty] = useState(false);
+  const lastInitialValuesRef = useRef(initialValues);
+
+  const needsGeoData = useMemo(
+    () => sections.some((section) => section.fields.some((field) => field.type === "country" || field.type === "state")),
+    [sections]
+  );
 
   useEffect(() => {
+    const previousInitialValues = lastInitialValuesRef.current;
+    lastInitialValuesRef.current = initialValues;
+
+    if (previousInitialValues === initialValues) return;
+    if (isDirty) return;
+
     setFormData(initialValues);
-  }, [initialValues]);
+  }, [initialValues, isDirty]);
+
+  useEffect(() => {
+    if (!needsGeoData || (countryModule && stateModule)) return;
+    let active = true;
+    void Promise.all([
+      import("country-state-city/lib/country"),
+      import("country-state-city/lib/state"),
+    ])
+      .then(([nextCountryModule, nextStateModule]) => {
+        if (!active) return;
+        setCountryModule(nextCountryModule);
+        setStateModule(nextStateModule);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [countryModule, needsGeoData, stateModule]);
 
   const normalizeOptions = (options?: string[], fallback?: string[]) =>
     options && options.length > 0 ? options : fallback ?? ["-None-"];
@@ -114,12 +149,16 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
   };
 
   const countryList = useMemo(() => {
-    const countries = Country.getAllCountries()
+    if (!countryModule) {
+      return ["-None-"];
+    }
+
+    const countries = countryModule.default.getAllCountries()
       .map((country) => country.name)
       .sort((a, b) => a.localeCompare(b));
 
     return ["-None-", ...countries];
-  }, []);
+  }, [countryModule]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -132,10 +171,16 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
       ...prev,
       [name]: type === "checkbox" ? checked : value,
     }));
+    setIsDirty(true);
+    if (errorMsg) {
+      setErrorMsg(null);
+    }
   };
 
   const resetForm = () => {
     setFormData(initialValues);
+    setIsDirty(false);
+    setErrorMsg(null);
   };
 
   const handleSave = async (goToNew = false) => {
@@ -143,6 +188,7 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
       setSaving(true);
       setErrorMsg(null);
       const result = await onSubmit(formData);
+      setIsDirty(false);
 
       if (goToNew) {
         resetForm();
@@ -214,16 +260,20 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
         <SelectField
           name={field.name}
           value={value}
-          onChange={(e) => {
-            const country = e.target.value;
-            setFormData((prev) => ({
-              ...prev,
-              country,
-              state: "",
-            }));
-          }}
-          options={options}
-        />
+            onChange={(e) => {
+              const country = e.target.value;
+              setFormData((prev) => ({
+                ...prev,
+                country,
+                state: "",
+              }));
+              setIsDirty(true);
+              if (errorMsg) {
+                setErrorMsg(null);
+              }
+            }}
+            options={options}
+          />
       );
     }
 
@@ -232,13 +282,17 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
       const baseOptions =
         field.options ??
         (() => {
-          const country = Country.getAllCountries().find(
+          if (!countryModule || !stateModule) {
+            return ["-None-"];
+          }
+
+          const country = countryModule.default.getAllCountries().find(
             (item) => item.name === selectedCountry
           );
           if (!country) {
             return ["-None-"];
           }
-          const states = State.getStatesOfCountry(country.isoCode)
+          const states = stateModule.default.getStatesOfCountry(country.isoCode)
             .map((state) => state.name)
             .sort((a, b) => a.localeCompare(b));
           return ["-None-", ...states];

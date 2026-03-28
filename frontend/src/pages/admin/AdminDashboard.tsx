@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Users, UserCheck, UserCog, ChevronRight,
+  Users, UserCheck, UserCog, ChevronRight, ChevronDown,
   RefreshCw, Loader2, Plus, Building2, UserPlus, Check, X,
 } from "lucide-react";
 import { apiRequest } from "../../api/client";
+import { readDashboardCache, writeDashboardCache } from "../../lib/dashboardCache";
 
 type OrgUser = {
   id: number;
@@ -15,14 +16,18 @@ type OrgUser = {
   is_active: boolean;
   manager: number | null;
   manager_email: string | null;
-  organization_name: string | null;
 };
+
+const ORGANIZATION_LABEL = "Zora Global AI Technologies";
 
 type GroupedOrg = {
   managers: OrgUser[];
   unassigned: OrgUser[];
   byManager: Record<number, OrgUser[]>;
 };
+
+const ADMIN_DASHBOARD_CACHE_KEY = "admin-dashboard-cache-v1";
+const ADMIN_DASHBOARD_CACHE_TTL_MS = 5 * 60 * 1000;
 
 function groupUsers(users: OrgUser[]): GroupedOrg {
   const managers = users.filter((u) => u.role === "manager");
@@ -242,37 +247,80 @@ function ManagerCard({
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const [users, setUsers] = useState<OrgUser[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [initialCache] = useState(() => readDashboardCache<OrgUser[]>(ADMIN_DASHBOARD_CACHE_KEY, ADMIN_DASHBOARD_CACHE_TTL_MS));
+  const [users, setUsers] = useState<OrgUser[]>(initialCache?.state ?? []);
+  const [loading, setLoading] = useState(!initialCache?.state);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [projectDeskOpen, setProjectDeskOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
+    const shouldFetch = refreshKey > 0 || !initialCache?.state;
+
+    if (!shouldFetch) {
+      setLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+
     setLoading(true);
     apiRequest<OrgUser[]>("/auth/manage-users/")
-      .then((data) => { if (active) setUsers(Array.isArray(data) ? data : []); })
+      .then((data) => {
+        if (!active) return;
+        const nextUsers = Array.isArray(data) ? data : [];
+        setUsers(nextUsers);
+        writeDashboardCache(ADMIN_DASHBOARD_CACHE_KEY, nextUsers);
+      })
       .catch(() => { if (active) setUsers([]); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [refreshKey]);
+  }, [initialCache?.state, refreshKey]);
 
   const { managers, unassigned, byManager } = groupUsers(users);
   const totalEmployees = users.filter((u) => u.role === "employee").length;
-  const orgName = users[0]?.organization_name ?? "Your Organization";
+  const orgName = ORGANIZATION_LABEL;
 
   const goToProfile = (u: OrgUser) => navigate(`/team/user/${u.id}`);
   const refresh = () => setRefreshKey((k) => k + 1);
 
-  if (loading) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="flex items-center gap-3 text-slate-500">
-          <Loader2 className="h-5 w-5 animate-spin" />
-          <span className="text-sm">Loading organization...</span>
-        </div>
-      </div>
-    );
-  }
+  const openProjectTaskDesk = async () => {
+    setProjectDeskOpen(false);
+    try {
+      const response = await apiRequest("/projects/");
+      const projects = Array.isArray(response)
+        ? response
+        : ((response as { results?: Array<{ id: string | number }> }).results ?? []);
+
+      if (projects.length > 0) {
+        navigate(`/projectdesk/tasks/create?project=${projects[0].id}`);
+        return;
+      }
+    } catch {
+      // Fall through to project creation if loading projects fails.
+    }
+
+    navigate("/projects/create");
+  };
+
+  const openProjectMeetingDesk = async () => {
+    setProjectDeskOpen(false);
+    try {
+      const response = await apiRequest("/projects/");
+      const projects = Array.isArray(response)
+        ? response
+        : ((response as { results?: Array<{ id: string | number }> }).results ?? []);
+
+      if (projects.length > 0) {
+        navigate(`/projectdesk/meetings/create?project=${projects[0].id}`);
+        return;
+      }
+    } catch {
+      // Fall through to project creation if loading projects fails.
+    }
+
+    navigate("/projects/create");
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 px-6 py-6">
@@ -286,6 +334,38 @@ export default function AdminDashboard() {
           <p className="text-sm text-slate-500">Admin view — full organization overview</p>
         </div>
         <div className="flex items-center gap-2">
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setProjectDeskOpen((prev) => !prev)}
+              className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+            >
+              ProjectDesk
+              <ChevronDown size={15} className={`transition ${projectDeskOpen ? "rotate-180" : ""}`} />
+            </button>
+            {projectDeskOpen && (
+              <div className="absolute right-0 z-20 mt-2 w-44 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg">
+                <button
+                  type="button"
+                  onClick={() => {
+                    void openProjectTaskDesk();
+                  }}
+                  className="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                >
+                  Assign Task
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void openProjectMeetingDesk();
+                  }}
+                  className="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                >
+                  Schedule Meeting
+                </button>
+              </div>
+            )}
+          </div>
           <button
             type="button"
             onClick={() => navigate("/team/users/create")}
@@ -311,7 +391,7 @@ export default function AdminDashboard() {
             <UserCog size={18} className="text-violet-600" />
           </div>
           <div>
-            <p className="text-2xl font-bold text-slate-900">{managers.length}</p>
+            <p className="text-2xl font-bold text-slate-900">{loading ? "..." : managers.length}</p>
             <p className="text-xs font-medium text-slate-500">Managers</p>
           </div>
         </div>
@@ -320,7 +400,7 @@ export default function AdminDashboard() {
             <Users size={18} className="text-emerald-600" />
           </div>
           <div>
-            <p className="text-2xl font-bold text-slate-900">{totalEmployees}</p>
+            <p className="text-2xl font-bold text-slate-900">{loading ? "..." : totalEmployees}</p>
             <p className="text-xs font-medium text-slate-500">Employees</p>
           </div>
         </div>
@@ -329,11 +409,11 @@ export default function AdminDashboard() {
             <UserCheck size={18} className="text-blue-600" />
           </div>
           <div>
-            <p className="text-2xl font-bold text-slate-900">{users.length}</p>
+            <p className="text-2xl font-bold text-slate-900">{loading ? "..." : users.length}</p>
             <p className="text-xs font-medium text-slate-500">Total Users</p>
           </div>
         </div>
-        {unassigned.length > 0 && (
+        {!loading && unassigned.length > 0 && (
           <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 shadow-sm">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
               <UserPlus size={18} className="text-amber-600" />
@@ -351,7 +431,28 @@ export default function AdminDashboard() {
         Organization Structure
       </h2>
 
-      {managers.length === 0 && unassigned.length === 0 ? (
+      {loading ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {Array.from({ length: 4 }, (_, index) => (
+            <div key={index} className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+              <div className="border-b border-slate-100 bg-slate-50 px-4 py-3">
+                <div className="h-5 w-40 animate-pulse rounded bg-slate-200" />
+              </div>
+              <div className="space-y-3 px-4 py-4">
+                {Array.from({ length: 3 }, (_, rowIndex) => (
+                  <div key={rowIndex} className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="h-8 w-8 animate-pulse rounded-full bg-slate-200" />
+                      <div className="h-4 w-32 animate-pulse rounded bg-slate-100" />
+                    </div>
+                    <div className="h-5 w-16 animate-pulse rounded-full bg-slate-100" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : managers.length === 0 && unassigned.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white py-16 text-center">
           <Users size={32} className="mx-auto mb-3 text-slate-300" />
           <p className="text-sm text-slate-500">No users yet. Add managers and employees to get started.</p>

@@ -125,6 +125,7 @@ class MeetingSerializer(serializers.ModelSerializer):
             "start_date",
             "end_date",
             "location",
+            "meeting_link",
             "host",
             "participants",
             "related_to",
