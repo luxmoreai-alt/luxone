@@ -59,6 +59,7 @@ export default function ManagerDashboard() {
   const [loadingLeads, setLoadingLeads] = useState(false);
   const [savingAssignment, setSavingAssignment] = useState(false);
   const [assignError, setAssignError] = useState("");
+  const [leadSearch, setLeadSearch] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -126,6 +127,7 @@ export default function ManagerDashboard() {
     setAssigningEmployee(employee);
     setSelectedLeadIds([]);
     setAssignError("");
+    setLeadSearch("");
     setLoadingLeads(true);
     apiRequest<LeadItem[] | ApiList<LeadItem>>("/leads/", {
       query: { page_size: 200 },
@@ -149,6 +151,7 @@ export default function ManagerDashboard() {
     setLeadOptions([]);
     setSelectedLeadIds([]);
     setAssignError("");
+    setLeadSearch("");
     setLoadingLeads(false);
   };
 
@@ -176,22 +179,34 @@ export default function ManagerDashboard() {
 
   const availableLeadOptions = useMemo(() => {
     if (!assigningEmployee) return [];
-    const currentUserId = Number(user?.id);
-    return visibleLeadOptions.filter(
-      (lead) => lead.owner == null || lead.owner === currentUserId
-    );
-  }, [assigningEmployee, user?.id, visibleLeadOptions]);
+    return visibleLeadOptions.filter((lead) => lead.owner == null);
+  }, [assigningEmployee, visibleLeadOptions]);
 
   const reassignLeadOptions = useMemo(() => {
-    const currentUserId = Number(user?.id);
     if (!assigningEmployee) return [];
     return leadOptions.filter(
       (lead) =>
         lead.owner != null &&
-        lead.owner !== currentUserId &&
         lead.owner !== assigningEmployee.id
     );
-  }, [assigningEmployee, leadOptions, user?.id]);
+  }, [assigningEmployee, leadOptions]);
+
+  const matchesLeadSearch = (lead: LeadItem) => {
+    const query = leadSearch.trim().toLowerCase();
+    if (!query) return true;
+    const leadName = `${lead.first_name} ${lead.last_name}`.trim().toLowerCase();
+    const company = (lead.company || "").toLowerCase();
+    const ownerName = (lead.owner_name || "").toLowerCase();
+    return leadName.includes(query) || company.includes(query) || ownerName.includes(query);
+  };
+
+  const filteredAssignedLeadOptions = assignedLeadOptions.filter(matchesLeadSearch);
+  const filteredAvailableLeadOptions = availableLeadOptions.filter(matchesLeadSearch);
+  const filteredReassignLeadOptions = reassignLeadOptions.filter(matchesLeadSearch);
+  const hasAnyLeadOptions =
+    filteredAssignedLeadOptions.length > 0 ||
+    filteredAvailableLeadOptions.length > 0 ||
+    filteredReassignLeadOptions.length > 0;
 
   const handleAssignLeads = async () => {
     if (!assigningEmployee || selectedLeadIds.length === 0) return;
@@ -231,6 +246,23 @@ export default function ManagerDashboard() {
     } finally {
       setSavingAssignment(false);
     }
+  };
+
+  const selectableLeadIds = [
+    ...filteredAvailableLeadOptions.map((lead) => lead.id),
+    ...filteredReassignLeadOptions.map((lead) => lead.id),
+  ];
+
+  const allSelectableMarked =
+    selectableLeadIds.length > 0 && selectableLeadIds.every((id) => selectedLeadIds.includes(id));
+
+  const handleToggleMarkAll = () => {
+    if (allSelectableMarked) {
+      setSelectedLeadIds((current) => current.filter((id) => !selectableLeadIds.includes(id)));
+      return;
+    }
+
+    setSelectedLeadIds((current) => [...new Set([...current, ...selectableLeadIds])]);
   };
 
   return (
@@ -414,11 +446,31 @@ export default function ManagerDashboard() {
                 </div>
               )}
 
+              <div className="mb-4">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="text"
+                    value={leadSearch}
+                    onChange={(event) => setLeadSearch(event.target.value)}
+                    placeholder="Filter leads by name, company, or owner"
+                    className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-violet-300 focus:ring-2 focus:ring-violet-100"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleToggleMarkAll}
+                    disabled={selectableLeadIds.length === 0}
+                    className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm font-medium text-violet-700 transition hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {allSelectableMarked ? "Unmark All" : "Mark All"}
+                  </button>
+                </div>
+              </div>
+
               {loadingLeads ? (
                 <div className="py-8 text-center text-sm text-slate-500">Loading leads...</div>
-              ) : visibleLeadOptions.length === 0 ? (
+              ) : !hasAnyLeadOptions ? (
                 <div className="py-8 text-center text-sm text-slate-500">
-                  No assignable leads are available right now.
+                  No matching leads are available right now.
                 </div>
               ) : (
                 <div className="space-y-5">
@@ -426,13 +478,13 @@ export default function ManagerDashboard() {
                     <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                       Assigned To This Employee
                     </div>
-                    {assignedLeadOptions.length === 0 ? (
+                    {filteredAssignedLeadOptions.length === 0 ? (
                       <div className="rounded-xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-500">
                         No leads assigned yet.
                       </div>
                     ) : (
                       <div className="space-y-2">
-                        {assignedLeadOptions.map((lead) => {
+                        {filteredAssignedLeadOptions.map((lead) => {
                           const leadName = `${lead.first_name} ${lead.last_name}`.trim();
                           return (
                             <div
@@ -462,13 +514,13 @@ export default function ManagerDashboard() {
                     <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                       Available To Assign
                     </div>
-                    {availableLeadOptions.length === 0 ? (
+                    {filteredAvailableLeadOptions.length === 0 ? (
                       <div className="rounded-xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-500">
                         No additional leads available.
                       </div>
                     ) : (
                       <div className="space-y-2">
-                        {availableLeadOptions.map((lead) => {
+                        {filteredAvailableLeadOptions.map((lead) => {
                     const checked = selectedLeadIds.includes(lead.id);
                     const leadName = `${lead.first_name} ${lead.last_name}`.trim();
                     return (
@@ -511,13 +563,13 @@ export default function ManagerDashboard() {
                     <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                       Reassign From Another Employee
                     </div>
-                    {reassignLeadOptions.length === 0 ? (
+                    {filteredReassignLeadOptions.length === 0 ? (
                       <div className="rounded-xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-500">
                         No reassignment candidates available.
                       </div>
                     ) : (
                       <div className="space-y-2">
-                        {reassignLeadOptions.map((lead) => {
+                        {filteredReassignLeadOptions.map((lead) => {
                           const checked = selectedLeadIds.includes(lead.id);
                           const leadName = `${lead.first_name} ${lead.last_name}`.trim();
                           return (
