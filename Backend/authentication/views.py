@@ -1,3 +1,4 @@
+import logging
 import secrets
 import string
 
@@ -26,6 +27,7 @@ from .services import generate_and_send_otp
 from .utils import custom_response
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 class _CompanyManagerFallback:
@@ -35,6 +37,14 @@ class _CompanyManagerFallback:
 
 class Company:
     objects = _CompanyManagerFallback()
+
+
+def normalize_auth_email(email):
+    """Normalize auth emails and correct common typos users keep entering."""
+    normalized = (email or "").strip().lower()
+    if normalized.endswith("@gamail.com"):
+        return normalized[:-11] + "@gmail.com"
+    return normalized
 
 # ── Module access map — which modules each role can access ─────────────────────
 
@@ -54,7 +64,7 @@ ROLE_MODULE_MAP = {
 
 # When a manager/team_lead has a department set, restrict to that department's modules
 DEPT_MODULE_MAP = {
-    "sales":                 ["sales", "activities", "inventory", "services"],
+    "sales":                 ["sales", "activities", "inventory"],
     "business_development":  ["sales", "activities", "integrations"],
     "software_development":  ["support", "projects", "integrations"],
     "support":               ["support", "activities", "services"],
@@ -72,7 +82,8 @@ def get_allowed_modules(role, department=""):
 
 def get_user_by_email(email):
     """Find an active user by email in the default database."""
-    return User.objects.filter(email__iexact=email, is_active=True).first()
+    normalized_email = normalize_auth_email(email)
+    return User.objects.filter(email__iexact=normalized_email, is_active=True).first()
 
 
 def configure_tenant_database_in_settings(_db_name):
@@ -89,17 +100,18 @@ def get_tenant_user_for_email(email):
     older auth clients. If a tenant company with a db name is available, look the
     user up against that alias first; otherwise fall back to the default database.
     """
+    normalized_email = normalize_auth_email(email)
     companies = Company.objects.filter(status="Active")
     company = companies[0] if companies else None
     db_name = getattr(company, "db_name", "default") or "default"
 
     if db_name != "default":
         configure_tenant_database_in_settings(db_name)
-        user = User.objects.using(db_name).filter(email__iexact=email, is_active=True).first()
+        user = User.objects.using(db_name).filter(email__iexact=normalized_email, is_active=True).first()
         if user:
             return db_name, user
 
-    return "default", get_user_by_email(email)
+    return "default", get_user_by_email(normalized_email)
 
 
 def get_tokens_for_user(user):
@@ -208,12 +220,24 @@ class LoginView(APIView):
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
-            email = serializer.validated_data['email']
+            raw_email = serializer.validated_data['email']
+            email = normalize_auth_email(raw_email)
             password = serializer.validated_data['password']
 
             tenant_db, tenant_user = get_tenant_user_for_email(email)
             authenticated_user = authenticate(request, email=email, password=password)
             user = authenticated_user or tenant_user
+            password_matches = bool(tenant_user and tenant_user.check_password(password))
+
+            logger.warning(
+                "Login attempt email=%r normalized=%r tenant_user_found=%s authenticated=%s password_match=%s active=%s",
+                request.data.get("email"),
+                email,
+                bool(tenant_user),
+                bool(authenticated_user),
+                password_matches,
+                getattr(tenant_user, "is_active", None),
+            )
 
             if not user or not user.check_password(password):
                 return Response(custom_response(success=False, message="Invalid credentials"), status=status.HTTP_401_UNAUTHORIZED)

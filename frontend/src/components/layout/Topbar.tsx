@@ -450,6 +450,12 @@ export default function Topbar({
 
   useEffect(() => {
     const fetchUnread = () => {
+      if (!localStorage.getItem("accessToken")) {
+        setUnreadEmailCount(0);
+        setRecentUnreadEmails([]);
+        return;
+      }
+
       apiRequest<{ unread_count: number; recent: { id: number; subject: string; from_email: string; received_at: string }[] }>(
         "/email/unread-count/"
       )

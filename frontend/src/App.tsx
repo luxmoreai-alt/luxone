@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect, useState, type ReactNode } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { DashboardLayoutRoute } from "./components/layout/DashboardLayout";
 import { apiRequest } from "./api/client";
+import { useAuth } from "./hooks/useAuth";
 import HomePage from "./pages/HomePage";
 import MyRequestsPage from "./pages/MyRequestsPage";
 import ReportsPage from "./pages/ReportsPage";
@@ -93,7 +94,12 @@ function RouteFallback() {
 
 function hasSession() {
   if (typeof window === "undefined") return false;
-  return localStorage.getItem("isLoggedIn") === "true";
+  return (
+    localStorage.getItem("isLoggedIn") === "true" &&
+    Boolean(localStorage.getItem("accessToken")) &&
+    Boolean(localStorage.getItem("refreshToken")) &&
+    Boolean(localStorage.getItem("loggedInUser"))
+  );
 }
 
 function getMustChangePassword() {
@@ -168,6 +174,40 @@ function MustChangePasswordGuard({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+const MODULE_ROUTE_PREFIXES: Array<{ module: string; prefixes: string[] }> = [
+  { module: "sales", prefixes: ["/leads", "/contacts", "/accounts", "/deals", "/documents", "/campaigns"] },
+  { module: "activities", prefixes: ["/tasks", "/meetings", "/calls"] },
+  {
+    module: "inventory",
+    prefixes: ["/products", "/price-books", "/quotes", "/sales-orders", "/purchase-orders", "/invoices", "/vendors", "/configurator"],
+  },
+  { module: "support", prefixes: ["/support"] },
+  { module: "integrations", prefixes: ["/integrations"] },
+  { module: "services", prefixes: ["/services"] },
+  { module: "projects", prefixes: ["/projects"] },
+];
+
+function getRequiredModuleForPath(pathname: string) {
+  for (const entry of MODULE_ROUTE_PREFIXES) {
+    if (entry.prefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
+      return entry.module;
+    }
+  }
+  return null;
+}
+
+function ModuleAccessGuard({ children }: { children: ReactNode }) {
+  const location = useLocation();
+  const { canAccess } = useAuth();
+  const requiredModule = getRequiredModuleForPath(location.pathname);
+
+  if (requiredModule && !canAccess(requiredModule)) {
+    return <Navigate to="/home" replace />;
+  }
+
+  return <>{children}</>;
+}
+
 export default function App() {
   return (
     <Suspense fallback={<RouteFallback />}>
@@ -192,7 +232,9 @@ export default function App() {
           element={
             <RequireAuth>
               <MustChangePasswordGuard>
-                <DashboardLayoutRoute />
+                <ModuleAccessGuard>
+                  <DashboardLayoutRoute />
+                </ModuleAccessGuard>
               </MustChangePasswordGuard>
             </RequireAuth>
           }

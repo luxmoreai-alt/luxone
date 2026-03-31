@@ -101,6 +101,13 @@ type PaginatedResponse<T> = {
   results: T[];
 };
 
+type StoredUser = {
+  id?: number | string;
+  email?: string;
+  name?: string;
+  role?: string;
+};
+
 function buildHeaders(): Record<string, string> {
   const token = localStorage.getItem("accessToken");
 
@@ -108,6 +115,16 @@ function buildHeaders(): Record<string, string> {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
+}
+
+function getStoredUser(): StoredUser | null {
+  try {
+    const raw = localStorage.getItem("loggedInUser");
+    if (!raw) return null;
+    return JSON.parse(raw) as StoredUser;
+  } catch {
+    return null;
+  }
 }
 
 function normalizeLeadList(item: BackendLeadList): LeadRecord {
@@ -257,7 +274,16 @@ export async function getLeads(options?: { pageSize?: number; maxPages?: number;
     pagesLoaded += 1;
   }
 
-  return allLeads.map(normalizeLeadList);
+  const storedUser = getStoredUser();
+  const role = (storedUser?.role || "").toLowerCase();
+  const userEmail = (storedUser?.email || "").toLowerCase();
+
+  const filteredLeads =
+    role === "employee"
+      ? allLeads.filter((lead) => (lead.owner_email || "").toLowerCase() === userEmail)
+      : allLeads;
+
+  return filteredLeads.map(normalizeLeadList);
 }
 
 export async function getLeadById(id: string): Promise<LeadRecord | null> {

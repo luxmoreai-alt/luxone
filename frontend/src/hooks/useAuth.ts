@@ -9,8 +9,16 @@ export function useAuth() {
 
   useEffect(() => {
     const refresh = () => setTick((t) => t + 1);
+    window.addEventListener("storage", refresh);
+    window.addEventListener("auth:login", refresh as EventListener);
+    window.addEventListener("auth:logout", refresh as EventListener);
     window.addEventListener("auth:modules-updated", refresh);
-    return () => window.removeEventListener("auth:modules-updated", refresh);
+    return () => {
+      window.removeEventListener("storage", refresh);
+      window.removeEventListener("auth:login", refresh as EventListener);
+      window.removeEventListener("auth:logout", refresh as EventListener);
+      window.removeEventListener("auth:modules-updated", refresh);
+    };
   }, []);
 
   const user = getStoredUser();

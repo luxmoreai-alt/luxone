@@ -29,6 +29,7 @@ from notes.serializers import LeadNoteSerializer
 from .filters import LeadFilter
 from .models import Lead
 from .pagination import LeadPagination
+from .permissions import filter_queryset_for_user
 from .serializers import (
     LeadActionSerializer,
     LeadAddTagsSerializer,
@@ -95,9 +96,9 @@ class LeadViewSet(viewsets.ModelViewSet):
             )
         )
 
-        qs = base_qs.all()
+        qs = filter_queryset_for_user(base_qs.all(), user)
         owner_id = self.request.query_params.get("owner_id")
-        if owner_id and getattr(user, "role", "employee") in ("admin", "manager"):
+        if owner_id:
             qs = qs.filter(owner_id=owner_id)
 
         if self.action == "list":

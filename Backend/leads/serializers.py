@@ -3,6 +3,7 @@ from rest_framework import serializers
 
 from core.user_display import get_user_display_name
 from integrations.models import IntegrationLeadSourceEvent, SyncedEmailMessage
+from .permissions import can_access_lead_owner
 
 from .models import Lead
 
@@ -155,6 +156,14 @@ class LeadDetailSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        instance = getattr(self, "instance", None)
+        owner = attrs.get("owner", getattr(instance, "owner", None))
+        if request and owner and not can_access_lead_owner(user=request.user, owner_id=owner.id):
+            raise serializers.ValidationError({"owner": "You cannot assign this owner."})
+        return attrs
 
     def get_owner_email(self, obj):
         try:
