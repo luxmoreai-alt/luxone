@@ -57,7 +57,7 @@ const routeWarmers: Array<{ prefix: string; warm: RouteWarmer }> = [
   { prefix: "/support/solutions", warm: async () => (await import("../api/client")).apiRequest("/support/solutions/", { cacheTtlMs: 2 * 60 * 1000 }) },
   { prefix: "/services/catalog", warm: async () => (await import("../api/client")).apiRequest("/services/", { cacheTtlMs: 2 * 60 * 1000 }) },
   { prefix: "/services/appointments", warm: async () => (await import("../api/client")).apiRequest("/services/appointments/", { cacheTtlMs: 2 * 60 * 1000 }) },
-  { prefix: "/integrations/email", warm: async () => (await import("../api/client")).apiRequest("/integrations/email-providers/", { cacheTtlMs: 2 * 60 * 1000 }) },
+  { prefix: "/integrations/email", warm: async () => (await import("../api/client")).apiRequest("/integrations/email/providers/", { cacheTtlMs: 2 * 60 * 1000 }) },
 ];
 const routeWarmersBySpecificity = [...routeWarmers].sort((a, b) => b.prefix.length - a.prefix.length);
 

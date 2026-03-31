@@ -4,8 +4,10 @@ import {
   ArrowRight,
   BadgeDollarSign,
   CalendarCheck2,
+  CalendarRange,
   CircleDot,
   ClipboardList,
+  Download,
   FileBarChart2,
   FileSpreadsheet,
   Package,
@@ -43,6 +45,8 @@ type ReportTile = {
   label: string;
 };
 
+type ExportPreset = "1" | "5" | "10" | "custom";
+
 function extractCount<T>(value: ApiList<T>): number {
   if (Array.isArray(value)) return value.length;
   if (typeof value.count === "number") return value.count;
@@ -59,22 +63,43 @@ function SnapshotCard({
   value,
   subtitle,
   icon,
+  className = "",
 }: {
   title: string;
   value: string;
   subtitle: string;
   icon: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbf8_100%)] px-5 py-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+    <div
+      className={`rounded-[28px] border border-[#cfddee] px-5 py-5 text-white shadow-[0_16px_34px_rgba(36,58,94,0.12)] ${className}`}
+    >
       <div className="flex items-center justify-between gap-3">
-        <div className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-400">{title}</div>
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-50 text-slate-700">{icon}</div>
+        <div className="text-sm font-semibold uppercase tracking-[0.14em] text-[#dbe8f8]">{title}</div>
+        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 text-[#f8fbff]">{icon}</div>
       </div>
-      <div className="mt-5 text-4xl font-semibold tracking-tight text-slate-900">{value}</div>
-      <div className="mt-2 text-sm text-slate-500">{subtitle}</div>
+      <div className="mt-5 text-4xl font-semibold tracking-tight text-[#f8fbff]">{value}</div>
+      <div className="mt-2 text-sm text-[#dbe8f8]">{subtitle}</div>
     </div>
   );
+}
+
+function WorkspaceIcon({
+  icon,
+  tone = "royal",
+}: {
+  icon: React.ReactNode;
+  tone?: "royal" | "sky" | "violet";
+}) {
+  const toneClass =
+    tone === "royal"
+      ? "bg-[#e8f0fb] text-[#2d466f]"
+      : tone === "sky"
+        ? "bg-[#edf7f6] text-[#138f87]"
+        : "bg-[#eff4fa] text-[#5f7393]";
+
+  return <span className={`flex h-9 w-9 items-center justify-center rounded-2xl ${toneClass}`}>{icon}</span>;
 }
 
 function DirectoryRow({
@@ -92,12 +117,12 @@ function DirectoryRow({
     <button
       type="button"
       onClick={onClick}
-      className="grid w-full grid-cols-[1.1fr_1.4fr_0.8fr_32px] items-center gap-4 border-t border-slate-100 px-4 py-4 text-left transition hover:bg-emerald-50/40"
+      className="grid w-full grid-cols-[1.1fr_1.4fr_0.8fr_32px] items-center gap-4 border-t border-[#e4ebf3] px-4 py-4 text-left transition hover:bg-[#f5f8fc]"
     >
-      <div className="text-sm font-semibold text-slate-900">{title}</div>
-      <div className="text-sm text-slate-500">{description}</div>
-      <div className="text-xs font-medium uppercase tracking-[0.12em] text-slate-400">{label}</div>
-      <ArrowRight className="h-4 w-4 text-slate-400" />
+      <div className="text-sm font-semibold text-[#12294d]">{title}</div>
+      <div className="text-sm text-[#6f84a3]">{description}</div>
+      <div className="text-xs font-medium uppercase tracking-[0.12em] text-[#138f87]">{label}</div>
+      <ArrowRight className="h-4 w-4 text-[#8ea1bb]" />
     </button>
   );
 }
@@ -113,7 +138,12 @@ export default function ReportsPage() {
   const [initialCache] = useState(() => readDashboardCache<SnapshotCounts>(REPORTS_CACHE_KEY, REPORTS_CACHE_TTL_MS));
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [showExportOptions, setShowExportOptions] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [exportPreset, setExportPreset] = useState<ExportPreset>("1");
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
   const [counts, setCounts] = useState<SnapshotCounts>(
     initialCache?.state ?? {
       leads: 0,
@@ -262,28 +292,113 @@ export default function ReportsPage() {
     [canViewActivities, canViewInventory, canViewSales, canViewSupport]
   );
 
+  const resolveExportDateRange = () => {
+    const today = new Date();
+    const end = today.toISOString().slice(0, 10);
+
+    if (exportPreset === "custom") {
+      const resolvedStartDate = customStartDate || customEndDate;
+      const resolvedEndDate = customEndDate || customStartDate;
+
+      return {
+        startDate: resolvedStartDate,
+        endDate: resolvedEndDate,
+      };
+    }
+
+    const days = Number(exportPreset);
+    const start = new Date(today);
+    start.setDate(start.getDate() - (days - 1));
+
+    return {
+      startDate: start.toISOString().slice(0, 10),
+      endDate: end,
+    };
+  };
+
+  const { startDate, endDate } = resolveExportDateRange();
+  const isDateRangeInvalid = exportPreset === "custom" && (!startDate || !endDate || startDate > endDate);
+
+  const handleExportReports = async () => {
+    if (isDateRangeInvalid) {
+      window.alert("Choose a valid custom date range before exporting.");
+      return;
+    }
+
+    try {
+      setExporting(true);
+      const XLSX = await import("xlsx");
+      const exportedAt = new Date();
+
+      const summaryRows = [
+        { Metric: "Start Date", Value: startDate || "All Dates" },
+        { Metric: "End Date", Value: endDate || "All Dates" },
+        { Metric: "Lead Records", Value: counts.leads },
+        { Metric: "Deal Records", Value: counts.deals },
+        { Metric: "Task Records", Value: counts.tasks },
+        { Metric: "Invoice Records", Value: counts.invoices },
+        { Metric: "Case Records", Value: counts.cases },
+        { Metric: "Exported At", Value: exportedAt.toLocaleString() },
+      ];
+
+      const reportRows = reportGroups.flatMap((group) =>
+        group.reports.map((report) => ({
+          Category: group.title,
+          Report: report.title,
+          Description: report.description,
+          Action: report.label,
+          Route: report.route,
+        }))
+      );
+
+      const workbook = XLSX.utils.book_new();
+      const summarySheet = XLSX.utils.json_to_sheet(summaryRows);
+      const directorySheet = XLSX.utils.json_to_sheet(reportRows);
+
+      XLSX.utils.book_append_sheet(workbook, summarySheet, "Summary");
+      XLSX.utils.book_append_sheet(workbook, directorySheet, "Report Directory");
+      XLSX.writeFile(workbook, `reports-export-${exportedAt.toISOString().slice(0, 10)}.xlsx`);
+      setShowExportOptions(false);
+    } catch {
+      window.alert("Failed to export reports to Excel.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        <div className="relative overflow-hidden rounded-[34px] border border-[#d4dfcf] bg-[linear-gradient(135deg,#f7fcf6_0%,#edf8ef_48%,#ffffff_100%)] px-6 py-5 shadow-[0_18px_42px_rgba(42,110,66,0.09)]">
-          <div className="pointer-events-none absolute -right-8 top-0 h-44 w-44 rounded-full bg-emerald-200/35 blur-3xl" />
+      <div className="space-y-6 bg-[linear-gradient(180deg,#f4f7fb_0%,#eef4f9_100%)] p-1">
+        <div className="relative overflow-hidden rounded-[34px] border border-[#d5e0ec] bg-[linear-gradient(135deg,#fdfefe_0%,#f3f7fb_52%,#ffffff_100%)] px-6 py-5 shadow-[0_18px_42px_rgba(36,58,94,0.10)]">
+          <div className="pointer-events-none absolute -right-8 top-0 h-44 w-44 rounded-full bg-[#dbe9f7] blur-3xl" />
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/80 bg-white/75 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-800 shadow-sm">
-                <TableProperties className="h-3.5 w-3.5" />
+              <div className="inline-flex items-center gap-2 rounded-full border border-[#d7e1ed] bg-white/90 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#2d466f] shadow-sm">
+                <TableProperties className="h-3.5 w-3.5 text-[#2d466f]" />
                 Reports Library
               </div>
-              <h1 className="mt-4 text-4xl font-semibold tracking-[-0.04em] text-slate-950">Reports</h1>
-              <p className="mt-2 text-sm text-slate-500">Open report-ready module views, review record volumes, and jump into list-based reporting quickly.</p>
+              <h1 className="mt-4 text-4xl font-semibold tracking-[-0.04em] text-[#12294d]">Reports</h1>
+              <p className="mt-2 text-sm text-[#5f7393]">Open report-ready module views, review record volumes, and jump into list-based reporting quickly.</p>
             </div>
-            <button
-              type="button"
-              onClick={() => setRefreshKey((current) => current + 1)}
-              className="inline-flex items-center gap-2 rounded-2xl border border-white bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
-            >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-              {refreshing ? "Refreshing..." : "Refresh Reports"}
-            </button>
+            <div className="flex flex-wrap items-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowExportOptions(true)}
+                disabled={exporting}
+                className="inline-flex cursor-pointer items-center gap-2 rounded-2xl border border-[#2d466f] bg-[#2d466f] px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-[#24395a] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Download className={`h-4 w-4 ${exporting ? "animate-pulse" : ""}`} />
+                {exporting ? "Exporting..." : "Export Excel"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setRefreshKey((current) => current + 1)}
+                className="inline-flex items-center gap-2 rounded-2xl border border-[#d5e0ec] bg-white px-4 py-2.5 text-sm font-medium text-[#2d466f] shadow-sm transition hover:bg-[#f3f7fb]"
+              >
+                <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+                {refreshing ? "Refreshing..." : "Refresh Reports"}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -293,7 +408,8 @@ export default function ReportsPage() {
               title="Lead Records"
               value={loading && !counts.leads ? "..." : String(counts.leads)}
               subtitle="Visible lead rows"
-              icon={<CircleDot className="h-5 w-5 text-violet-600" />}
+              icon={<CircleDot className="h-5 w-5 text-[#f8fbff]" />}
+              className="bg-[linear-gradient(145deg,#304a74_0%,#3d5a87_58%,#203554_100%)]"
             />
           ) : null}
           {canViewSales ? (
@@ -301,7 +417,8 @@ export default function ReportsPage() {
               title="Deal Records"
               value={loading && !counts.deals ? "..." : String(counts.deals)}
               subtitle="Pipeline and won deals"
-              icon={<BadgeDollarSign className="h-5 w-5 text-blue-600" />}
+              icon={<BadgeDollarSign className="h-5 w-5 text-[#f8fbff]" />}
+              className="bg-[linear-gradient(155deg,#3b5f92_0%,#4b74ab_42%,#294a77_100%)]"
             />
           ) : null}
           {canViewActivities ? (
@@ -309,7 +426,8 @@ export default function ReportsPage() {
               title="Task Records"
               value={loading && !counts.tasks ? "..." : String(counts.tasks)}
               subtitle="Activity reporting base"
-              icon={<CalendarCheck2 className="h-5 w-5 text-emerald-600" />}
+              icon={<CalendarCheck2 className="h-5 w-5 text-[#f8fbff]" />}
+              className="bg-[linear-gradient(140deg,#4f6b90_0%,#375174_55%,#6d88ab_100%)]"
             />
           ) : null}
           {canViewInventory ? (
@@ -317,7 +435,8 @@ export default function ReportsPage() {
               title="Invoice Records"
               value={loading && !counts.invoices ? "..." : String(counts.invoices)}
               subtitle="Billing-side report inputs"
-              icon={<Package className="h-5 w-5 text-amber-600" />}
+              icon={<Package className="h-5 w-5 text-[#f8fbff]" />}
+              className="bg-[linear-gradient(150deg,#2d466f_0%,#3d5a87_48%,#6f87a6_100%)]"
             />
           ) : null}
           {canViewSupport ? (
@@ -325,7 +444,8 @@ export default function ReportsPage() {
               title="Case Records"
               value={loading && !counts.cases ? "..." : String(counts.cases)}
               subtitle="Support workload visibility"
-              icon={<ShieldCheck className="h-5 w-5 text-cyan-600" />}
+              icon={<ShieldCheck className="h-5 w-5 text-[#f8fbff]" />}
+              className="bg-[linear-gradient(145deg,#3d5a87_0%,#2d466f_38%,#1f314d_100%)]"
             />
           ) : null}
         </div>
@@ -333,12 +453,16 @@ export default function ReportsPage() {
         <div className="grid gap-5 xl:grid-cols-[1.3fr_0.9fr]">
           <div className="space-y-5">
             {reportGroups.map((group) => (
-              <section key={group.title} className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_10px_32px_rgba(15,23,42,0.05)]">
-                <div className="border-b border-slate-100 px-5 py-4">
-                  <h2 className="text-xl font-semibold tracking-tight text-slate-900">{group.title}</h2>
-                  <p className="mt-1 text-sm text-slate-500">{group.subtitle}</p>
+              <section key={group.title} className="overflow-hidden rounded-[30px] border border-[#d5e0ec] bg-white shadow-[0_10px_32px_rgba(36,58,94,0.08)]">
+                <div className="border-b border-[#dbe4ef] bg-[#2d466f] px-5 py-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h2 className="text-xl font-semibold tracking-tight text-white">{group.title}</h2>
+                      <p className="mt-1 text-sm text-[#dbe8f8]">{group.subtitle}</p>
+                    </div>
+                  </div>
                 </div>
-                <div className="grid grid-cols-[1.1fr_1.4fr_0.8fr_32px] gap-4 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+                <div className="grid grid-cols-[1.1fr_1.4fr_0.8fr_32px] gap-4 bg-[#f2f6fb] px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-[#4f6484]">
                   <div>Report</div>
                   <div>Description</div>
                   <div>Open</div>
@@ -360,10 +484,10 @@ export default function ReportsPage() {
           </div>
 
           <div className="space-y-5">
-            <section className="rounded-[30px] border border-[#1d3d32] bg-[linear-gradient(160deg,#10221d_0%,#17362d_52%,#1d4b3d_100%)] px-5 py-5 text-white shadow-[0_20px_44px_rgba(16,34,29,0.22)]">
-              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Collections</div>
+            <section className="rounded-[30px] border border-[#d5e0ec] bg-[linear-gradient(160deg,#2d466f_0%,#24395a_72%,#18263d_100%)] px-5 py-5 text-white shadow-[0_20px_44px_rgba(36,58,94,0.20)]">
+              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[#dbe8f8]">Collections</div>
               <div className="mt-2 text-xl font-semibold">Pinned Workspaces</div>
-              <div className="mt-1 text-sm text-slate-400">Jump to the areas your team will most often use for reporting and exports.</div>
+              <div className="mt-1 text-sm text-[#dbe8f8]">Jump to the areas your team will most often use for reporting and exports.</div>
               <div className="mt-5 space-y-3">
                 {[
                   canViewSales ? { label: "Sales Workspace", route: "/leads", icon: <FileBarChart2 className="h-4 w-4" /> } : null,
@@ -383,10 +507,13 @@ export default function ReportsPage() {
                         className="flex w-full items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-left text-sm font-medium text-slate-100 transition hover:bg-white/10"
                       >
                         <span className="flex items-center gap-3">
-                          <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-white/10 text-slate-100">{collection.icon}</span>
+                          <WorkspaceIcon
+                            tone={collection.label === "Billing Workspace" ? "sky" : "violet"}
+                            icon={collection.icon}
+                          />
                           <span>{collection.label}</span>
                         </span>
-                        <ArrowRight className="h-4 w-4 text-slate-400" />
+                        <ArrowRight className="h-4 w-4 text-[#c9d8ea]" />
                       </button>
                     );
                   })}
@@ -395,13 +522,13 @@ export default function ReportsPage() {
 
             <CRMSectionCard title="Suggested Flow" subtitle="Use reports differently from analytics so both pages stay useful.">
               <div className="space-y-3 text-sm leading-6 text-slate-600">
-                <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                <div className="rounded-2xl border border-[#d5e0ec] bg-[#f2f6fb] px-4 py-3 text-[#2d466f]">
                   Start here when you want list-driven reporting, module filters, or an export-style workflow.
                 </div>
-                <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                <div className="rounded-2xl border border-[#d5e0ec] bg-[#f2f6fb] px-4 py-3 text-[#2d466f]">
                   Use Analytics when you need trends, targets, performance, and chart-based summaries.
                 </div>
-                <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                <div className="rounded-2xl border border-[#d5e0ec] bg-[#f2f6fb] px-4 py-3 text-[#2d466f]">
                   Open the matching module from these report directories, apply filters there, and review the records you need.
                 </div>
               </div>
@@ -409,6 +536,116 @@ export default function ReportsPage() {
           </div>
         </div>
       </div>
+
+      {showExportOptions ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4">
+          <div className="w-full max-w-3xl rounded-[28px] border border-[#d5e0ec] bg-[linear-gradient(180deg,#ffffff_0%,#f6f9fc_100%)] p-6 shadow-[0_24px_70px_rgba(36,58,94,0.18)]">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold text-[#12294d]">Export Reports</h2>
+                <p className="mt-1 text-sm text-[#5f7393]">Choose a preset range or switch to a custom date range before exporting.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowExportOptions(false)}
+                className="rounded-full border border-[#d5e0ec] px-3 py-1 text-sm text-[#5f7393] transition hover:bg-[#f3f7fb]"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-4">
+              {[
+                { label: "Today", value: "1" as ExportPreset, tone: "royal" as const },
+                { label: "5 Days", value: "5" as ExportPreset, tone: "sky" as const },
+                { label: "10 Days", value: "10" as ExportPreset, tone: "royal" as const },
+                { label: "Custom", value: "custom" as ExportPreset, tone: "violet" as const },
+              ].map((preset) => (
+                <button
+                  key={preset.value}
+                  type="button"
+                  onClick={() => setExportPreset(preset.value)}
+                  className={`flex min-h-[78px] w-full items-center rounded-2xl border px-4 py-3 text-left text-sm font-medium transition ${
+                    exportPreset === preset.value
+                      ? "border-[#2d466f] bg-[#e8f0fb] text-[#2d466f]"
+                      : "border-[#d5e0ec] bg-white text-[#5f7393] hover:bg-[#f8fbfd]"
+                  }`}
+                >
+                  <span className="inline-flex w-full items-center gap-3">
+                    <WorkspaceIcon
+                      tone={preset.tone}
+                      icon={
+                        preset.value === "custom" ? (
+                          <CalendarRange className="h-4 w-4" />
+                        ) : (
+                          <FileSpreadsheet className="h-4 w-4" />
+                        )
+                      }
+                    />
+                    <span className="flex min-w-0 flex-1 flex-col justify-center">
+                      <span className="leading-5">{preset.label}</span>
+                      <span className="text-xs font-normal text-[#6f84a3]">
+                        {preset.value === "custom" ? "Pick your own dates" : "Quick preset range"}
+                      </span>
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {exportPreset === "custom" ? (
+              <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                <label className="text-sm font-medium text-[#2d466f]">
+                  <span className="mb-1 block">Start Date</span>
+                  <input
+                    type="date"
+                    value={customStartDate}
+                    onChange={(event) => setCustomStartDate(event.target.value)}
+                    className="w-full rounded-2xl border border-[#d5e0ec] bg-white px-4 py-2.5 text-sm text-[#12294d] outline-none transition focus:border-[#2d466f]"
+                  />
+                </label>
+                <label className="text-sm font-medium text-[#138f87]">
+                  <span className="mb-1 block">End Date</span>
+                  <input
+                    type="date"
+                    value={customEndDate}
+                    onChange={(event) => setCustomEndDate(event.target.value)}
+                    className="w-full rounded-2xl border border-[#cdebe7] bg-white px-4 py-2.5 text-sm text-[#12294d] outline-none transition focus:border-[#138f87]"
+                  />
+                </label>
+              </div>
+            ) : (
+              <div className="mt-5 rounded-2xl border border-[#d5e0ec] bg-[#f2f6fb] px-4 py-3 text-sm text-[#2d466f]">
+                Export range: <span className="font-medium text-[#12294d]">{startDate}</span> to{" "}
+                <span className="font-medium text-[#12294d]">{endDate}</span>
+              </div>
+            )}
+
+            {isDateRangeInvalid ? (
+              <p className="mt-3 text-sm text-rose-600">Choose at least one date, and make sure the end date is not before the start date.</p>
+            ) : null}
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowExportOptions(false)}
+                className="rounded-2xl border border-[#d5e0ec] px-4 py-2.5 text-sm font-medium text-[#5f7393] transition hover:bg-[#f3f7fb]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleExportReports}
+                disabled={exporting || isDateRangeInvalid}
+                className="inline-flex items-center gap-2 rounded-2xl bg-[#2d466f] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[#24395a] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Download className={`h-4 w-4 ${exporting ? "animate-pulse" : ""}`} />
+                {exporting ? "Exporting..." : "Export Now"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </DashboardLayout>
   );
 }
