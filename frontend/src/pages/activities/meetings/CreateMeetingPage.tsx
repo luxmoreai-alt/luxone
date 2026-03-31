@@ -349,7 +349,7 @@ export default function CreateMeetingPage() {
         <div className="relative z-10 flex min-h-[calc(100vh-64px)] items-start justify-center px-4 py-8">
           <div className="w-full max-w-[450px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
             <form onSubmit={handleSubmit}>
-              <div className="max-h-[80vh] overflow-y-auto px-7 py-6">
+              <div className="px-7 py-6">
                 <h1 className="mb-6 text-[18px] font-semibold text-slate-900">
                   {isEditing ? "Edit Meeting" : "Meeting Information"}
                 </h1>

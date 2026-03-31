@@ -70,7 +70,7 @@ function FilePreview({ url, name }: { url: string; name: string | null }) {
       <a
         href={url}
         download
-        className="mt-3 flex items-center gap-1.5 text-sm font-medium text-[#4d76ff] hover:underline"
+        className="mt-3 flex items-center gap-1.5 text-sm font-medium text-[#359de9] hover:underline"
       >
         <Download size={14} /> Download to view
       </a>
@@ -148,7 +148,7 @@ export default function DocumentDetailPage() {
   };
 
   const inputCls =
-    "w-full rounded-[8px] border border-[#cfd7e6] px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#4d76ff] focus:ring-2 focus:ring-[#4d76ff]/10";
+    "w-full rounded-[8px] border border-[#cfd7e6] px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#359de9] focus:ring-2 focus:ring-[#359de9]/10";
 
   if (loading) {
     return (
@@ -209,7 +209,7 @@ export default function DocumentDetailPage() {
                 <button
                   onClick={() => void handleSave()}
                   disabled={saving}
-                  className="flex items-center gap-1.5 rounded-[6px] bg-gradient-to-b from-[#4d76ff] to-[#365eea] px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                  className="flex items-center gap-1.5 rounded-[6px] bg-gradient-to-b from-[#359de9] to-[#365eea] px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
                 >
                   {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
                   Save
@@ -267,7 +267,7 @@ export default function DocumentDetailPage() {
                       <a
                         href={v.file_url}
                         download
-                        className="flex items-center gap-1 text-xs font-medium text-[#4d76ff] hover:underline"
+                        className="flex items-center gap-1 text-xs font-medium text-[#359de9] hover:underline"
                       >
                         <Download size={12} /> Download
                       </a>
@@ -324,7 +324,7 @@ export default function DocumentDetailPage() {
                   <label className="mb-1 block text-xs font-medium text-slate-600">Replace File (optional)</label>
                   <div
                     onClick={() => fileRef.current?.click()}
-                    className="flex cursor-pointer items-center gap-2 rounded-[8px] border border-dashed border-[#cfd7e6] px-3 py-2.5 text-sm text-slate-500 hover:border-[#4d76ff] hover:text-[#4d76ff]"
+                    className="flex cursor-pointer items-center gap-2 rounded-[8px] border border-dashed border-[#cfd7e6] px-3 py-2.5 text-sm text-slate-500 hover:border-[#359de9] hover:text-[#359de9]"
                   >
                     <Upload size={14} />
                     {newFile ? newFile.name : "Click to select new file…"}

@@ -2,13 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Bell,
   CalendarDays,
-  Gauge,
   Grid2x2,
   Menu,
   Plus,
   Search,
   Settings,
-  Sparkles,
   User,
   X,
   Mail,
@@ -530,10 +528,6 @@ export default function Topbar({
             <Plus size={16} />
           </button>
 
-          <button className="flex h-[32px] w-[32px] items-center justify-center rounded-md hover:bg-slate-100">
-            <Gauge size={16} />
-          </button>
-
           <div className="relative">
             <button
               onClick={() => { setNotificationsOpen((prev) => !prev); setEmailInboxOpen(false); }}
@@ -718,29 +712,19 @@ export default function Topbar({
               onClick={() => navigate("/calendar")}
               className="flex h-[32px] w-[32px] items-center justify-center rounded-md hover:bg-slate-100"
             >
-            <CalendarDays size={16} />
-          </button>
+              <CalendarDays size={16} />
+            </button>
 
-          <button className="flex h-[32px] w-[32px] items-center justify-center rounded-md hover:bg-slate-100">
-            <Sparkles size={16} />
-          </button>
+            <button
+              onClick={() => setProfileOpen(true)}
+              className="flex h-[32px] w-[32px] items-center justify-center rounded-md hover:bg-slate-100"
+            >
+              <User size={16} />
+            </button>
 
-          <button className="flex h-[32px] w-[32px] items-center justify-center rounded-md hover:bg-slate-100">
-            <Settings size={16} />
-          </button>
-
-          <div className="mx-1 h-5 w-px bg-slate-200" />
-
-          <button
-            onClick={() => setProfileOpen(true)}
-            className="flex h-[32px] w-[32px] items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200"
-          >
-            <User size={16} />
-          </button>
-
-          <button className="flex h-[32px] w-[32px] items-center justify-center rounded-md hover:bg-slate-100">
-            <Grid2x2 size={16} />
-          </button>
+            <button className="flex h-[32px] w-[32px] items-center justify-center rounded-md hover:bg-slate-100">
+              <Grid2x2 size={16} />
+            </button>
         </div>
       </header>
 

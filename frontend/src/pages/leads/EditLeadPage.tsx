@@ -148,7 +148,24 @@ export default function EditLeadPage() {
   if (loading) return <div className="p-6 text-sm text-slate-600">Loading lead...</div>;
   if (error || !initialValues) return <div className="p-6 text-sm text-rose-600">{error ?? "Lead not found"}</div>;
 
+  const isLeedsEmail = (email: string) => {
+    const normalized = email.trim().toLowerCase();
+    return (
+      normalized.endsWith("@leeds.ac.uk") ||
+      normalized.endsWith("@leeds.com") ||
+      normalized.endsWith("@leeds.co.uk") ||
+      normalized.includes("@leeds")
+    );
+  };
+
   const handleSubmit = async (values: LeadEditValues) => {
+    if (!isLeedsEmail(values.email)) {
+      throw new Error("Email must be a Leeds email address (e.g. user@leeds.ac.uk).");
+    }
+    if (values.secondaryEmail && !isLeedsEmail(values.secondaryEmail)) {
+      throw new Error("Secondary email must also be a Leeds email address.");
+    }
+
     await updateLead(id!, {
       leadOwner: values.leadOwner,
       firstName: values.firstName,

@@ -78,7 +78,7 @@ function UploadModal({
   };
 
   const inputCls =
-    "w-full rounded-[8px] border border-[#cfd7e6] px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#4d76ff] focus:ring-2 focus:ring-[#4d76ff]/10";
+    "w-full rounded-[8px] border border-[#cfd7e6] px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#359de9] focus:ring-2 focus:ring-[#359de9]/10";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
@@ -104,12 +104,12 @@ function UploadModal({
             onDrop={handleDrop}
             onClick={() => fileRef.current?.click()}
             className={`flex cursor-pointer flex-col items-center justify-center rounded-[10px] border-2 border-dashed py-6 transition ${
-              dragging ? "border-[#4d76ff] bg-blue-50" : "border-[#cfd7e6] hover:border-[#4d76ff] hover:bg-slate-50"
+              dragging ? "border-[#359de9] bg-blue-50" : "border-[#cfd7e6] hover:border-[#359de9] hover:bg-slate-50"
             }`}
           >
             <Upload size={22} className="mb-2 text-slate-400" />
             {file ? (
-              <span className="text-sm font-medium text-[#4d76ff]">{file.name}</span>
+              <span className="text-sm font-medium text-[#359de9]">{file.name}</span>
             ) : (
               <>
                 <span className="text-sm text-slate-500">Drag & drop or click to select</span>
@@ -187,7 +187,7 @@ function UploadModal({
             <button
               type="submit"
               disabled={loading}
-              className="flex items-center gap-1.5 rounded-[6px] bg-gradient-to-b from-[#4d76ff] to-[#365eea] px-5 py-2 text-sm font-medium text-white disabled:opacity-60"
+              className="flex items-center gap-1.5 rounded-[6px] bg-gradient-to-b from-[#359de9] to-[#365eea] px-5 py-2 text-sm font-medium text-white disabled:opacity-60"
             >
               {loading && <Loader2 size={13} className="animate-spin" />}
               Upload
@@ -270,7 +270,7 @@ export default function DocumentsPage() {
           </div>
           <button
             onClick={() => setShowUpload(true)}
-            className="flex items-center gap-1.5 rounded-[6px] bg-gradient-to-b from-[#4d76ff] to-[#365eea] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+            className="flex items-center gap-1.5 rounded-[6px] bg-gradient-to-b from-[#359de9] to-[#365eea] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
           >
             <Plus size={15} /> Upload Document
           </button>
@@ -287,14 +287,14 @@ export default function DocumentsPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search documents…"
-              className="w-full rounded-[8px] border border-[#cfd7e6] bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-[#4d76ff]"
+            className="w-full rounded-[8px] border border-[#cfd7e6] bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-[#359de9]"
             />
           </div>
 
           <select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value as DocumentType | "")}
-            className="rounded-[8px] border border-[#cfd7e6] bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#4d76ff]"
+            className="rounded-[8px] border border-[#cfd7e6] bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#359de9]"
           >
             <option value="">All Types</option>
             {Object.entries(DOCUMENT_TYPE_LABELS).map(([v, l]) => (
@@ -305,7 +305,7 @@ export default function DocumentsPage() {
           <select
             value={filterModule}
             onChange={(e) => setFilterModule(e.target.value as RelatedModule | "")}
-            className="rounded-[8px] border border-[#cfd7e6] bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#4d76ff]"
+            className="rounded-[8px] border border-[#cfd7e6] bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#359de9]"
           >
             <option value="">All Modules</option>
             {(["lead", "contact", "deal", "project"] as RelatedModule[]).map((m) => (
@@ -326,7 +326,7 @@ export default function DocumentsPage() {
               <p className="text-sm text-slate-500">No documents found.</p>
               <button
                 onClick={() => setShowUpload(true)}
-                className="mt-3 text-sm font-medium text-[#4d76ff] hover:underline"
+                className="mt-3 text-sm font-medium text-[#359de9] hover:underline"
               >
                 Upload your first document
               </button>
@@ -351,7 +351,7 @@ export default function DocumentsPage() {
                       <td className="px-5 py-3">
                         <button
                           onClick={() => navigate(`/documents/${doc.id}`)}
-                          className="flex items-center gap-2 font-medium text-[#1f2d3d] hover:text-[#4d76ff]"
+                          className="flex items-center gap-2 font-medium text-[#1f2d3d] hover:text-[#359de9]"
                         >
                           <FileText size={14} className="shrink-0 text-slate-400" />
                           {doc.title}

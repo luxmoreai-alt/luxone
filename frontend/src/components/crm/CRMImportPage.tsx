@@ -1396,7 +1396,7 @@ export default function CRMImportPage({
                 <button
                   type="button"
                   onClick={handleBrowseClick}
-                  className="rounded-[6px] bg-gradient-to-b from-[#4d76ff] to-[#365eea] px-8 py-2 text-[14px] font-medium text-white"
+                  className="rounded-[6px] bg-gradient-to-b from-[#359de9] to-[#365eea] px-8 py-2 text-[14px] font-medium text-white"
                   disabled={isProcessing}
                 >
                   Browse File
@@ -1441,7 +1441,7 @@ export default function CRMImportPage({
                   </button>
                   <button
                     type="button"
-                    className="rounded-[6px] bg-[#4d76ff] px-6 py-2 text-[13px] font-medium text-white disabled:opacity-70"
+                    className="rounded-[6px] bg-[#359de9] px-6 py-2 text-[13px] font-medium text-white disabled:opacity-70"
                     disabled={isProcessing || !noteText.trim()}
                     onClick={handleImport}
                   >
@@ -1561,7 +1561,7 @@ export default function CRMImportPage({
                   </button>
                   <button
                     type="button"
-                    className="rounded-[6px] bg-[#4d76ff] px-6 py-2 text-[13px] font-medium text-white disabled:opacity-70"
+                    className="rounded-[6px] bg-[#359de9] px-6 py-2 text-[13px] font-medium text-white disabled:opacity-70"
                     disabled={isProcessing}
                     onClick={handleImport}
                   >
@@ -1618,7 +1618,7 @@ export default function CRMImportPage({
                 <div className="mt-6 flex justify-end">
                   <button
                     type="button"
-                    className="rounded-[6px] bg-[#4d76ff] px-6 py-2 text-[13px] font-medium text-white"
+                    className="rounded-[6px] bg-[#359de9] px-6 py-2 text-[13px] font-medium text-white"
                     onClick={() => navigate(backPath)}
                   >
                     Done

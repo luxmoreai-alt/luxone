@@ -50,10 +50,10 @@ class LeadActivity(models.Model):
             models.Index(fields=["deal", "created_at"]),
             models.Index(fields=["created_at"]),
         ]
-
     def __str__(self):
         record_id = self.lead_id or self.contact_id or self.account_id or self.deal_id
         return f"{self.action} - {record_id}"
+
 
 
 class Task(models.Model):

@@ -284,7 +284,7 @@ export default function CreateCampaignPage() {
                 type="button"
                 onClick={() => void handleSave(false)}
                 disabled={saving}
-                className="h-[32px] rounded-[6px] bg-gradient-to-b from-[#4d76ff] to-[#365eea] px-8 text-[14px] font-medium text-white disabled:opacity-60"
+                className="h-[32px] rounded-[6px] bg-gradient-to-b from-[#359de9] to-[#365eea] px-8 text-[14px] font-medium text-white disabled:opacity-60"
               >
                 {saving ? "Saving..." : "Save"}
               </button>

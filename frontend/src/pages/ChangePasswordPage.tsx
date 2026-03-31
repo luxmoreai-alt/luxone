@@ -17,7 +17,7 @@ export default function ChangePasswordPage() {
   const accessToken = getAccessToken();
 
   const inputCls =
-    "w-full rounded-[8px] border border-[#cfd7e6] px-3 py-2.5 text-sm text-slate-800 outline-none transition-colors focus:border-[#4d76ff] focus:ring-2 focus:ring-[#4d76ff]/10";
+    "w-full rounded-[8px] border border-[#cfd7e6] px-3 py-2.5 text-sm text-slate-800 outline-none transition-colors focus:border-[#359de9] focus:ring-2 focus:ring-[#359de9]/10";
 
   const handleSubmit = async (e: { preventDefault(): void }) => {
     e.preventDefault();
@@ -64,7 +64,7 @@ export default function ChangePasswordPage() {
       <div className="w-full max-w-[420px]">
         <div className="mb-8 text-center">
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-blue-100">
-            <ShieldCheck size={28} className="text-[#4d76ff]" />
+            <ShieldCheck size={28} className="text-[#359de9]" />
           </div>
           <h1 className="text-2xl font-bold text-[#1f2d3d]">Set Your Password</h1>
           <p className="mt-2 text-sm text-slate-500">
@@ -141,7 +141,7 @@ export default function ChangePasswordPage() {
             <button
               type="submit"
               disabled={loading}
-              className="mt-2 flex w-full items-center justify-center gap-2 rounded-[8px] bg-gradient-to-b from-[#4d76ff] to-[#365eea] py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+              className="mt-2 flex w-full items-center justify-center gap-2 rounded-[8px] bg-gradient-to-b from-[#359de9] to-[#365eea] py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
             >
               {loading ? (
                 <Loader2 size={15} className="animate-spin" />

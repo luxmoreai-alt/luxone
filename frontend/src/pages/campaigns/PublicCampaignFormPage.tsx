@@ -201,7 +201,7 @@ export default function PublicCampaignFormPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="flex w-full items-center justify-center gap-2 rounded-[8px] bg-gradient-to-b from-[#4d76ff] to-[#365eea] py-2.5 text-[15px] font-medium text-white disabled:opacity-70"
+            className="flex w-full items-center justify-center gap-2 rounded-[8px] bg-gradient-to-b from-[#359de9] to-[#365eea] py-2.5 text-[15px] font-medium text-white disabled:opacity-70"
           >
             {submitting ? <Loader2 size={16} className="animate-spin" /> : null}
             {submitting ? "Submitting..." : "Submit"}

@@ -340,7 +340,7 @@ export default function CampaignDetailPage() {
                     onClick={() => setFilter(tab)}
                     className={`rounded-[6px] px-3 py-1.5 text-[13px] ${
                       filter === tab
-                        ? "bg-[#4d76ff] text-white"
+                        ? "bg-[#359de9] text-white"
                         : "border border-[#cfd7e6] bg-white text-slate-600 hover:bg-slate-50"
                     }`}
                   >
@@ -351,7 +351,7 @@ export default function CampaignDetailPage() {
                   <button
                     onClick={() => void handleBulkConvert()}
                     disabled={bulkConverting || unconvertedSelectedCount === 0}
-                    className="flex items-center gap-1.5 rounded-[6px] bg-gradient-to-b from-[#4d76ff] to-[#365eea] px-4 py-1.5 text-[13px] font-medium text-white disabled:opacity-60"
+                    className="flex items-center gap-1.5 rounded-[6px] bg-gradient-to-b from-[#359de9] to-[#365eea] px-4 py-1.5 text-[13px] font-medium text-white disabled:opacity-60"
                   >
                     {bulkConverting ? (
                       <Loader2 size={13} className="animate-spin" />
@@ -435,7 +435,7 @@ export default function CampaignDetailPage() {
                               <button
                                 onClick={() => void handleConvertOne(sub)}
                                 disabled={converting.has(sub.id)}
-                                className="flex items-center gap-1 rounded bg-gradient-to-b from-[#4d76ff] to-[#365eea] px-2.5 py-1 text-xs font-medium text-white disabled:opacity-60"
+                                className="flex items-center gap-1 rounded bg-gradient-to-b from-[#359de9] to-[#365eea] px-2.5 py-1 text-xs font-medium text-white disabled:opacity-60"
                               >
                                 {converting.has(sub.id) ? (
                                   <Loader2 size={11} className="animate-spin" />

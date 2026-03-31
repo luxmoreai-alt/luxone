@@ -155,7 +155,7 @@ export default function FilterSidebar({
                             type="checkbox"
                             checked={isChecked}
                             onChange={() => toggleItem(label)}
-                            className="h-[14px] w-[14px] shrink-0 rounded border-slate-300 accent-[#4d76ff]"
+                            className="h-[14px] w-[14px] shrink-0 rounded border-slate-300 accent-[#359de9]"
                           />
                           <span>{label}</span>
                         </label>
@@ -191,7 +191,7 @@ export default function FilterSidebar({
           type="button"
           onClick={handleApply}
           disabled={!hasAnyChecked}
-          className="h-[32px] flex-1 rounded-[6px] bg-gradient-to-b from-[#4d76ff] to-[#365eea] text-[13px] font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+          className="h-[32px] flex-1 rounded-[6px] bg-gradient-to-b from-[#359de9] to-[#365eea] text-[13px] font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           Apply Filter
         </button>

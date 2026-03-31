@@ -44,8 +44,7 @@ ROLE_MODULE_MAP = {
     "admin":                ALL_MODULES,
     "sub_admin":            ALL_MODULES,
     "hr":                   ["sales", "activities", "projects"],
-    "manager":              ["sales", "activities", "inventory", "support", "services", "projects"],
-    "team_lead":            ["activities", "services", "projects"],
+    "manager":              ["sales", "activities", "inventory", "support", "services", "projects"],    "sales_manager":        ["sales", "activities", "inventory", "services", "projects"],    "team_lead":            ["activities", "services", "projects"],
     "business_development": ["sales", "activities", "integrations"],
     "software_development": ["support", "projects"],
     "support_team":         ["support"],
@@ -63,11 +62,15 @@ DEPT_MODULE_MAP = {
 
 def get_allowed_modules(role, department=""):
     """Return module list based on role; for manager/team_lead/employee also consider department."""
-    if role in ("admin", "sub_admin"):
+    normalized_role = (role or "").strip().lower()
+
+    if normalized_role in ("admin", "sub_admin"):
         return ALL_MODULES
-    if role in ("manager", "team_lead", "employee") and department and department in DEPT_MODULE_MAP:
+
+    if normalized_role in ("manager", "sales_manager", "team_lead", "employee") and department and department in DEPT_MODULE_MAP:
         return DEPT_MODULE_MAP[department]
-    return ROLE_MODULE_MAP.get(role, ["sales", "activities"])
+
+    return ROLE_MODULE_MAP.get(normalized_role, ["sales", "activities"])
 
 
 def get_user_by_email(email):
@@ -89,15 +92,22 @@ def get_tenant_user_for_email(email):
     older auth clients. If a tenant company with a db name is available, look the
     user up against that alias first; otherwise fall back to the default database.
     """
-    companies = Company.objects.filter(status="Active")
-    company = companies[0] if companies else None
-    db_name = getattr(company, "db_name", "default") or "default"
+    try:
+        companies = Company.objects.filter(status="Active")
+        company = companies[0] if companies else None
+        db_name = getattr(company, "db_name", "default") or "default"
+    except Exception:
+        # If the companies table does not exist yet or DB is not ready, fallback.
+        db_name = "default"
 
     if db_name != "default":
         configure_tenant_database_in_settings(db_name)
-        user = User.objects.using(db_name).filter(email__iexact=email, is_active=True).first()
-        if user:
-            return db_name, user
+        try:
+            user = User.objects.using(db_name).filter(email__iexact=email, is_active=True).first()
+            if user:
+                return db_name, user
+        except Exception:
+            pass
 
     return "default", get_user_by_email(email)
 
@@ -207,10 +217,13 @@ class LoginView(APIView):
     @swagger_auto_schema(request_body=LoginSerializer)
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
-        if serializer.is_valid():
-            email = serializer.validated_data['email']
-            password = serializer.validated_data['password']
+        if not serializer.is_valid():
+            return Response(custom_response(success=False, message=serializer.errors), status=status.HTTP_400_BAD_REQUEST)
 
+        email = serializer.validated_data['email']
+        password = serializer.validated_data['password']
+
+        try:
             tenant_db, tenant_user = get_tenant_user_for_email(email)
             authenticated_user = authenticate(request, email=email, password=password)
             user = authenticated_user or tenant_user
@@ -221,7 +234,13 @@ class LoginView(APIView):
             data = build_auth_payload(user)
             data["tenant_db"] = tenant_db
             return Response(custom_response(success=True, message="Login successful", data=data), status=status.HTTP_200_OK)
-        return Response(custom_response(success=False, message=serializer.errors), status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as exc:
+            # Return JSON for backend errors instead of rendering HTML trace pages.
+            return Response(
+                custom_response(success=False, message="Login failed. " + str(exc)),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class SendOTPView(APIView):
@@ -385,7 +404,7 @@ class UserManagementViewSet(viewsets.ViewSet):
             base = base.filter(is_active=True)
         if role in ("admin", "sub_admin"):
             return base
-        if role in ("manager", "team_lead"):
+        if role in ("manager", "sales_manager", "team_lead"):
             team_ids = list(User.objects.filter(manager=user, is_active=True).values_list("id", flat=True))
             team_ids.append(user.pk)
             return base.filter(pk__in=team_ids)

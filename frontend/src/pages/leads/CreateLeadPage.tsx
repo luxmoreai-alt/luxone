@@ -196,7 +196,24 @@ export default function CreateLeadPage() {
     void loadLead();
   }, [id]);
 
+  const isLeedsEmail = (email: string) => {
+    const normalized = email.trim().toLowerCase();
+    return (
+      normalized.endsWith("@leeds.ac.uk") ||
+      normalized.endsWith("@leeds.com") ||
+      normalized.endsWith("@leeds.co.uk") ||
+      normalized.includes("@leeds")
+    );
+  };
+
   const handleSubmit = async (values: LeadCreateValues) => {
+    if (!isLeedsEmail(values.email)) {
+      throw new Error("Email must be a Leeds email address (e.g. user@leeds.ac.uk).");
+    }
+    if (values.secondaryEmail && !isLeedsEmail(values.secondaryEmail)) {
+      throw new Error("Secondary email must also be a Leeds email address.");
+    }
+
     const payload = {
       leadOwner: values.leadOwner,
       salutation: values.salutation,
