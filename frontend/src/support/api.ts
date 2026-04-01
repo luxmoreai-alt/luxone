@@ -380,6 +380,7 @@ function casePayload(values: CaseFormData) {
     company: values.company,
     country: values.country,
     phone: values.phone,
+    lead: values.lead ? Number(values.lead) : undefined,
     lead_name: values.leadName,
     lead_source: values.leadSource,
     owner: values.owner ? Number(values.owner) : undefined,
@@ -451,6 +452,7 @@ export async function fetchSupportLookup(lookup: SupportLookupName, query: strin
     dealName: item.deal_name ? asString(item.deal_name) : undefined,
     productCode: item.product_code ? asString(item.product_code) : undefined,
     unitPrice: item.unit_price == null ? undefined : asNumber(item.unit_price),
+    source: item.lead_source ? asString(item.lead_source) : undefined,
   }));
 }
 

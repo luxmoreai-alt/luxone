@@ -48,6 +48,7 @@ CASE_IMPORT_FIELD_MAP = {
     "company": "company",
     "country": "country",
     "phone": "phone",
+    "lead": "lead",
     "lead_name": "lead_name",
     "lead_source": "lead_source",
     "case_owner": "owner",
@@ -198,6 +199,13 @@ def _resolve_fk(field_name: str, value: Any):
         if isinstance(value, int) or str(value).isdigit():
             return Deal.objects.filter(pk=int(value), is_active=True).first()
         return Deal.objects.filter(deal_name__iexact=str(value).strip(), is_active=True).first()
+    if field_name == "lead":
+        if isinstance(value, int) or str(value).isdigit():
+            return Lead.objects.filter(pk=int(value)).first()
+        text = str(value).strip()
+        return Lead.objects.filter(
+            Q(first_name__iexact=text) | Q(last_name__iexact=text) | Q(email__iexact=text),
+        ).first()
     return value
 
 
@@ -292,7 +300,7 @@ def _solution_title_for(payload: dict[str, Any]) -> str:
     return "Issue Resolution"
 
 
-def _sync_support_links(module_type: str, obj, *, contact=None, account=None, deal=None, product=None, case=None):
+def _sync_support_links(module_type: str, obj, *, contact=None, account=None, deal=None, product=None, case=None, lead=None):
     SupportLinkedRecord.objects.filter(**_record_kwargs(module_type, obj)).delete()
     link_payload = {
         **_record_kwargs(module_type, obj),
@@ -300,6 +308,7 @@ def _sync_support_links(module_type: str, obj, *, contact=None, account=None, de
         "account": account,
         "deal": deal,
         "product": product,
+        "lead": lead,
         "relationship_label": "Connected To",
         "metadata": {"autolink": True},
     }
@@ -316,6 +325,14 @@ def create_case(data: dict[str, Any], user):
     payload.setdefault("status", "Open")
     payload.setdefault("priority", "Medium")
     payload.setdefault("case_reason", _default_case_reason(payload.get("type")))
+    lead = payload.get("lead")
+    if lead:
+        payload.setdefault("lead_name", f"{lead.first_name} {lead.last_name}".strip())
+        payload.setdefault("lead_source", lead.lead_source)
+        payload.setdefault("company", payload.get("company") or lead.company)
+        payload.setdefault("email", payload.get("email") or lead.email)
+        payload.setdefault("phone", payload.get("phone") or lead.phone or lead.mobile)
+        payload.setdefault("reported_by", payload.get("reported_by") or f"{lead.first_name} {lead.last_name}".strip())
     contact = payload.get("related_contact")
     if contact:
         payload.setdefault("account", contact.account)
@@ -342,6 +359,7 @@ def create_case(data: dict[str, Any], user):
         account=case.account,
         deal=case.deal,
         product=case.product,
+        lead=case.lead,
     )
     log_timeline("case", case.pk, "created", "Case Created", user=user, metadata={"case_number": case.case_number})
     return case
@@ -366,6 +384,26 @@ def update_case(case: SupportCase, data: dict[str, Any], user):
         if inferred_deal:
             case.deal = inferred_deal
             changed_fields.append("deal")
+    if case.lead:
+        normalized_lead_name = f"{case.lead.first_name} {case.lead.last_name}".strip()
+        if not case.lead_name:
+            case.lead_name = normalized_lead_name
+            changed_fields.append("lead_name")
+        if not case.lead_source and case.lead.lead_source:
+            case.lead_source = case.lead.lead_source
+            changed_fields.append("lead_source")
+        if not case.email and case.lead.email:
+            case.email = case.lead.email
+            changed_fields.append("email")
+        if not case.phone and (case.lead.phone or case.lead.mobile):
+            case.phone = case.lead.phone or case.lead.mobile
+            changed_fields.append("phone")
+        if not case.company and case.lead.company:
+            case.company = case.lead.company
+            changed_fields.append("company")
+        if not case.reported_by:
+            case.reported_by = normalized_lead_name
+            changed_fields.append("reported_by")
     if not case.case_reason:
         case.case_reason = _default_case_reason(case.type)
         changed_fields.append("case_reason")
@@ -388,6 +426,7 @@ def update_case(case: SupportCase, data: dict[str, Any], user):
             account=case.account,
             deal=case.deal,
             product=case.product,
+            lead=case.lead,
         )
         log_timeline(
             "case",
@@ -438,6 +477,7 @@ def create_solution(data: dict[str, Any], user):
         deal=source_case.deal if source_case else None,
         product=solution.product,
         case=source_case,
+        lead=source_case.lead if source_case else None,
     )
     log_timeline("solution", solution.pk, "created", "Solution Created", user=user, metadata={"solution_number": solution.solution_number})
     return solution
@@ -473,6 +513,7 @@ def update_solution(solution: SupportSolution, data: dict[str, Any], user):
             deal=solution.source_case.deal if solution.source_case else None,
             product=solution.product,
             case=solution.source_case,
+            lead=solution.source_case.lead if solution.source_case else None,
         )
         log_timeline(
             "solution",
@@ -875,6 +916,27 @@ def build_lookup_payload(lookup_name: str, query: str = ""):
                 "label": obj.case_number or obj.subject,
                 "subject": obj.subject,
                 "status": obj.status,
+            }
+            for obj in queryset[:25]
+        ]
+    if lookup_name == "leads":
+        queryset = Lead.objects.all()
+        if term:
+            queryset = queryset.filter(
+                Q(first_name__icontains=term)
+                | Q(last_name__icontains=term)
+                | Q(email__icontains=term)
+                | Q(company__icontains=term)
+            )
+        return [
+            {
+                "id": obj.id,
+                "name": f"{obj.first_name} {obj.last_name}".strip(),
+                "label": f"{obj.first_name} {obj.last_name}".strip() or obj.email,
+                "email": obj.email,
+                "phone": obj.phone or obj.mobile,
+                "account_name": obj.company,
+                "lead_source": obj.lead_source,
             }
             for obj in queryset[:25]
         ]

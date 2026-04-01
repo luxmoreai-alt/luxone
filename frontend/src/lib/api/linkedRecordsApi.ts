@@ -611,12 +611,14 @@ export async function loadLeadLinkedData(lead: LeadRecord, options?: { forceRefr
   const cached: LinkedDataResult | null = options?.forceRefresh ? null : getCachedLinkedData<LinkedDataResult>(cacheKey);
   if (cached) return cached;
 
-  const [emails, connectedRecords, socialMessages, visitorEvents, serviceConnectedRecords] = await Promise.all([
+  const [emails, connectedRecords, socialMessages, visitorEvents, serviceConnectedRecords, cases, solutions] = await Promise.all([
     loadRecordEmailsWithFallback({ lead: lead.id }, () => integrationsApi.listLeadRecordEmails(lead.id), { excludeSupportLinked: true, disableFallback: true }),
     getLeadConnectedRecords(lead.id).catch(() => []),
     integrationsApi.listSocialMessages({ lead: lead.id }).catch(() => []),
     integrationsApi.listVisitorEvents({ lead: lead.id }).catch(() => []),
     fetchServiceConnectedRecords(lead.id, "lead", lead.id).catch(() => []),
+    fetchList<SupportCaseDto>("/support/cases", { lead: lead.id }).catch(() => []),
+    fetchList<SupportSolutionDto>("/support/solutions", { lead: lead.id }).catch(() => []),
   ]);
   const mergedEmails = dedupeSalesInboxItems(excludeSupportCaseEmails(emails || []));
 
@@ -635,8 +637,8 @@ export async function loadLeadLinkedData(lead: LeadRecord, options?: { forceRefr
       ...visitorEvents.map((item) => mapVisitorEvent(lead.id, item)),
       ...serviceConnectedRecords,
     ],
-    cases: [] as Case[],
-    solutions: [] as Solution[],
+    cases: cases.map((item) => mapCase(lead.id, item)),
+    solutions: solutions.map((item) => mapSolution(lead.id, item)),
     contacts: [],
     accounts: [],
     quotes: [] as Quote[],
@@ -667,6 +669,8 @@ export async function loadLeadLinkedData(lead: LeadRecord, options?: { forceRefr
           ),
         ],
         emails: mergedEmails.map((item) => mapIntegrationEmail(lead.id, item)),
+        cases: cases.map((item) => mapCase(lead.id, item)),
+        solutions: solutions.map((item) => mapSolution(lead.id, item)),
       }),
   };
   setCachedLinkedData(cacheKey, result);

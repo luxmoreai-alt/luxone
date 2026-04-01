@@ -23,6 +23,7 @@ export type SupportLookupOption = {
   dealName?: string;
   productCode?: string;
   unitPrice?: number;
+  source?: string;
 };
 
 export type CaseListItem = {
@@ -77,6 +78,8 @@ export type CaseFormData = {
   company: string;
   country: string;
   phone: string;
+  lead: string;
+  leadLabel: string;
   leadName: string;
   leadSource: string;
   owner: string;

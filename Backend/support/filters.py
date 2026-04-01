@@ -27,6 +27,7 @@ class SupportCaseFilter(django_filters.FilterSet):
     product = django_filters.NumberFilter(field_name="product_id")
     account = django_filters.NumberFilter(field_name="account_id")
     deal = django_filters.NumberFilter(field_name="deal_id")
+    lead = django_filters.NumberFilter(field_name="lead_id")
 
     class Meta:
         model = SupportCase
@@ -51,6 +52,7 @@ class SupportCaseFilter(django_filters.FilterSet):
             "product",
             "account",
             "deal",
+            "lead",
         ]
 
     def filter_connected_to(self, queryset, name, value):
@@ -62,6 +64,8 @@ class SupportCaseFilter(django_filters.FilterSet):
             | Q(account__account_name__icontains=value)
             | Q(deal__deal_name__icontains=value)
             | Q(product__product_name__icontains=value)
+            | Q(lead__first_name__icontains=value)
+            | Q(lead__last_name__icontains=value)
         ).distinct()
 
 
@@ -84,6 +88,7 @@ class SupportSolutionFilter(django_filters.FilterSet):
     source_case = django_filters.NumberFilter(field_name="source_case_id")
     status = django_filters.CharFilter(field_name="status", lookup_expr="iexact")
     vendor = django_filters.NumberFilter(field_name="linked_records__vendor_id")
+    lead = django_filters.NumberFilter(method="filter_lead")
 
     class Meta:
         model = SupportSolution
@@ -106,6 +111,7 @@ class SupportSolutionFilter(django_filters.FilterSet):
             "source_case",
             "status",
             "vendor",
+            "lead",
         ]
 
     def filter_connected_to(self, queryset, name, value):
@@ -141,4 +147,11 @@ class SupportSolutionFilter(django_filters.FilterSet):
             return queryset
         return queryset.filter(
             Q(linked_records__deal_id=value) | Q(source_case__deal_id=value)
+        ).distinct()
+
+    def filter_lead(self, queryset, name, value):
+        if not value:
+            return queryset
+        return queryset.filter(
+            Q(linked_records__lead_id=value) | Q(source_case__lead_id=value)
         ).distinct()

@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  ChevronRight,
   Download,
   Eye,
   FileText,
+  Folder,
   Loader2,
   Plus,
   Search,
@@ -22,6 +24,8 @@ import {
   type DocumentType,
   type RelatedModule,
 } from "../../lib/api/documentsApi";
+import { getLeads } from "../../lib/api/leadsApi";
+import { useAuth } from "../../hooks/useAuth";
 
 // ── Upload Modal ────────────────────────────────────────────────────────────
 
@@ -222,13 +226,17 @@ function TypeBadge({ type }: { type: string }) {
 
 export default function DocumentsPage() {
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
   const [docs, setDocs] = useState<DocumentRecord[]>([]);
+  const [leadNames, setLeadNames] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<DocumentType | "">("");
-  const [filterModule, setFilterModule] = useState<RelatedModule | "">("");
+  const [filterModule, setFilterModule] = useState<RelatedModule | "">(isAdmin ? "" : "lead");
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [expandedLeadIds, setExpandedLeadIds] = useState<number[]>([]);
+  const normalizedSearch = search.trim().toLowerCase();
 
   const load = useCallback(async (filters?: DocumentFilters) => {
     try {
@@ -246,6 +254,111 @@ export default function DocumentsPage() {
     void load({ search, document_type: filterType || undefined, related_module: filterModule || undefined });
   }, [load, search, filterType, filterModule]);
 
+  useEffect(() => {
+    if (!isAdmin) {
+      setFilterModule("lead");
+      return;
+    }
+    setFilterModule((current) => (current === "lead" ? current : ""));
+  }, [isAdmin]);
+
+  useEffect(() => {
+    const leadIds = Array.from(
+      new Set(
+        docs
+          .filter((doc) => doc.related_module === "lead" && doc.related_id != null)
+          .map((doc) => doc.related_id as number)
+      )
+    ).filter((leadId) => !leadNames[leadId]);
+
+    if (leadIds.length === 0) return;
+
+    let cancelled = false;
+
+    void getLeads({ pageSize: 100, maxPages: 50, cacheTtlMs: 60_000 })
+      .then((leads) => {
+        if (cancelled) return;
+        const nextNames: Record<number, string> = {};
+        leads.forEach((lead) => {
+          const leadId = Number(lead.id);
+          if (!Number.isNaN(leadId)) {
+            nextNames[leadId] = lead.leadName || `Lead #${leadId}`;
+          }
+        });
+        setLeadNames((current) => ({ ...nextNames, ...current }));
+      })
+      .catch(() => {
+        // silent
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [docs, leadNames]);
+
+  const groupedLeadDocuments = useMemo(() => {
+    const groups = new Map<
+      number,
+      { leadId: number; leadLabel: string; documents: DocumentRecord[]; latestCreatedAt: string }
+    >();
+
+    docs
+      .filter((doc) => doc.related_module === "lead" && doc.related_id != null)
+      .forEach((doc) => {
+        const leadId = doc.related_id as number;
+        const current = groups.get(leadId);
+        const leadLabel = leadNames[leadId] || `Lead #${leadId}`;
+
+        if (current) {
+          current.documents.push(doc);
+          if (new Date(doc.created_at).getTime() > new Date(current.latestCreatedAt).getTime()) {
+            current.latestCreatedAt = doc.created_at;
+          }
+          return;
+        }
+
+        groups.set(leadId, {
+          leadId,
+          leadLabel,
+          documents: [doc],
+          latestCreatedAt: doc.created_at,
+        });
+      });
+
+    return Array.from(groups.values())
+      .map((group) => ({
+        ...group,
+        documents: [...group.documents].sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        ),
+      }))
+      .sort(
+        (a, b) => new Date(b.latestCreatedAt).getTime() - new Date(a.latestCreatedAt).getTime()
+      );
+  }, [docs, leadNames]);
+
+  const visibleLeadFolders = useMemo(() => {
+    if (!normalizedSearch) return groupedLeadDocuments;
+
+    return groupedLeadDocuments.filter((group) => {
+      const leadNumber = String(group.leadId);
+      const leadLabel = group.leadLabel.toLowerCase();
+
+      return leadNumber.includes(normalizedSearch) || leadLabel.includes(normalizedSearch);
+    });
+  }, [groupedLeadDocuments, normalizedSearch]);
+
+  useEffect(() => {
+    if (filterModule !== "lead") {
+      setExpandedLeadIds([]);
+      return;
+    }
+
+    setExpandedLeadIds((current) =>
+      current.filter((leadId) => visibleLeadFolders.some((group) => group.leadId === leadId))
+    );
+  }, [filterModule, visibleLeadFolders]);
+
   const handleDelete = async (id: string) => {
     if (!window.confirm("Delete this document?")) return;
     try {
@@ -259,6 +372,14 @@ export default function DocumentsPage() {
     }
   };
 
+  const toggleLeadFolder = (leadId: number) => {
+    setExpandedLeadIds((current) =>
+      current.includes(leadId) ? current.filter((id) => id !== leadId) : [...current, leadId]
+    );
+  };
+
+  const showLeadFolders = filterModule === "lead";
+
   return (
     <div className="h-full overflow-y-auto bg-[#f5f7fb]">
       {/* Header */}
@@ -266,14 +387,18 @@ export default function DocumentsPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-[18px] font-semibold text-[#1f2d3d]">Documents</h1>
-            <p className="text-xs text-slate-500">Manage files linked to your CRM records</p>
+            <p className="text-xs text-slate-500">
+              {isAdmin ? "Manage files linked to your CRM records" : "View lead-linked documents. Upload new files from the Lead detail page."}
+            </p>
           </div>
-          <button
-            onClick={() => setShowUpload(true)}
-            className="flex items-center gap-1.5 rounded-[6px] bg-gradient-to-b from-[#4d76ff] to-[#365eea] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-          >
-            <Plus size={15} /> Upload Document
-          </button>
+          {isAdmin ? (
+            <button
+              onClick={() => setShowUpload(true)}
+              className="flex items-center gap-1.5 rounded-[6px] bg-gradient-to-b from-[#4d76ff] to-[#365eea] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+            >
+              <Plus size={15} /> Upload Document
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -286,7 +411,7 @@ export default function DocumentsPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search documents…"
+              placeholder={showLeadFolders ? "Search by lead number, lead name, or document…" : "Search documents…"}
               className="w-full rounded-[8px] border border-[#cfd7e6] bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-[#4d76ff]"
             />
           </div>
@@ -302,16 +427,22 @@ export default function DocumentsPage() {
             ))}
           </select>
 
-          <select
-            value={filterModule}
-            onChange={(e) => setFilterModule(e.target.value as RelatedModule | "")}
-            className="rounded-[8px] border border-[#cfd7e6] bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#4d76ff]"
-          >
-            <option value="">All Modules</option>
-            {(["lead", "contact", "deal", "project"] as RelatedModule[]).map((m) => (
-              <option key={m} value={m}>{MODULE_LABELS[m]}</option>
-            ))}
-          </select>
+          {isAdmin ? (
+            <select
+              value={filterModule}
+              onChange={(e) => setFilterModule(e.target.value as RelatedModule | "")}
+              className="rounded-[8px] border border-[#cfd7e6] bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#4d76ff]"
+            >
+              <option value="">All Modules</option>
+              {(["lead", "contact", "deal", "project"] as RelatedModule[]).map((m) => (
+                <option key={m} value={m}>{MODULE_LABELS[m]}</option>
+              ))}
+            </select>
+          ) : (
+            <div className="inline-flex items-center rounded-[8px] border border-[#d9e1ef] bg-white px-3 py-2 text-sm text-slate-600">
+              Showing lead documents
+            </div>
+          )}
         </div>
 
         {/* Table */}
@@ -324,12 +455,136 @@ export default function DocumentsPage() {
             <div className="py-16 text-center">
               <FileText size={36} className="mx-auto mb-3 text-slate-300" />
               <p className="text-sm text-slate-500">No documents found.</p>
-              <button
-                onClick={() => setShowUpload(true)}
-                className="mt-3 text-sm font-medium text-[#4d76ff] hover:underline"
-              >
-                Upload your first document
-              </button>
+              {isAdmin ? (
+                <button
+                  onClick={() => setShowUpload(true)}
+                  className="mt-3 text-sm font-medium text-[#4d76ff] hover:underline"
+                >
+                  Upload your first document
+                </button>
+              ) : (
+                <p className="mt-3 text-sm text-slate-400">Open a lead record to upload and manage its documents.</p>
+              )}
+            </div>
+          ) : showLeadFolders ? (
+            <div className="divide-y divide-slate-100">
+              {visibleLeadFolders.map((group) => {
+                const isExpanded = expandedLeadIds.includes(group.leadId);
+
+                return (
+                  <div key={group.leadId} className="bg-white">
+                    <button
+                      type="button"
+                      onClick={() => toggleLeadFolder(group.leadId)}
+                      className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left hover:bg-slate-50"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="rounded-[10px] bg-amber-50 p-2 text-amber-600">
+                          <Folder size={18} />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-[#1f2d3d]">{group.leadLabel}</p>
+                          <p className="mt-0.5 text-xs text-slate-500">
+                            {group.documents.length} {group.documents.length === 1 ? "document" : "documents"} · Last upload{" "}
+                            {new Date(group.latestCreatedAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+                          Lead #{group.leadId}
+                        </span>
+                        <ChevronRight
+                          size={16}
+                          className={`text-slate-400 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                        />
+                      </div>
+                    </button>
+
+                    {isExpanded ? (
+                      <div className="border-t border-slate-100 bg-slate-50/60 px-4 py-3">
+                        <div className="overflow-x-auto rounded-[10px] border border-slate-200 bg-white">
+                          <table className="w-full text-left text-sm">
+                            <thead className="border-b border-slate-200 bg-slate-50 text-xs font-medium uppercase text-slate-500">
+                              <tr>
+                                <th className="px-4 py-3">Title</th>
+                                <th className="px-4 py-3">Type</th>
+                                <th className="px-4 py-3">Uploaded By</th>
+                                <th className="px-4 py-3">Version</th>
+                                <th className="px-4 py-3">Date</th>
+                                <th className="px-4 py-3 text-right">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {group.documents.map((doc) => (
+                                <tr key={doc.id} className="border-t border-slate-100 hover:bg-slate-50">
+                                  <td className="px-4 py-3">
+                                    <button
+                                      onClick={() => navigate(`/documents/${doc.id}`)}
+                                      className="flex items-center gap-2 font-medium text-[#1f2d3d] hover:text-[#4d76ff]"
+                                    >
+                                      <FileText size={14} className="shrink-0 text-slate-400" />
+                                      {doc.title}
+                                    </button>
+                                    {doc.file_name ? (
+                                      <p className="mt-0.5 pl-[22px] text-xs text-slate-400">{doc.file_name}</p>
+                                    ) : null}
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <TypeBadge type={doc.document_type} />
+                                  </td>
+                                  <td className="px-4 py-3 text-slate-600">{doc.uploaded_by_email ?? "—"}</td>
+                                  <td className="px-4 py-3">
+                                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                                      v{doc.version}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 text-xs text-slate-500">
+                                    {new Date(doc.created_at).toLocaleDateString()}
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <div className="flex items-center justify-end gap-2">
+                                      <button
+                                        onClick={() => navigate(`/documents/${doc.id}`)}
+                                        title="View"
+                                        className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                                      >
+                                        <Eye size={14} />
+                                      </button>
+                                      {doc.file_url && (
+                                        <a
+                                          href={doc.file_url}
+                                          download
+                                          title="Download"
+                                          className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                                        >
+                                          <Download size={14} />
+                                        </a>
+                                      )}
+                                      <button
+                                        onClick={() => void handleDelete(doc.id)}
+                                        disabled={deleting === doc.id}
+                                        title="Delete"
+                                        className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
+                                      >
+                                        {deleting === doc.id ? (
+                                          <Loader2 size={14} className="animate-spin" />
+                                        ) : (
+                                          <Trash2 size={14} />
+                                        )}
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -419,7 +674,7 @@ export default function DocumentsPage() {
         </div>
       </div>
 
-      {showUpload && (
+      {isAdmin && showUpload && (
         <UploadModal
           onClose={() => setShowUpload(false)}
           onUploaded={(doc) => setDocs((prev) => [doc, ...prev])}

@@ -8,7 +8,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Download, Eye, FileText, Loader2, Plus, Trash2, Upload, X } from "lucide-react";
+import { Download, Eye, ExternalLink, FileText, Loader2, Plus, Trash2, Upload, X } from "lucide-react";
 import {
   deleteDocument,
   getDocuments,
@@ -27,6 +27,11 @@ const TYPE_COLORS: Record<string, string> = {
   contract: "bg-rose-100 text-rose-700",
   other: "bg-slate-100 text-slate-600",
 };
+
+function canPreviewDocument(fileName: string | null) {
+  const ext = fileName?.split(".").pop()?.toLowerCase() ?? "";
+  return ["jpg", "jpeg", "png", "gif", "webp", "svg", "pdf", "txt", "md", "csv", "json", "log"].includes(ext);
+}
 
 // ── Inline Upload Modal ─────────────────────────────────────────────────────
 
@@ -246,12 +251,35 @@ export default function DocumentsSection({ module, relatedId }: Props) {
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <button
-                  onClick={() => navigate(`/documents/${doc.id}`)}
+                  onClick={() => {
+                    if (canPreviewDocument(doc.file_name)) {
+                      navigate(`/documents/${doc.id}`);
+                      return;
+                    }
+
+                    if (doc.file_url) {
+                      window.open(doc.file_url, "_blank", "noopener,noreferrer");
+                      return;
+                    }
+
+                    navigate(`/documents/${doc.id}`);
+                  }}
                   title="View"
                   className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                 >
                   <Eye size={13} />
                 </button>
+                {doc.file_url && !canPreviewDocument(doc.file_name) ? (
+                  <a
+                    href={doc.file_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    title="Open File"
+                    className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                  >
+                    <ExternalLink size={13} />
+                  </a>
+                ) : null}
                 {doc.file_url && (
                   <a
                     href={doc.file_url}

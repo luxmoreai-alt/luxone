@@ -51,6 +51,8 @@ const emptyCaseForm: CaseFormData = {
   company: "",
   country: "",
   phone: "",
+  lead: "",
+  leadLabel: "",
   leadName: "",
   leadSource: "",
   owner: "",
@@ -146,9 +148,10 @@ export default function SupportFormPageCore({ moduleKey }: Props) {
     const accountName = searchParams.get("accountName") || "";
     const dealId = searchParams.get("dealId") || "";
     const dealName = searchParams.get("dealName") || "";
+    const leadId = searchParams.get("leadId") || "";
     const leadName = searchParams.get("leadName") || "";
 
-    if (!productId && !contactId && !accountId && !dealId && !leadName) return;
+    if (!productId && !contactId && !accountId && !dealId && !leadId && !leadName) return;
 
     setCaseForm((prev) => ({
       ...prev,
@@ -160,6 +163,8 @@ export default function SupportFormPageCore({ moduleKey }: Props) {
       accountLabel: prev.accountLabel || accountName,
       deal: prev.deal || dealId,
       dealLabel: prev.dealLabel || dealName,
+      lead: prev.lead || leadId,
+      leadLabel: prev.leadLabel || leadName,
       leadName: prev.leadName || leadName,
     }));
   }, [isEdit, moduleKey, searchParams]);
@@ -256,7 +261,7 @@ export default function SupportFormPageCore({ moduleKey }: Props) {
 
   const hydrateLeadContext = async (dealId?: string, fallbackLeadName?: string) => {
     if (!dealId && !fallbackLeadName) {
-      return { leadName: "", leadSource: "" };
+      return { leadName: "", leadSource: "", leadId: "" };
     }
 
     let leadName = fallbackLeadName || "";
@@ -292,18 +297,27 @@ export default function SupportFormPageCore({ moduleKey }: Props) {
         if (firstLead) {
           leadSource = String(firstLead.lead_source || "");
           leadName = String(firstLead.lead_name || leadName || "");
+          leadId = String(firstLead.id || leadId || "");
         }
       } catch {
         // Do not block case entry if search-based enrichment fails.
       }
     }
 
-    return { leadName, leadSource };
+    return { leadName, leadSource, leadId };
   };
 
   const handleContactSelect = (option: SupportLookupOption | null) => {
     if (!option) {
-      setCaseForm((prev) => ({ ...prev, relatedContact: "", relatedContactLabel: "", leadName: "", leadSource: "" }));
+      setCaseForm((prev) => ({
+        ...prev,
+        relatedContact: "",
+        relatedContactLabel: "",
+        lead: "",
+        leadLabel: "",
+        leadName: "",
+        leadSource: "",
+      }));
       return;
     }
     void (async () => {
@@ -336,6 +350,8 @@ export default function SupportFormPageCore({ moduleKey }: Props) {
         dealLabel: prev.dealLabel || linkedDealName,
         reportedBy: prev.reportedBy || option.label,
         company: prev.company || option.accountName || prev.company,
+        lead: prev.lead || leadContext.leadId,
+        leadLabel: prev.leadLabel || leadContext.leadName,
         leadName: prev.leadName || leadContext.leadName,
         leadSource: prev.leadSource || leadContext.leadSource,
         subject: prev.subject || (prev.productLabel ? `${prev.productLabel} Issue - ${option.label}` : `Support Issue - ${option.label}`),
@@ -345,7 +361,15 @@ export default function SupportFormPageCore({ moduleKey }: Props) {
 
   const handleDealSelect = (option: SupportLookupOption | null) => {
     if (!option) {
-      setCaseForm((prev) => ({ ...prev, deal: "", dealLabel: "", leadName: "", leadSource: "" }));
+      setCaseForm((prev) => ({
+        ...prev,
+        deal: "",
+        dealLabel: "",
+        lead: "",
+        leadLabel: "",
+        leadName: "",
+        leadSource: "",
+      }));
       return;
     }
 
@@ -355,6 +379,8 @@ export default function SupportFormPageCore({ moduleKey }: Props) {
         ...prev,
         deal: option.id,
         dealLabel: option.label,
+        lead: leadContext.leadId || prev.lead,
+        leadLabel: leadContext.leadName || prev.leadLabel,
         leadName: leadContext.leadName || prev.leadName,
         leadSource: leadContext.leadSource || prev.leadSource,
         account: prev.account || option.accountId || prev.account,
@@ -451,10 +477,29 @@ export default function SupportFormPageCore({ moduleKey }: Props) {
                 <Field label="Email"><input className={inputClass} value={caseForm.email} onChange={(e) => setCaseForm({ ...caseForm, email: e.target.value })} /></Field>
                 <Field label="Phone"><input className={inputClass} value={caseForm.phone} onChange={(e) => setCaseForm({ ...caseForm, phone: e.target.value })} /></Field>
                 <Field label="Company"><input className={inputClass} value={caseForm.company} onChange={(e) => setCaseForm({ ...caseForm, company: e.target.value })} /></Field>
-                <div>
-                  <Field label="Lead Name"><input className={inputClass} value={caseForm.leadName} onChange={(e) => setCaseForm({ ...caseForm, leadName: e.target.value })} /></Field>
-                  <p className="mt-1 text-xs text-slate-500">Auto-filled from the selected deal or related contact when a linked lead exists.</p>
-                </div>
+                <Field label="Lead">
+                  <div className="space-y-1">
+                    <CaseLookupField
+                      label="Lead"
+                      lookup="leads"
+                      value={caseForm.lead}
+                      displayValue={caseForm.leadLabel || caseForm.leadName}
+                      onChange={(option) =>
+                        setCaseForm((prev) => ({
+                          ...prev,
+                          lead: option?.id || "",
+                          leadLabel: option?.label || "",
+                          leadName: option?.label || prev.leadName,
+                          leadSource: option?.source || prev.leadSource,
+                          email: prev.email || option?.email || "",
+                          phone: prev.phone || option?.phone || "",
+                          company: prev.company || option?.accountName || prev.company,
+                        }))
+                      }
+                    />
+                    <p className="text-xs text-slate-500">Use lookup to attach a real lead record for reporting and linking.</p>
+                  </div>
+                </Field>
                 <Field label="Country"><input className={inputClass} value={caseForm.country} onChange={(e) => setCaseForm({ ...caseForm, country: e.target.value })} /></Field>
                 <div>
                   <Field label="Lead Source"><input className={inputClass} value={caseForm.leadSource} onChange={(e) => setCaseForm({ ...caseForm, leadSource: e.target.value })} /></Field>

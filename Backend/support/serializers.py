@@ -29,7 +29,10 @@ User = get_user_model()
 
 
 def _active_queryset(model):
-    return model.objects.filter(is_active=True)
+    # Some related models (e.g., Lead) do not have an `is_active` flag.
+    if any(field.name == "is_active" for field in model._meta.fields):
+        return model.objects.filter(is_active=True)
+    return model.objects.all()
 
 
 class SupportUserSummarySerializer(serializers.Serializer):
@@ -208,6 +211,7 @@ class SupportCaseListSerializer(serializers.ModelSerializer):
     related_contact_name = serializers.SerializerMethodField()
     deal_name = serializers.SerializerMethodField()
     product_name = serializers.SerializerMethodField()
+    lead_name = serializers.SerializerMethodField()
 
     class Meta:
         model = SupportCase
@@ -226,6 +230,8 @@ class SupportCaseListSerializer(serializers.ModelSerializer):
             "product_name",
             "related_contact",
             "related_contact_name",
+            "lead",
+            "lead_name",
             "account",
             "account_name",
             "deal",
@@ -254,6 +260,11 @@ class SupportCaseListSerializer(serializers.ModelSerializer):
     def get_product_name(self, obj):
         return obj.product.product_name if obj.product else None
 
+    def get_lead_name(self, obj):
+        if obj.lead:
+            return f"{obj.lead.first_name} {obj.lead.last_name}".strip()
+        return obj.lead_name
+
 
 class SupportCaseWriteSerializer(serializers.ModelSerializer):
     owner = serializers.PrimaryKeyRelatedField(queryset=_active_queryset(User), required=False, allow_null=True)
@@ -261,6 +272,7 @@ class SupportCaseWriteSerializer(serializers.ModelSerializer):
     related_contact = serializers.PrimaryKeyRelatedField(queryset=_active_queryset(Contact), required=False, allow_null=True)
     account = serializers.PrimaryKeyRelatedField(queryset=_active_queryset(Account), required=False, allow_null=True)
     deal = serializers.PrimaryKeyRelatedField(queryset=_active_queryset(Deal), required=False, allow_null=True)
+    lead = serializers.PrimaryKeyRelatedField(queryset=_active_queryset(Lead), required=False, allow_null=True)
 
     class Meta:
         model = SupportCase
@@ -286,6 +298,7 @@ class SupportCaseWriteSerializer(serializers.ModelSerializer):
             "related_contact",
             "account",
             "deal",
+            "lead",
         ]
 
     def validate_subject(self, value):

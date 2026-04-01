@@ -42,6 +42,13 @@ class SupportCase(BaseModel):
     country = models.CharField(max_length=100, blank=True, null=True, db_index=True)
     phone = models.CharField(max_length=20, blank=True, null=True)
     lead_name = models.CharField(max_length=255, blank=True, null=True)
+    lead = models.ForeignKey(
+        "leads.Lead",
+        on_delete=models.SET_NULL,
+        related_name="support_cases",
+        null=True,
+        blank=True,
+    )
     lead_source = models.CharField(max_length=100, blank=True, null=True)
     no_of_comments = models.PositiveIntegerField(default=0)
     owner = models.ForeignKey(
@@ -110,6 +117,7 @@ class SupportCase(BaseModel):
             models.Index(fields=["related_contact"]),
             models.Index(fields=["deal"]),
             models.Index(fields=["product"]),
+            models.Index(fields=["lead"]),
             models.Index(fields=["last_activity_at"]),
             models.Index(fields=["is_active"]),
         ]

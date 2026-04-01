@@ -8,6 +8,7 @@ import CRMSectionCard from "../../components/crm/CRMSectionCard";
 import CRMTabs from "../../components/crm/CRMTabs";
 import CRMTimeline from "../../components/crm/CRMTimeline";
 import DashboardLayout from "../../components/layout/DashboardLayout";
+import DocumentsSection from "../documents/DocumentsSection";
 import type {
   Activity,
   Attachment,
@@ -27,6 +28,7 @@ import type {
   Solution,
   TimelineItem,
 } from "../../lib/shared/crmTypes";
+import type { RelatedModule } from "../../lib/api/documentsApi";
 
 type CRMDetailData = {
   notes: Note[];
@@ -78,19 +80,31 @@ export default function CRMModuleDetailPage<T extends CRMRecord>({
   };
 
   const record = useMemo(() => rows.find((row) => row.id === id) ?? rows[0], [id, rows]);
+  const documentModule = useMemo<RelatedModule>(
+    () => (config.module === "leads" ? "lead" : ""),
+    [config.module]
+  );
+  const hasDocumentsSection = documentModule !== "";
+  const relatedListItems = useMemo(
+    () =>
+      hasDocumentsSection && !config.relatedListItems.includes("Documents")
+        ? [...config.relatedListItems, "Documents"]
+        : config.relatedListItems,
+    [config.relatedListItems, hasDocumentsSection]
+  );
 
   const sectionIdMap = useMemo(() => {
     const map: Record<string, string> = {};
-    config.relatedListItems.forEach((item) => {
+    relatedListItems.forEach((item) => {
       map[item] = `${item.toLowerCase().replace(/\s+/g, "-")}-section`;
     });
     return map;
-  }, [config.relatedListItems]);
+  }, [relatedListItems]);
 
   useEffect(() => {
     if (activeTab !== "overview") return;
 
-    const observed = config.relatedListItems
+    const observed = relatedListItems
       .map((item) => ({ item, element: document.getElementById(sectionIdMap[item]) }))
       .filter((entry): entry is { item: string; element: HTMLElement } => !!entry.element);
 
@@ -112,7 +126,7 @@ export default function CRMModuleDetailPage<T extends CRMRecord>({
 
     observed.forEach((entry) => observer.observe(entry.element));
     return () => observer.disconnect();
-  }, [activeTab, config.relatedListItems, sectionIdMap]);
+  }, [activeTab, relatedListItems, sectionIdMap]);
 
   const isLongTextField = (fieldKey: string) => {
     const normalized = fieldKey.toLowerCase();
@@ -502,7 +516,7 @@ export default function CRMModuleDetailPage<T extends CRMRecord>({
 
         <div className="grid gap-4 lg:grid-cols-[240px_1fr]">
           <CRMRelatedList
-            items={config.relatedListItems}
+            items={relatedListItems}
             activeItem={activeRelatedItem}
             onSelect={(item) => {
               setActiveTab("overview");
@@ -549,6 +563,14 @@ export default function CRMModuleDetailPage<T extends CRMRecord>({
                   </CRMSectionCard>
                 </section>
               ))}
+
+              {hasDocumentsSection ? (
+                <section id={sectionIdMap.Documents} className="scroll-mt-24">
+                  <CRMSectionCard title="Documents">
+                    <DocumentsSection module={documentModule} relatedId={record.id} />
+                  </CRMSectionCard>
+                </section>
+              ) : null}
             </div>
           )}
         </div>

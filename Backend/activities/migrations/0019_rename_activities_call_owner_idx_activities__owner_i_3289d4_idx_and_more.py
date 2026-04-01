@@ -6,23 +6,109 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('activities', '0018_meeting_meeting_link'),
+        ("activities", "0018_meeting_meeting_link"),
     ]
 
     operations = [
-        migrations.RenameIndex(
-            model_name='call',
-            new_name='activities__owner_i_3289d4_idx',
-            old_name='activities_call_owner_idx',
+        # Keep DB operations guarded (to avoid failures when old names are missing)
+        # while updating the migration state with the intended RenameIndex ops.
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                migrations.RunSQL(
+                    sql="""
+                    DO $$
+                    BEGIN
+                        IF EXISTS (
+                            SELECT 1 FROM pg_class c WHERE c.relname = 'activities_call_owner_idx'
+                        ) THEN
+                            ALTER INDEX activities_call_owner_idx RENAME TO activities__owner_i_3289d4_idx;
+                        END IF;
+                    END$$;
+                    """,
+                    reverse_sql="""
+                    DO $$
+                    BEGIN
+                        IF EXISTS (
+                            SELECT 1 FROM pg_class c WHERE c.relname = 'activities__owner_i_3289d4_idx'
+                        ) THEN
+                            ALTER INDEX activities__owner_i_3289d4_idx RENAME TO activities_call_owner_idx;
+                        END IF;
+                    END$$;
+                    """,
+                ),
+            ],
+            state_operations=[
+                migrations.RenameIndex(
+                    model_name="call",
+                    new_name="activities__owner_i_3289d4_idx",
+                    old_name="activities_call_owner_idx",
+                )
+            ],
         ),
-        migrations.RenameIndex(
-            model_name='call',
-            new_name='activities__call_st_23d3c3_idx',
-            old_name='activities_call_status_idx',
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                migrations.RunSQL(
+                    sql="""
+                    DO $$
+                    BEGIN
+                        IF EXISTS (
+                            SELECT 1 FROM pg_class c WHERE c.relname = 'activities_call_status_idx'
+                        ) THEN
+                            ALTER INDEX activities_call_status_idx RENAME TO activities__call_st_23d3c3_idx;
+                        END IF;
+                    END$$;
+                    """,
+                    reverse_sql="""
+                    DO $$
+                    BEGIN
+                        IF EXISTS (
+                            SELECT 1 FROM pg_class c WHERE c.relname = 'activities__call_st_23d3c3_idx'
+                        ) THEN
+                            ALTER INDEX activities__call_st_23d3c3_idx RENAME TO activities_call_status_idx;
+                        END IF;
+                    END$$;
+                    """,
+                ),
+            ],
+            state_operations=[
+                migrations.RenameIndex(
+                    model_name="call",
+                    new_name="activities__call_st_23d3c3_idx",
+                    old_name="activities_call_status_idx",
+                )
+            ],
         ),
-        migrations.RenameIndex(
-            model_name='task',
-            new_name='activities__assigne_d9349c_idx',
-            old_name='activities__assigne_created_idx',
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                migrations.RunSQL(
+                    sql="""
+                    DO $$
+                    BEGIN
+                        IF EXISTS (
+                            SELECT 1 FROM pg_class c WHERE c.relname = 'activities__assigne_created_idx'
+                        ) THEN
+                            ALTER INDEX activities__assigne_created_idx RENAME TO activities__assigne_d9349c_idx;
+                        END IF;
+                    END$$;
+                    """,
+                    reverse_sql="""
+                    DO $$
+                    BEGIN
+                        IF EXISTS (
+                            SELECT 1 FROM pg_class c WHERE c.relname = 'activities__assigne_d9349c_idx'
+                        ) THEN
+                            ALTER INDEX activities__assigne_d9349c_idx RENAME TO activities__assigne_created_idx;
+                        END IF;
+                    END$$;
+                    """,
+                ),
+            ],
+            state_operations=[
+                migrations.RenameIndex(
+                    model_name="task",
+                    new_name="activities__assigne_d9349c_idx",
+                    old_name="activities__assigne_created_idx",
+                )
+            ],
         ),
     ]
