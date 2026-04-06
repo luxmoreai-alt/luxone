@@ -148,7 +148,10 @@ function RequireAuth({ children }: { children: ReactNode }) {
         if (data.department !== undefined) storedUser.department = data.department;
         localStorage.setItem("loggedInUser", JSON.stringify(storedUser));
         // Only trigger re-render if something changed
-        if (prevModules !== JSON.stringify(data.allowed_modules) || prevDept !== data.department) {
+        if (
+          prevModules !== JSON.stringify(data.allowed_modules) ||
+          prevDept !== data.department
+        ) {
           window.dispatchEvent(new Event("auth:modules-updated"));
         }
       })

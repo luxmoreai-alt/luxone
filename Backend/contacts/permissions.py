@@ -7,7 +7,7 @@ def _resolve_role(user) -> str:
         return "admin"
 
     role = (getattr(user, "role", "") or "").strip().lower()
-    if role in {"admin", "manager", "sales", "sales_rep", "sales rep"}:
+    if role in {"admin", "manager", "sales_manager", "sales", "sales_rep", "sales rep"}:
         return role
 
     if getattr(user, "is_staff", False):

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import { deleteCampaign, getCampaigns, type CampaignRecord } from "../../lib/api/campaignsApi";
+import { keepEmployeeOwnedRows } from "../../lib/shared/recordVisibility";
 import { Pencil, Trash2 } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -23,7 +24,7 @@ export default function CampaignsPage() {
     try {
       setLoading(true);
       setError(null);
-      setRows(await getCampaigns({ search }));
+      setRows(keepEmployeeOwnedRows(await getCampaigns({ search })));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load campaigns");
     } finally {
@@ -67,7 +68,7 @@ export default function CampaignsPage() {
               <button
                 type="button"
                 onClick={() => navigate("/campaigns/create")}
-                className="rounded-[6px] bg-gradient-to-b from-[#4d76ff] to-[#365eea] px-4 py-2 text-[14px] font-medium text-white"
+                className="rounded-[6px] bg-gradient-to-b from-[#359de9] to-[#365eea] px-4 py-2 text-[14px] font-medium text-white"
               >
                 Create Campaign
               </button>

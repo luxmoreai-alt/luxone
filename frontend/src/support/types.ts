@@ -9,7 +9,7 @@ import type {
 
 export type SupportModuleKey = "cases" | "solutions";
 
-export type SupportLookupName = "products" | "accounts" | "contacts" | "vendors" | "deals";
+export type SupportLookupName = "products" | "accounts" | "contacts" | "vendors" | "deals" | "leads";
 
 export type SupportLookupOption = {
   id: string;

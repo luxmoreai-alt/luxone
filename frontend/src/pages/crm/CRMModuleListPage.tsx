@@ -476,7 +476,7 @@ export default function CRMModuleListPage<T extends CRMRecord>({
                 </div>
               </div>
             ) : <CRMTable
-              rows={paginatedRows}
+          rows={paginatedRows}
               columns={visibleColumns}
               rowActions={config.rowActions}
               selectedIds={selectedIds}

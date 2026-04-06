@@ -7,6 +7,11 @@ import {
 } from "lucide-react";
 import { apiRequest } from "../../api/client";
 import { useAuth } from "../../hooks/useAuth";
+import { removeDashboardCache } from "../../lib/dashboardCache";
+
+const TEAM_UPDATED_EVENT = "team:updated";
+const ADMIN_DASHBOARD_CACHE_KEY = "admin-dashboard-cache-v1";
+const MANAGER_DASHBOARD_CACHE_KEY = "manager-dashboard-cache-v1";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -309,6 +314,9 @@ export default function EmployeeProfilePage() {
       setEmployee(updated);
       setEditingManager(false);
       setSelectedManager("");
+      removeDashboardCache(ADMIN_DASHBOARD_CACHE_KEY);
+      removeDashboardCache(MANAGER_DASHBOARD_CACHE_KEY);
+      window.dispatchEvent(new Event(TEAM_UPDATED_EVENT));
     } catch (err) {
       setManagerError(err instanceof Error ? err.message : "Failed to assign.");
     } finally {
@@ -333,6 +341,9 @@ export default function EmployeeProfilePage() {
       });
       setEmployee(updated);
       setEditingDetails(false);
+      removeDashboardCache(ADMIN_DASHBOARD_CACHE_KEY);
+      removeDashboardCache(MANAGER_DASHBOARD_CACHE_KEY);
+      window.dispatchEvent(new Event(TEAM_UPDATED_EVENT));
     } catch (err) {
       setDetailsError(err instanceof Error ? err.message : "Failed to update details.");
     } finally {
@@ -346,6 +357,9 @@ export default function EmployeeProfilePage() {
     setDeleteError("");
     try {
       await apiRequest(`/auth/manage-users/${id}/permanent-delete/`, { method: "POST" });
+      removeDashboardCache(ADMIN_DASHBOARD_CACHE_KEY);
+      removeDashboardCache(MANAGER_DASHBOARD_CACHE_KEY);
+      window.dispatchEvent(new Event(TEAM_UPDATED_EVENT));
       navigate("/team");
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : "Delete failed.");
@@ -361,6 +375,9 @@ export default function EmployeeProfilePage() {
       const updated = await apiRequest<EmployeeInfo>(`/auth/manage-users/${id}/${action}/`, { method: "POST" });
       setEmployee(updated);
       setOffboardAction(null);
+      removeDashboardCache(ADMIN_DASHBOARD_CACHE_KEY);
+      removeDashboardCache(MANAGER_DASHBOARD_CACHE_KEY);
+      window.dispatchEvent(new Event(TEAM_UPDATED_EVENT));
     } catch (err) {
       setOffboardError(err instanceof Error ? err.message : "Action failed.");
     } finally {

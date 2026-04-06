@@ -2,13 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Bell,
   CalendarDays,
-  Gauge,
   Grid2x2,
   Menu,
   Plus,
   Search,
-  Settings,
-  Sparkles,
   User,
   X,
   Mail,
@@ -292,6 +289,11 @@ export default function Topbar({
     "User";
 
   const displayEmail = fullUser?.email || user.email || "No email";
+  const allowedEmailDomains = useMemo(() => {
+    const domain = (displayEmail.includes("@") ? displayEmail.split("@")[1] : "").toLowerCase();
+    const domains = domain ? [`@${domain}`] : [];
+    return [...domains, ...STATIC_ALLOWED_EMAIL_DOMAINS];
+  }, [displayEmail]);
   const activeRole = fullUser?.role || user.role;
   const canManageProjectAttendance = ["admin", "sub_admin", "manager"].includes(
     (activeRole || "").trim().toLowerCase()
@@ -460,15 +462,16 @@ export default function Topbar({
         "/email/unread-count/"
       )
         .then((data) => {
-          setUnreadEmailCount(data.unread_count ?? 0);
-          setRecentUnreadEmails(data.recent ?? []);
+          const filtered = (data.recent ?? []).filter((email) => isRelevantEmailAddress(email.from_email, allowedEmailDomains));
+          setUnreadEmailCount(filtered.length);
+          setRecentUnreadEmails(filtered);
         })
         .catch(() => {});
     };
     fetchUnread();
     const interval = setInterval(fetchUnread, 60_000);
     return () => clearInterval(interval);
-  }, []);
+  }, [allowedEmailDomains]);
 
   const handleLogout = () => {
     // Clear all auth keys and fire the logout event so RequireAuth updates
@@ -534,10 +537,6 @@ export default function Topbar({
 
           <button className="flex h-[32px] w-[32px] items-center justify-center rounded-md border border-[#4c6fff] text-[#4c6fff]">
             <Plus size={16} />
-          </button>
-
-          <button className="flex h-[32px] w-[32px] items-center justify-center rounded-md hover:bg-slate-100">
-            <Gauge size={16} />
           </button>
 
           <div className="relative">
@@ -724,29 +723,19 @@ export default function Topbar({
               onClick={() => navigate("/calendar")}
               className="flex h-[32px] w-[32px] items-center justify-center rounded-md hover:bg-slate-100"
             >
-            <CalendarDays size={16} />
-          </button>
+              <CalendarDays size={16} />
+            </button>
 
-          <button className="flex h-[32px] w-[32px] items-center justify-center rounded-md hover:bg-slate-100">
-            <Sparkles size={16} />
-          </button>
+            <button
+              onClick={() => setProfileOpen(true)}
+              className="flex h-[32px] w-[32px] items-center justify-center rounded-md hover:bg-slate-100"
+            >
+              <User size={16} />
+            </button>
 
-          <button className="flex h-[32px] w-[32px] items-center justify-center rounded-md hover:bg-slate-100">
-            <Settings size={16} />
-          </button>
-
-          <div className="mx-1 h-5 w-px bg-slate-200" />
-
-          <button
-            onClick={() => setProfileOpen(true)}
-            className="flex h-[32px] w-[32px] items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200"
-          >
-            <User size={16} />
-          </button>
-
-          <button className="flex h-[32px] w-[32px] items-center justify-center rounded-md hover:bg-slate-100">
-            <Grid2x2 size={16} />
-          </button>
+            <button className="flex h-[32px] w-[32px] items-center justify-center rounded-md hover:bg-slate-100">
+              <Grid2x2 size={16} />
+            </button>
         </div>
       </header>
 
@@ -848,3 +837,24 @@ export default function Topbar({
 }
 
 
+const STATIC_ALLOWED_EMAIL_DOMAINS = [] as string[]; // optional extras: ["@client.com"]
+const BLOCKED_EMAIL_SUBSTRINGS = [
+  "@facebookmail.com",
+  "@dare2compete",
+  "@workday.com",
+  "@njoyn.com",
+  "career postings",
+  "job alert",
+  "newsletter",
+  "no-reply",
+  "noreply",
+];
+
+function isRelevantEmailAddress(email?: string | null, allowedDomains: string[] = []) {
+  if (!email) return false;
+  const value = email.trim().toLowerCase();
+  if (allowedDomains.length > 0) {
+    return allowedDomains.some((domain) => value.endsWith(domain.toLowerCase()));
+  }
+  return !BLOCKED_EMAIL_SUBSTRINGS.some((needle) => value.includes(needle.toLowerCase()));
+}

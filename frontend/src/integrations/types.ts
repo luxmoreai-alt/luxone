@@ -163,6 +163,7 @@ export type SalesInboxFeedItem = {
   id: number;
   subject: string;
   from_email: string;
+  counterparty_email?: string | null;
   preview_text?: string | null;
   body_text?: string | null;
   body_html?: string | null;

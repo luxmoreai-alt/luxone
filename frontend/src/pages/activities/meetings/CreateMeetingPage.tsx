@@ -41,6 +41,8 @@ type BackendLead = {
   first_name: string;
   last_name: string;
   company?: string;
+  email?: string | null;
+  lead_name?: string | null;
 };
 
 type BackendUser = {
@@ -115,7 +117,7 @@ export default function CreateMeetingPage() {
 
   // Real data from backend
   const [contactOptions, setContactOptions] = useState<Participant[]>([]);
-  const [leadOptions, setLeadOptions] = useState<{ id: number; name: string }[]>([]);
+  const [leadOptions, setLeadOptions] = useState<{ id: number; name: string; searchText: string }[]>([]);
   const [userOptions, setUserOptions] = useState<BackendUser[]>([]);
 
   // Related-to selection
@@ -140,7 +142,22 @@ export default function CreateMeetingPage() {
       .then((data) => {
         const leads = toList(data).map((l) => ({
           id: l.id,
-          name: `${l.first_name} ${l.last_name}`.trim(),
+          name:
+            l.lead_name?.trim() ||
+            `${l.first_name} ${l.last_name}`.trim() ||
+            l.company?.trim() ||
+            l.email?.trim() ||
+            `Lead #${l.id}`,
+          searchText: [
+            l.lead_name,
+            l.first_name,
+            l.last_name,
+            l.company,
+            l.email,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase(),
         }));
         setLeadOptions(leads);
       })
@@ -237,6 +254,20 @@ export default function CreateMeetingPage() {
       c.name.toLowerCase().includes(contactSearch.toLowerCase()) ||
       c.email.toLowerCase().includes(contactSearch.toLowerCase())
   );
+
+  const filteredRelatedOptions =
+    formData.related_to === "Lead"
+      ? leadOptions.filter((lead) =>
+          relatedSearch.trim()
+            ? lead.searchText.includes(relatedSearch.trim().toLowerCase())
+            : true
+        )
+      : contactOptions.filter((contact) =>
+          relatedSearch.trim()
+            ? contact.name.toLowerCase().includes(relatedSearch.trim().toLowerCase()) ||
+              contact.email.toLowerCase().includes(relatedSearch.trim().toLowerCase())
+            : true
+        );
 
   const selectedIds = new Set(participants.map((item) => item.id));
 
@@ -349,7 +380,7 @@ export default function CreateMeetingPage() {
         <div className="relative z-10 flex min-h-[calc(100vh-64px)] items-start justify-center px-4 py-8">
           <div className="w-full max-w-[450px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
             <form onSubmit={handleSubmit}>
-              <div className="max-h-[80vh] overflow-y-auto px-7 py-6">
+              <div className="px-7 py-6">
                 <h1 className="mb-6 text-[18px] font-semibold text-slate-900">
                   {isEditing ? "Edit Meeting" : "Meeting Information"}
                 </h1>
@@ -403,7 +434,7 @@ export default function CreateMeetingPage() {
                       name="meeting_link"
                       value={formData.meeting_link}
                       onChange={handleFieldChange}
-                      placeholder="https://meet.google.com/..."
+                      placeholder="Enter Meeting link"
                       className="w-full border-0 border-b border-slate-300 bg-transparent px-0 py-1 text-[15px] text-slate-900 outline-none focus:border-blue-600"
                     />
                     <p className="mt-1 text-[12px] text-slate-400">
@@ -560,20 +591,13 @@ export default function CreateMeetingPage() {
                           setShowRelatedDropdown(true);
                         }}
                         onFocus={() => setShowRelatedDropdown(true)}
+                        onClick={() => setShowRelatedDropdown(true)}
                         className="w-full border-0 border-b border-slate-300 bg-transparent px-0 py-1 pr-6 text-[15px] text-slate-900 outline-none focus:border-blue-600"
                       />
                       <Search className="pointer-events-none absolute right-0 top-2 h-4 w-4 text-slate-400" />
-                      {showRelatedDropdown && relatedSearch && !selectedRelatedId && (
+                      {showRelatedDropdown && !selectedRelatedId && (
                         <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg">
-                          {(formData.related_to === "Lead"
-                            ? leadOptions.filter((l) =>
-                                l.name.toLowerCase().includes(relatedSearch.toLowerCase())
-                              )
-                            : contactOptions.filter((c) =>
-                                c.name.toLowerCase().includes(relatedSearch.toLowerCase()) ||
-                                c.email.toLowerCase().includes(relatedSearch.toLowerCase())
-                              )
-                          ).map((item) => (
+                          {filteredRelatedOptions.slice(0, 12).map((item) => (
                             <button
                               key={item.id}
                               type="button"
@@ -588,14 +612,7 @@ export default function CreateMeetingPage() {
                               {item.name}
                             </button>
                           ))}
-                          {(formData.related_to === "Lead"
-                            ? leadOptions.filter((l) =>
-                                l.name.toLowerCase().includes(relatedSearch.toLowerCase())
-                              )
-                            : contactOptions.filter((c) =>
-                                c.name.toLowerCase().includes(relatedSearch.toLowerCase())
-                              )
-                          ).length === 0 && (
+                          {filteredRelatedOptions.length === 0 && (
                             <p className="px-3 py-2 text-sm text-slate-500">No results found.</p>
                           )}
                         </div>

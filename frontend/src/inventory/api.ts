@@ -251,7 +251,7 @@ function mapIntegrationEmail(parentId: string, item: SalesInboxFeedItem): EmailR
     parentId,
     subject: asString(item.subject) || "(No subject)",
     sentAt: asString(item.sent_at || item.received_at),
-    sentBy: asString(item.from_email),
+    sentBy: asString(item.counterparty_email || item.from_email),
     status: "Sent",
   };
 }

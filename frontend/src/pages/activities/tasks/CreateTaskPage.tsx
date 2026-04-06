@@ -231,7 +231,7 @@ export default function CreateTaskPage() {
   return (
     <DashboardLayout>
       <div className="px-6 py-6">
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="sticky top-0 z-40 mb-6 flex flex-col gap-4 bg-slate-50 pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <button
               type="button"

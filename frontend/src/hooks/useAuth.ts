@@ -4,6 +4,47 @@ import type { UserRole, AuthUser } from "../lib/api/authApi";
 
 export type { UserRole, AuthUser };
 
+const ALL_MODULES = ["sales", "activities", "inventory", "support", "integrations", "services", "projects"];
+
+const DEPT_MODULE_MAP: Record<string, string[]> = {
+  sales: ["sales", "activities", "inventory"],
+  business_development: ["sales", "activities", "integrations"],
+  software_development: ["support", "projects", "integrations"],
+  support: ["support", "activities", "services"],
+};
+
+const ROLE_MODULE_MAP: Record<string, string[]> = {
+  admin: ALL_MODULES,
+  sub_admin: ALL_MODULES,
+  hr: ["sales", "activities", "projects"],
+  manager: ["sales", "activities", "inventory", "support", "services", "projects"],
+  sales_manager: ["sales", "activities", "inventory", "services", "projects"],
+  team_lead: ["activities", "services", "projects"],
+  business_development: ["sales", "activities", "integrations"],
+  software_development: ["support", "projects"],
+  support_team: ["support"],
+  employee: ["sales", "activities"],
+};
+
+function deriveAllowedModules(role: string, department: string | undefined, stored: string[]) {
+  const normalizedRole = (role || "").trim().toLowerCase();
+  const dept = (department || "").trim().toLowerCase();
+
+  let roleDerived = ROLE_MODULE_MAP[normalizedRole] ?? ROLE_MODULE_MAP.employee;
+
+  if (normalizedRole === "admin" || normalizedRole === "sub_admin") {
+    roleDerived = ALL_MODULES;
+  } else if (["manager", "sales_manager", "team_lead", "employee"].includes(normalizedRole) && dept && DEPT_MODULE_MAP[dept]) {
+    roleDerived = DEPT_MODULE_MAP[dept];
+  }
+
+  if (stored && stored.length > 0) {
+    return stored.filter((module) => roleDerived.includes(module));
+  }
+
+  return roleDerived;
+}
+
 export function useAuth() {
   const [, setTick] = useState(0);
 
@@ -23,10 +64,10 @@ export function useAuth() {
 
   const user = getStoredUser();
   const role: UserRole = (user?.role as UserRole) ?? "employee";
-  const allowedModules: string[] = user?.allowed_modules ?? [];
+  const derivedAllowedModules = deriveAllowedModules(role, user?.department, user?.allowed_modules ?? []);
   const canAccess = useCallback(
-    (module: string) => role === "admin" || role === "sub_admin" || allowedModules.includes(module),
-    [allowedModules, role]
+    (module: string) => role === "admin" || role === "sub_admin" || derivedAllowedModules.includes(module),
+    [derivedAllowedModules, role]
   );
 
   return {
@@ -39,7 +80,7 @@ export function useAuth() {
     isManager: role === "manager" || role === "team_lead",
     isEmployee: !["admin", "sub_admin", "manager", "team_lead"].includes(role),
     // Module access
-    allowedModules,
+    allowedModules: derivedAllowedModules,
     canAccess,
     mustChangePassword: user?.must_change_password ?? false,
   };

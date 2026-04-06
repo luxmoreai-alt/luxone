@@ -14,6 +14,7 @@ type FormState = {
   email: string;
   phone: string;
   company: string;
+  website: string;
   notes: string;
 };
 
@@ -23,6 +24,7 @@ const initial: FormState = {
   email: "",
   phone: "",
   company: "",
+  website: "",
   notes: "",
 };
 
@@ -36,7 +38,11 @@ export default function PublicCampaignFormPage() {
   const [fieldErrors, setFieldErrors] = useState<Partial<FormState>>({});
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
+    const { name } = e.target;
+    const value =
+      name === "phone" && e.target instanceof HTMLInputElement
+        ? e.target.value.replace(/\D/g, "").slice(0, 10)
+        : e.target.value;
     setForm((prev) => ({ ...prev, [name]: value }));
     setFieldErrors((prev) => ({ ...prev, [name]: "" }));
     setError(null);
@@ -50,6 +56,19 @@ export default function PublicCampaignFormPage() {
       errs.email = "Email is required.";
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
       errs.email = "Enter a valid email address.";
+    }
+    if (form.phone.trim() && !/^\d{10}$/.test(form.phone.trim())) {
+      errs.phone = "Phone number must be exactly 10 digits.";
+    }
+    if (form.website.trim()) {
+      try {
+        const parsed = new URL(form.website.trim());
+        if (!["http:", "https:"].includes(parsed.protocol)) {
+          errs.website = "Enter a valid URL.";
+        }
+      } catch {
+        errs.website = "Enter a valid URL.";
+      }
     }
     return errs;
   };
@@ -75,6 +94,7 @@ export default function PublicCampaignFormPage() {
         email: form.email.trim(),
         phone: form.phone.trim(),
         company: form.company.trim(),
+        website: form.website.trim(),
         notes: form.notes.trim(),
       };
       await submitCampaignForm(campaignId, payload);
@@ -171,8 +191,14 @@ export default function PublicCampaignFormPage() {
               value={form.phone}
               onChange={handleChange}
               className={inputClass}
-              placeholder="+1 (555) 000-0000"
+              placeholder="Enter 10-digit phone number"
+              inputMode="numeric"
+              pattern="\d{10}"
+              maxLength={10}
             />
+            {fieldErrors.phone && (
+              <p className="mt-1 text-xs text-red-500">{fieldErrors.phone}</p>
+            )}
           </div>
 
           <div>
@@ -184,6 +210,22 @@ export default function PublicCampaignFormPage() {
               className={inputClass}
               placeholder="Your company name"
             />
+          </div>
+
+          <div>
+            <label className={labelClass}>Website</label>
+            <input
+              name="website"
+              type="url"
+              value={form.website}
+              onChange={handleChange}
+              className={inputClass}
+              placeholder="https://yourcompany.com"
+            />
+            <p className="mt-1 text-xs text-slate-400">Optional</p>
+            {fieldErrors.website && (
+              <p className="mt-1 text-xs text-red-500">{fieldErrors.website}</p>
+            )}
           </div>
 
           <div>
@@ -201,7 +243,7 @@ export default function PublicCampaignFormPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="flex w-full items-center justify-center gap-2 rounded-[8px] bg-gradient-to-b from-[#4d76ff] to-[#365eea] py-2.5 text-[15px] font-medium text-white disabled:opacity-70"
+            className="flex w-full items-center justify-center gap-2 rounded-[8px] bg-gradient-to-b from-[#359de9] to-[#365eea] py-2.5 text-[15px] font-medium text-white disabled:opacity-70"
           >
             {submitting ? <Loader2 size={16} className="animate-spin" /> : null}
             {submitting ? "Submitting..." : "Submit"}

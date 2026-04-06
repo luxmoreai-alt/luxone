@@ -149,6 +149,8 @@ export default function EditLeadPage() {
   if (error || !initialValues) return <div className="p-6 text-sm text-rose-600">{error ?? "Lead not found"}</div>;
 
   const handleSubmit = async (values: LeadEditValues) => {
+    // No domain restriction
+
     await updateLead(id!, {
       leadOwner: values.leadOwner,
       firstName: values.firstName,

@@ -1,84 +1,34 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { CalendarDays, CheckCircle2, ClipboardList, Clock3, RefreshCw } from "lucide-react";
+import { AlertTriangle, CalendarDays, CheckCircle2, ClipboardList, Clock3, Layers3, RefreshCw } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
-import { apiRequest } from "../api/client";
+import CRMSectionCard from "../components/crm/CRMSectionCard";
 import { useAuth } from "../hooks/useAuth";
+import {
+  getMyRequestsDashboard,
+  type DashboardRequestItem,
+  type MyRequestsDashboardResponse,
+} from "../lib/api/dashboardApi";
 import { readDashboardCache, writeDashboardCache } from "../lib/dashboardCache";
-import { listAppointments } from "../servicesModule/api";
-import { getSupportList } from "../support/api";
-import type { AppointmentRecord } from "../servicesModule/types";
-import type { CaseListItem } from "../support/types";
 
-type Task = {
-  id: number | string;
-  subject?: string | null;
-  due_date?: string | null;
-  status?: string | null;
-  priority?: string | null;
-  owner?: { name?: string; email?: string } | string | null;
-  created_at?: string | null;
-  updated_at?: string | null;
-};
-
-type Meeting = {
-  id: number | string;
-  title?: string | null;
-  subject?: string | null;
-  status?: string | null;
-  start_date?: string | null;
-  start_datetime?: string | null;
-  created_at?: string | null;
-  updated_at?: string | null;
-  organizer?: { name?: string; email?: string } | null;
-};
-
-type ApiList<T> = T[] | { results?: T[]; data?: T[] };
-
-type MyRequestsCache = {
-  tasks: Task[];
-  meetings: Meeting[];
-  cases: CaseListItem[];
-  appointments: AppointmentRecord[];
-};
-
-type MyRequestItem = {
-  id: string;
-  module: "Task" | "Meeting" | "Case" | "Appointment";
-  title: string;
-  status: string;
-  priority?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  dueAt?: string;
-  href: string;
-  meta: string;
-};
-
-const MY_REQUESTS_CACHE_KEY = "my-requests-cache-v1";
+const MY_REQUESTS_CACHE_KEY = "my-requests-cache-v2";
 const MY_REQUESTS_CACHE_TTL_MS = 5 * 60 * 1000;
 
-function extractList<T>(payload: ApiList<T>): T[] {
-  if (Array.isArray(payload)) return payload;
-  if (Array.isArray(payload.results)) return payload.results;
-  if (Array.isArray(payload.data)) return payload.data;
-  return [];
-}
+const EMPTY_STATE: MyRequestsDashboardResponse = {
+  updated: "",
+  summary_cards: { created_today: 0, updated_today: 0, due_today: 0, closed_today: 0 },
+  focus_today: { overdue: 0, due_today: 0, pending: 0 },
+  request_mix: [],
+  open_requests: [],
+  upcoming_queue: [],
+  closed_history: [],
+  pending_approval: [],
+};
 
 function toDate(value?: string | null) {
   if (!value) return null;
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
-function formatDate(value?: string | null) {
-  const parsed = toDate(value);
-  if (!parsed) return "N/A";
-  return parsed.toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
 }
 
 function formatDateTime(value?: string | null) {
@@ -93,81 +43,83 @@ function formatDateTime(value?: string | null) {
   });
 }
 
-function normalize(value?: string | null) {
-  return (value || "").trim().toLowerCase();
+function formatUpdatedAt(value?: string | null) {
+  const parsed = toDate(value);
+  if (!parsed) return "Not updated yet";
+  const seconds = Math.max(1, Math.round((Date.now() - parsed.getTime()) / 1000));
+  if (seconds < 60) return `Updated ${seconds}s ago`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `Updated ${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `Updated ${hours}h ago`;
+  return `Updated ${Math.round(hours / 24)}d ago`;
 }
 
-function getTaskOwner(task: Task) {
-  if (!task.owner) return "";
-  if (typeof task.owner === "string") return task.owner;
-  return task.owner.email || task.owner.name || "";
+function statusTone(status: string) {
+  const normalized = status.trim().toLowerCase();
+  if (normalized.includes("pending")) return "bg-amber-100 text-amber-800";
+  if (["closed", "completed", "resolved", "done"].some((token) => normalized.includes(token))) {
+    return "bg-emerald-100 text-emerald-700";
+  }
+  if (normalized.includes("overdue")) return "bg-rose-100 text-rose-700";
+  return "bg-slate-100 text-slate-700";
 }
 
-function matchCurrentUser(candidate: string, userEmail: string, userName: string) {
-  const value = normalize(candidate);
-  if (!value) return false;
-  return value === userEmail || value === userName || value.includes(userEmail) || value.includes(userName);
-}
+function RequestList({ items, emptyText }: { items: DashboardRequestItem[]; emptyText: string }) {
+  if (!items.length) {
+    return <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-8 text-sm text-slate-500">{emptyText}</div>;
+  }
 
-function isOpenStatus(status: string) {
-  const value = normalize(status);
-  return ["open", "new", "requested", "scheduled", "in progress", "pending", "on hold"].some((item) => value.includes(item));
-}
-
-function isClosedStatus(status: string) {
-  const value = normalize(status);
-  return ["closed", "completed", "resolved", "done", "cancelled", "canceled"].some((item) => value.includes(item));
+  return (
+    <div className="space-y-3">
+      {items.map((item) => (
+        <Link
+          key={item.id}
+          to={item.href}
+          className="block rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 transition hover:border-slate-300 hover:bg-white"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-base font-semibold text-slate-900">{item.title}</span>
+                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusTone(item.status)}`}>{item.status}</span>
+              </div>
+              <div className="mt-2 text-sm text-slate-600">{item.module}</div>
+              <div className="mt-1 text-sm leading-6 text-slate-500">{item.meta}</div>
+            </div>
+            <div className="shrink-0 text-right text-xs text-slate-500">
+              <div>{item.priority || "Standard"}</div>
+              <div className="mt-1">{formatDateTime(item.updated_at || item.created_at || item.due_at)}</div>
+            </div>
+          </div>
+        </Link>
+      ))}
+    </div>
+  );
 }
 
 export default function MyRequestsPage() {
-  const { user, canAccess } = useAuth();
-  const [initialCache] = useState(() => readDashboardCache<MyRequestsCache>(MY_REQUESTS_CACHE_KEY, MY_REQUESTS_CACHE_TTL_MS));
+  const { user } = useAuth();
+  const [initialCache] = useState(() => readDashboardCache<MyRequestsDashboardResponse>(MY_REQUESTS_CACHE_KEY, MY_REQUESTS_CACHE_TTL_MS));
   const [loading, setLoading] = useState(!initialCache?.state);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [lastUpdated, setLastUpdated] = useState<number | null>(initialCache?.savedAt ?? null);
-  const [cacheState, setCacheState] = useState<MyRequestsCache>(
-    initialCache?.state ?? { tasks: [], meetings: [], cases: [], appointments: [] }
-  );
+  const [state, setState] = useState<MyRequestsDashboardResponse>(initialCache?.state ?? EMPTY_STATE);
 
   useEffect(() => {
     let active = true;
-    const shouldFetch = refreshKey > 0 || !initialCache?.state;
-
-    if (!shouldFetch) {
-      setLoading(false);
-      setRefreshing(false);
-      return () => {
-        active = false;
-      };
-    }
+    const hasCachedState = Boolean(initialCache?.state);
 
     const load = async () => {
       try {
         setError(null);
-        setLoading(!initialCache?.state && refreshKey === 0);
-        setRefreshing(refreshKey > 0);
-
-        const [tasksResult, meetingsResult, casesResult, appointmentsResult] = await Promise.allSettled([
-          canAccess("activities") ? apiRequest<ApiList<Task>>("/tasks/", { query: { page_size: 50 } }) : Promise.resolve([] as Task[]),
-          canAccess("activities") ? apiRequest<ApiList<Meeting>>("/meetings/", { query: { page_size: 50 } }) : Promise.resolve([] as Meeting[]),
-          canAccess("support") ? getSupportList("cases") : Promise.resolve([] as CaseListItem[]),
-          canAccess("services") ? listAppointments({ page_size: 50 }) : Promise.resolve([] as AppointmentRecord[]),
-        ]);
-
+        setLoading(!hasCachedState);
+        setRefreshing(hasCachedState || refreshKey > 0);
+        const nextState = await getMyRequestsDashboard(2 * 60 * 1000);
         if (!active) return;
-
-        const nextState: MyRequestsCache = {
-          tasks: tasksResult.status === "fulfilled" ? extractList(tasksResult.value) : [],
-          meetings: meetingsResult.status === "fulfilled" ? extractList(meetingsResult.value) : [],
-          cases: casesResult.status === "fulfilled" ? (casesResult.value as CaseListItem[]) : [],
-          appointments: appointmentsResult.status === "fulfilled" ? appointmentsResult.value : [],
-        };
-
-        setCacheState(nextState);
+        setState(nextState);
         writeDashboardCache(MY_REQUESTS_CACHE_KEY, nextState);
-        setLastUpdated(Date.now());
       } catch (loadError) {
         if (!active) return;
         setError(loadError instanceof Error ? loadError.message : "Unable to load your requests.");
@@ -183,91 +135,7 @@ export default function MyRequestsPage() {
     return () => {
       active = false;
     };
-  }, [canAccess, refreshKey, initialCache?.state]);
-
-  const requestItems = useMemo(() => {
-    const userEmail = normalize(user?.email);
-    const userName = normalize(user?.name);
-
-    const taskItems = cacheState.tasks
-      .filter((task) => matchCurrentUser(getTaskOwner(task), userEmail, userName))
-      .map<MyRequestItem>((task) => ({
-        id: `task-${task.id}`,
-        module: "Task",
-        title: task.subject?.trim() || "Untitled task",
-        status: task.status || "Open",
-        priority: task.priority || undefined,
-        createdAt: task.created_at || undefined,
-        updatedAt: task.updated_at || undefined,
-        dueAt: task.due_date || undefined,
-        href: `/tasks/${task.id}`,
-        meta: `Due ${formatDate(task.due_date)}`,
-      }));
-
-    const meetingItems = cacheState.meetings
-      .filter((meeting) =>
-        matchCurrentUser(meeting.organizer?.email || meeting.organizer?.name || "", userEmail, userName)
-      )
-      .map<MyRequestItem>((meeting) => ({
-        id: `meeting-${meeting.id}`,
-        module: "Meeting",
-        title: meeting.title?.trim() || meeting.subject?.trim() || "Untitled meeting",
-        status: meeting.status || "Scheduled",
-        createdAt: meeting.created_at || undefined,
-        updatedAt: meeting.updated_at || undefined,
-        dueAt: meeting.start_datetime || meeting.start_date || undefined,
-        href: `/meetings/${meeting.id}`,
-        meta: `Scheduled ${formatDateTime(meeting.start_datetime || meeting.start_date)}`,
-      }));
-
-    const caseItems = cacheState.cases
-      .filter((item) => matchCurrentUser(item.owner, userEmail, userName))
-      .map<MyRequestItem>((item) => ({
-        id: `case-${item.id}`,
-        module: "Case",
-        title: item.subject || item.caseNumber || "Untitled case",
-        status: item.status || "Open",
-        priority: item.priority || undefined,
-        createdAt: item.createdAt || undefined,
-        updatedAt: item.updatedAt || undefined,
-        href: `/support/cases/${item.id}`,
-        meta: item.caseNumber ? `Case ${item.caseNumber}` : "Support case",
-      }));
-
-    const appointmentItems = cacheState.appointments
-      .filter((item) => matchCurrentUser(item.assignedMemberEmail || "", userEmail, userName))
-      .map<MyRequestItem>((item) => ({
-        id: `appointment-${item.id}`,
-        module: "Appointment",
-        title: item.serviceName || item.appointmentNumber || "Service appointment",
-        status: item.status || "Scheduled",
-        createdAt: item.createdAt || undefined,
-        updatedAt: item.updatedAt || undefined,
-        dueAt: item.appointmentDate || undefined,
-        href: `/services/appointments/${item.id}`,
-        meta: item.appointmentForDisplay ? `For ${item.appointmentForDisplay}` : "Service request",
-      }));
-
-    return [...taskItems, ...meetingItems, ...caseItems, ...appointmentItems].sort((left, right) => {
-      const leftDate = toDate(left.updatedAt || left.createdAt || left.dueAt)?.getTime() || 0;
-      const rightDate = toDate(right.updatedAt || right.createdAt || right.dueAt)?.getTime() || 0;
-      return rightDate - leftDate;
-    });
-  }, [cacheState, user?.email, user?.name]);
-
-  const summary = useMemo(() => {
-    const open = requestItems.filter((item) => isOpenStatus(item.status) && !isClosedStatus(item.status));
-    const closed = requestItems.filter((item) => isClosedStatus(item.status));
-    const pending = requestItems.filter((item) => normalize(item.status).includes("pending"));
-    const dueToday = requestItems.filter((item) => {
-      const date = toDate(item.dueAt);
-      if (!date) return false;
-      const now = new Date();
-      return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate();
-    });
-
-    return { open, closed, pending, dueToday };
-  }, [requestItems]);
+  }, [initialCache?.state, refreshKey]);
 
   if (error) {
     return (
@@ -279,126 +147,122 @@ export default function MyRequestsPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="mx-auto w-full max-w-[1400px] space-y-6">
         <div className="relative overflow-hidden rounded-[34px] border border-[#d6d9f6] bg-[linear-gradient(135deg,#faf8ff_0%,#f1efff_46%,#ffffff_100%)] shadow-[0_18px_42px_rgba(101,87,180,0.10)]">
           <div className="pointer-events-none absolute -right-6 top-0 h-40 w-40 rounded-full bg-violet-300/25 blur-3xl" />
           <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-violet-700">Personal History</div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-violet-700">Personal Queue</div>
               <h1 className="mt-2 text-[2.1rem] font-semibold tracking-[-0.04em] text-slate-950">My Requests</h1>
-              <p className="mt-1 text-sm text-slate-500">Only your own tasks, meetings, support cases, and service requests appear here.</p>
+              <p className="mt-1 text-sm text-slate-500">
+                Daily requests assigned to {user?.name || user?.email || "you"} across tasks, meetings, support, and services.
+              </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setRefreshKey((current) => current + 1)}
-              className="inline-flex items-center gap-2 rounded-2xl border border-white bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
-            >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-              {refreshing ? "Refreshing..." : "Refresh"}
-            </button>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="rounded-2xl border border-white/70 bg-white/85 px-4 py-2 text-sm font-medium text-slate-700">
+                {formatUpdatedAt(state.updated)}
+              </div>
+              <button
+                type="button"
+                onClick={() => setRefreshKey((current) => current + 1)}
+                className="inline-flex items-center gap-2 rounded-2xl border border-white bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+              >
+                <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+                {refreshing ? "Refreshing..." : "Refresh"}
+              </button>
+            </div>
           </div>
-          <div className="grid gap-3 px-5 py-4 md:grid-cols-2 xl:grid-cols-4">
-            <SummaryCard icon={<ClipboardList className="h-5 w-5" />} label="Total Requests" value={requestItems.length} />
-            <SummaryCard icon={<Clock3 className="h-5 w-5" />} label="Open Requests" value={summary.open.length} />
-            <SummaryCard icon={<CalendarDays className="h-5 w-5" />} label="Due Today" value={summary.dueToday.length} />
-            <SummaryCard icon={<CheckCircle2 className="h-5 w-5" />} label="Closed" value={summary.closed.length} />
+
+          <div className="grid gap-4 px-5 py-5 md:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Created Today</span>
+                <ClipboardList className="h-5 w-5 text-slate-500" />
+              </div>
+              <div className="mt-4 text-4xl font-semibold tracking-tight text-slate-950">{loading ? "..." : state.summary_cards.created_today}</div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Updated Today</span>
+                <Layers3 className="h-5 w-5 text-slate-500" />
+              </div>
+              <div className="mt-4 text-4xl font-semibold tracking-tight text-slate-950">{loading ? "..." : state.summary_cards.updated_today}</div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Due Today</span>
+                <CalendarDays className="h-5 w-5 text-slate-500" />
+              </div>
+              <div className="mt-4 text-4xl font-semibold tracking-tight text-slate-950">{loading ? "..." : state.summary_cards.due_today}</div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Closed Today</span>
+                <CheckCircle2 className="h-5 w-5 text-slate-500" />
+              </div>
+              <div className="mt-4 text-4xl font-semibold tracking-tight text-slate-950">{loading ? "..." : state.summary_cards.closed_today}</div>
+            </div>
           </div>
         </div>
 
-        {loading && requestItems.length === 0 ? (
-          <div className="rounded-3xl border border-slate-200 bg-white px-5 py-8 text-sm text-slate-500">Loading your requests...</div>
-        ) : requestItems.length === 0 ? (
-          <div className="rounded-3xl border border-slate-200 bg-white px-5 py-10 text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
-              <ClipboardList className="h-6 w-6" />
+        <div className="grid items-stretch gap-4 lg:grid-cols-3">
+          <div className="rounded-2xl border border-rose-200 bg-[linear-gradient(180deg,#fff9f9_0%,#fff2f3_100%)] px-4 py-4">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-semibold text-slate-900">Overdue</div>
+              <AlertTriangle className="h-5 w-5 text-rose-600" />
             </div>
-            <h2 className="mt-4 text-lg font-semibold text-slate-900">No personal requests found</h2>
-            <p className="mt-2 text-sm text-slate-500">This page only lists records assigned to you or owned by your account.</p>
-            <p className="mt-2 text-xs uppercase tracking-[0.14em] text-slate-400">
-              {lastUpdated ? `Updated ${formatDateTime(new Date(lastUpdated).toISOString())}` : "Not updated yet"}
-            </p>
+            <div className="mt-4 text-4xl font-semibold tracking-tight text-slate-950">{state.focus_today.overdue}</div>
+            <div className="mt-2 text-sm text-slate-500">Requests that need immediate attention.</div>
           </div>
-        ) : (
-          <div className="grid gap-4 xl:grid-cols-[1.1fr_1.1fr_0.8fr]">
-            <RequestSection title="Open Requests" subtitle="Active items that still need your attention." items={summary.open} />
-            <RequestSection title="Pending Approval" subtitle="Items waiting on confirmation or next action." items={summary.pending} />
-            <RequestSection title="Closed History" subtitle="Your recently completed or closed requests." items={summary.closed.slice(0, 8)} compact />
+          <div className="rounded-2xl border border-amber-200 bg-[linear-gradient(180deg,#fffdf7_0%,#fff8ea_100%)] px-4 py-4">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-semibold text-slate-900">Due Today</div>
+              <Clock3 className="h-5 w-5 text-amber-600" />
+            </div>
+            <div className="mt-4 text-4xl font-semibold tracking-tight text-slate-950">{state.focus_today.due_today}</div>
+            <div className="mt-2 text-sm text-slate-500">Queue items expected to move before today ends.</div>
           </div>
-        )}
+          <div className="rounded-2xl border border-violet-200 bg-[linear-gradient(180deg,#fbf9ff_0%,#f4efff_100%)] px-4 py-4">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-semibold text-slate-900">Pending</div>
+              <ClipboardList className="h-5 w-5 text-violet-600" />
+            </div>
+            <div className="mt-4 text-4xl font-semibold tracking-tight text-slate-950">{state.focus_today.pending}</div>
+            <div className="mt-2 text-sm text-slate-500">Approvals or waiting states that may block progress.</div>
+          </div>
+        </div>
+
+        <CRMSectionCard title="Request Mix" subtitle="Current distribution across your assigned CRM work.">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {state.request_mix.map((item) => (
+              <div key={item.module} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                <div className="text-sm font-semibold text-slate-900">{item.module}</div>
+                <div className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">{item.count}</div>
+              </div>
+            ))}
+          </div>
+        </CRMSectionCard>
+
+        <div className="grid items-start gap-5 xl:grid-cols-[1.12fr_0.88fr]">
+          <CRMSectionCard title="Open Requests" subtitle="Active work that currently needs your attention.">
+            <RequestList items={state.open_requests} emptyText="No open requests assigned right now." />
+          </CRMSectionCard>
+
+          <CRMSectionCard title="Upcoming Queue" subtitle="What is scheduled next in your request pipeline.">
+            <RequestList items={state.upcoming_queue} emptyText="No upcoming queue items scheduled yet." />
+          </CRMSectionCard>
+        </div>
+
+        <div className="grid items-start gap-5 xl:grid-cols-[1fr_1fr]">
+          <CRMSectionCard title="Closed History" subtitle="Recently completed request history for today and recent cycles.">
+            <RequestList items={state.closed_history} emptyText="No recently closed request history available." />
+          </CRMSectionCard>
+
+          <CRMSectionCard title="Pending Approval" subtitle="Requests still waiting on confirmation, input, or review.">
+            <RequestList items={state.pending_approval} emptyText="No pending approval items right now." />
+          </CRMSectionCard>
+        </div>
       </div>
     </DashboardLayout>
   );
-}
-
-function SummaryCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
-  return (
-    <div className="rounded-[24px] border border-white/80 bg-white/72 px-4 py-3 shadow-sm backdrop-blur">
-      <div className="flex items-center gap-2 text-slate-500">
-        {icon}
-        <span className="text-[11px] font-semibold uppercase tracking-[0.18em]">{label}</span>
-      </div>
-      <div className="mt-3 text-3xl font-semibold text-slate-900">{value}</div>
-    </div>
-  );
-}
-
-function RequestSection({
-  title,
-  subtitle,
-  items,
-  compact = false,
-}: {
-  title: string;
-  subtitle: string;
-  items: MyRequestItem[];
-  compact?: boolean;
-}) {
-  return (
-    <section className="rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#fbfaff_100%)] shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
-      <div className="border-b border-slate-100 px-4 py-3">
-        <h2 className="text-base font-semibold text-slate-900">{title}</h2>
-        <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
-      </div>
-      <div className="p-4">
-        {items.length ? (
-          <div className="space-y-3">
-            {items.map((item) => (
-              <Link
-                key={item.id}
-                to={item.href}
-                className="block rounded-2xl border border-slate-200 bg-[linear-gradient(180deg,#fafbff_0%,#f5f4ff_100%)] px-4 py-3 transition hover:border-slate-300 hover:bg-white"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-700">{item.module}</div>
-                    <div className="mt-1 truncate text-sm font-semibold text-slate-900">{item.title}</div>
-                    <div className="mt-1 text-sm text-slate-500">{item.meta}</div>
-                  </div>
-                  <StatusPill status={item.status} />
-                </div>
-                <div className={`mt-3 grid gap-2 text-xs text-slate-500 ${compact ? "grid-cols-1" : "md:grid-cols-3"}`}>
-                  <span>Created: {formatDate(item.createdAt)}</span>
-                  <span>Updated: {formatDate(item.updatedAt)}</span>
-                  <span>{item.priority ? `Priority: ${item.priority}` : item.dueAt ? `Due: ${formatDate(item.dueAt)}` : "No extra details"}</span>
-                </div>
-              </Link>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-2xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">No records in this section yet.</div>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function StatusPill({ status }: { status: string }) {
-  const value = normalize(status);
-  const colorClass = isClosedStatus(value)
-    ? "bg-emerald-50 text-emerald-700"
-    : value.includes("pending")
-      ? "bg-amber-50 text-amber-700"
-      : "bg-blue-50 text-blue-700";
-
-  return <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${colorClass}`}>{status || "Open"}</span>;
 }

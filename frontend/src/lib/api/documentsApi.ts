@@ -29,6 +29,7 @@ export type DocumentRecord = {
   related_id: number | null;
   uploaded_by: number | null;
   uploaded_by_email: string | null;
+  uploaded_by_name?: string | null;
   file_url: string | null;
   file_name: string | null;
   version: number;

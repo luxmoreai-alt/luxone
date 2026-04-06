@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { contactModuleConfig } from "../../components/modules/contacts/contactsMockData";
 import { deleteContact, getContacts } from "../../lib/api/contactsApi";
+import { keepEmployeeOwnedRows } from "../../lib/shared/recordVisibility";
 import type { ContactRecord } from "../../lib/shared/crmTypes";
 import CRMModuleListPage from "../crm/CRMModuleListPage";
 
@@ -14,7 +15,7 @@ export default function ContactsPage() {
       setLoading(true);
       setError(null);
       const data = await getContacts();
-      setRows(data);
+      setRows(keepEmployeeOwnedRows(data));
     } catch (err) {
       console.error("Failed to load contacts:", err);
       setError(err instanceof Error ? err.message : "Unable to load contacts");

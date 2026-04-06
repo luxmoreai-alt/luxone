@@ -3,6 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, CheckCircle2, Loader2, Mail, UserPlus } from "lucide-react";
 import { apiRequest } from "../../api/client";
 import { useAuth } from "../../hooks/useAuth";
+import { removeDashboardCache } from "../../lib/dashboardCache";
+
+const TEAM_UPDATED_EVENT = "team:updated";
+const ADMIN_DASHBOARD_CACHE_KEY = "admin-dashboard-cache-v1";
+const MANAGER_DASHBOARD_CACHE_KEY = "manager-dashboard-cache-v1";
 
 type UserRole =
   | "admin"
@@ -119,6 +124,9 @@ export default function UserCreatePage() {
         body: JSON.stringify(payload),
       });
       setCreated(result);
+      removeDashboardCache(ADMIN_DASHBOARD_CACHE_KEY);
+      removeDashboardCache(MANAGER_DASHBOARD_CACHE_KEY);
+      window.dispatchEvent(new Event(TEAM_UPDATED_EVENT));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create user.");
     } finally {

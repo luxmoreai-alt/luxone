@@ -102,7 +102,7 @@ function mapIntegrationEmail(parentId: string, item: any) {
     parentId,
     subject: asString(item.subject) || "(No subject)",
     sentAt: asString(item.sent_at || item.received_at || item.created_at),
-    sentBy: asString(item.from_email),
+    sentBy: asString(item.counterparty_email || item.from_email),
     status: direction === "incoming" ? ("Received" as const) : ("Sent" as const),
     previewText: asString(item.preview_text),
   };

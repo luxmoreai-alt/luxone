@@ -50,7 +50,7 @@ async function authPost<T>(path: string, body: unknown): Promise<T> {
 }
 
 const inputCls =
-  "w-full rounded-[8px] border border-[#cfd7e6] px-3 py-2.5 text-sm text-slate-800 outline-none transition-colors focus:border-[#4d76ff] focus:ring-2 focus:ring-[#4d76ff]/10";
+  "w-full rounded-[8px] border border-[#cfd7e6] px-3 py-2.5 text-sm text-slate-800 outline-none transition-colors focus:border-[#359de9] focus:ring-2 focus:ring-[#359de9]/10";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -80,25 +80,28 @@ export default function LoginPage() {
       ? ((window.history.state as { usr: { from: string } }).usr.from || "/home")
       : "/home";
 
-  const MODULE_PATHS: Record<string, string> = {
-    sales: "/sales",
-    activities: "/activities",
-    inventory: "/inventory",
-    support: "/support",
-    integrations: "/integrations",
-    services: "/services",
-    projects: "/projects",
-  };
+  const MODULE_PATHS: Array<{ module: string; prefixes: string[]; landing: string }> = [
+    { module: "sales", prefixes: ["/leads", "/contacts", "/accounts", "/deals", "/documents", "/campaigns"], landing: "/leads" },
+    { module: "activities", prefixes: ["/tasks", "/meetings", "/calls"], landing: "/tasks" },
+    {
+      module: "inventory",
+      prefixes: ["/products", "/price-books", "/quotes", "/sales-orders", "/purchase-orders", "/invoices", "/vendors", "/configurator"],
+      landing: "/products",
+    },
+    { module: "support", prefixes: ["/support/cases", "/support/solutions"], landing: "/support/cases" },
+    { module: "integrations", prefixes: ["/integrations"], landing: "/integrations" },
+    { module: "services", prefixes: ["/services/business-hours", "/services/catalog", "/services/appointments", "/services/job-sheets", "/services/settings"], landing: "/services/catalog" },
+    { module: "projects", prefixes: ["/projects"], landing: "/projects" },
+  ];
 
   const getRedirectForModules = (path: string, allowedModules: string[]) => {
-    const restricted = Object.entries(MODULE_PATHS).some(
-      ([mod, prefix]) => path.startsWith(prefix) && !allowedModules.includes(mod)
-    );
-    // also check /deals, /leads, /contacts, /accounts under sales
-    const salesPaths = ["/deals", "/leads", "/contacts", "/accounts"];
-    const isSalesPath = salesPaths.some((p) => path.startsWith(p));
-    if (isSalesPath && !allowedModules.includes("sales")) return "/home";
-    return restricted ? "/home" : path;
+    const rootMatch = MODULE_PATHS.find((entry) => path === `/${entry.module}`);
+    if (rootMatch) {
+      return allowedModules.includes(rootMatch.module) ? rootMatch.landing : "/home";
+    }
+
+    const match = MODULE_PATHS.find((entry) => entry.prefixes.some((prefix) => path === prefix || path.startsWith(`${prefix}/`)));
+    return match && !allowedModules.includes(match.module) ? "/home" : path;
   };
 
   // ── Login ──────────────────────────────────────────────────────────────────
@@ -222,7 +225,7 @@ export default function LoginPage() {
                     <button
                       type="button"
                       onClick={() => { setFpEmail(email); setFpError(""); setFpSuccess(""); setStep("forgot-email"); }}
-                      className="text-xs text-[#4d76ff] hover:underline"
+                      className="text-xs text-[#359de9] hover:underline"
                     >
                       Forgot password?
                     </button>
@@ -249,7 +252,7 @@ export default function LoginPage() {
                 )}
 
                 <button type="submit" disabled={loading}
-                  className="mt-2 w-full rounded-[8px] bg-gradient-to-b from-[#4d76ff] to-[#365eea] py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60">
+                  className="mt-2 w-full rounded-[8px] bg-gradient-to-b from-[#359de9] to-[#365eea] py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60">
                   {loading ? "Signing in…" : "Sign in"}
                 </button>
               </form>
@@ -275,7 +278,7 @@ export default function LoginPage() {
                 )}
 
                 <button type="submit" disabled={fpLoading}
-                  className="w-full rounded-[8px] bg-gradient-to-b from-[#4d76ff] to-[#365eea] py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">
+                  className="w-full rounded-[8px] bg-gradient-to-b from-[#359de9] to-[#365eea] py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">
                   {fpLoading ? "Sending…" : "Send OTP"}
                 </button>
 
@@ -309,13 +312,13 @@ export default function LoginPage() {
                 )}
 
                 <button type="submit" disabled={fpOtp.length < 6}
-                  className="w-full rounded-[8px] bg-gradient-to-b from-[#4d76ff] to-[#365eea] py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">
+                  className="w-full rounded-[8px] bg-gradient-to-b from-[#359de9] to-[#365eea] py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">
                   Verify OTP
                 </button>
 
                 <div className="flex items-center justify-between text-sm">
                   <button type="button" onClick={() => { setFpError(""); void handleSendOtp({ preventDefault: () => {} }); }}
-                    className="text-[#4d76ff] hover:underline">
+                    className="text-[#359de9] hover:underline">
                     Resend OTP
                   </button>
                   <button type="button" onClick={resetForgot} className="text-slate-500 hover:text-slate-700">
@@ -359,7 +362,7 @@ export default function LoginPage() {
                 )}
 
                 <button type="submit" disabled={fpLoading}
-                  className="w-full rounded-[8px] bg-gradient-to-b from-[#4d76ff] to-[#365eea] py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">
+                  className="w-full rounded-[8px] bg-gradient-to-b from-[#359de9] to-[#365eea] py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">
                   {fpLoading ? "Resetting…" : "Reset Password"}
                 </button>
 

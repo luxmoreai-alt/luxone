@@ -87,7 +87,7 @@ function QuickUploadModal({
   };
 
   const inp =
-    "w-full rounded-[8px] border border-[#cfd7e6] px-3 py-2 text-sm outline-none focus:border-[#4d76ff] focus:ring-2 focus:ring-[#4d76ff]/10";
+    "w-full rounded-[8px] border border-[#cfd7e6] px-3 py-2 text-sm outline-none focus:border-[#359de9] focus:ring-2 focus:ring-[#359de9]/10";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
@@ -108,12 +108,12 @@ function QuickUploadModal({
             onDrop={handleDrop}
             onClick={() => fileRef.current?.click()}
             className={`flex cursor-pointer flex-col items-center rounded-[8px] border-2 border-dashed py-5 transition ${
-              dragging ? "border-[#4d76ff] bg-blue-50" : "border-[#cfd7e6] hover:border-[#4d76ff]"
+              dragging ? "border-[#359de9] bg-blue-50" : "border-[#cfd7e6] hover:border-[#359de9]"
             }`}
           >
             <Upload size={20} className="mb-1.5 text-slate-400" />
             {file ? (
-              <span className="text-sm font-medium text-[#4d76ff]">{file.name}</span>
+              <span className="text-sm font-medium text-[#359de9]">{file.name}</span>
             ) : (
               <span className="text-sm text-slate-500">Drag & drop or click</span>
             )}
@@ -147,7 +147,7 @@ function QuickUploadModal({
             <button
               type="submit"
               disabled={loading}
-              className="flex items-center gap-1.5 rounded-[6px] bg-gradient-to-b from-[#4d76ff] to-[#365eea] px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+              className="flex items-center gap-1.5 rounded-[6px] bg-gradient-to-b from-[#359de9] to-[#365eea] px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
             >
               {loading && <Loader2 size={12} className="animate-spin" />}
               Attach
@@ -228,7 +228,7 @@ export default function DocumentsSection({ module, relatedId }: Props) {
           <p className="text-xs text-slate-400">No documents attached.</p>
           <button
             onClick={() => setShowUpload(true)}
-            className="mt-2 text-xs font-medium text-[#4d76ff] hover:underline"
+            className="mt-2 text-xs font-medium text-[#359de9] hover:underline"
           >
             Attach one
           </button>

@@ -2,6 +2,7 @@ import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState }
 import { AlertCircle, Loader2, Pencil, Trash2, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { apiRequest } from "../../../api/client";
+import { keepEmployeeVisibleRows } from "../../../lib/shared/recordVisibility";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -500,7 +501,11 @@ const TasksKanbanBoard = forwardRef<
     setLoading(true);
     setError("");
     apiRequest<ApiResponse>("/tasks/", { method: "GET" })
-      .then((json) => { if (active) setTasks(getTaskListFromResponse(json)); })
+      .then((json) => {
+        if (active) {
+          setTasks(keepEmployeeVisibleRows(getTaskListFromResponse(json), (task) => task.owner));
+        }
+      })
       .catch((err) => { if (active) setError(err instanceof Error ? err.message : "Something went wrong"); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };

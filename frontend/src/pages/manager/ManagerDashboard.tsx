@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { apiRequest } from "../../api/client";
 import { useAuth } from "../../hooks/useAuth";
-import { readDashboardCache, writeDashboardCache } from "../../lib/dashboardCache";
+import { readDashboardCache, writeDashboardCache, removeDashboardCache } from "../../lib/dashboardCache";
 
 type TeamMember = {
   id: number;
@@ -22,6 +22,7 @@ type LeadItem = {
   first_name: string;
   last_name: string;
   company: string;
+  email?: string;
   owner: number | null;
   owner_name?: string | null;
 };
@@ -32,6 +33,7 @@ type ApiList<T> = {
 
 const MANAGER_DASHBOARD_CACHE_KEY = "manager-dashboard-cache-v1";
 const MANAGER_DASHBOARD_CACHE_TTL_MS = 5 * 60 * 1000;
+const TEAM_UPDATED_EVENT = "team:updated";
 
 function RoleBadge({ role }: { role: string }) {
   const cls =
@@ -84,6 +86,16 @@ export default function ManagerDashboard() {
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [initialCache?.state, refreshKey]);
+
+  useEffect(() => {
+    const refresh = () => {
+      removeDashboardCache(MANAGER_DASHBOARD_CACHE_KEY);
+      setRefreshKey((k) => k + 1);
+    };
+
+    window.addEventListener(TEAM_UPDATED_EVENT, refresh);
+    return () => window.removeEventListener(TEAM_UPDATED_EVENT, refresh);
+  }, []);
 
   const openProjectTaskDesk = async () => {
     setProjectDeskOpen(false);
@@ -222,13 +234,6 @@ export default function ManagerDashboard() {
         )
       );
       const assignedEmployee = assigningEmployee;
-      const reassignedLeads = leadOptions
-        .filter((lead) => selectedLeadIds.includes(lead.id))
-        .map((lead) => ({
-          ...lead,
-          owner: assignedEmployee.id,
-          owner_name: assignedEmployee.name || assignedEmployee.email,
-        }));
       setLeadOptions((current) =>
         current.map((lead) =>
           selectedLeadIds.includes(lead.id)
@@ -240,6 +245,7 @@ export default function ManagerDashboard() {
             : lead
         )
       );
+      window.dispatchEvent(new Event(TEAM_UPDATED_EVENT));
       closeAssignLeadModal();
     } catch (err) {
       setAssignError(err instanceof Error ? err.message : "Failed to assign leads.");

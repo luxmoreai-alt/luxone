@@ -5,7 +5,7 @@ import {
   RefreshCw, Loader2, Plus, Building2, UserPlus, Check, X,
 } from "lucide-react";
 import { apiRequest } from "../../api/client";
-import { readDashboardCache, writeDashboardCache } from "../../lib/dashboardCache";
+import { readDashboardCache, writeDashboardCache, removeDashboardCache } from "../../lib/dashboardCache";
 
 type OrgUser = {
   id: number;
@@ -28,6 +28,7 @@ type GroupedOrg = {
 
 const ADMIN_DASHBOARD_CACHE_KEY = "admin-dashboard-cache-v1";
 const ADMIN_DASHBOARD_CACHE_TTL_MS = 5 * 60 * 1000;
+const TEAM_UPDATED_EVENT = "team:updated";
 
 function groupUsers(users: OrgUser[]): GroupedOrg {
   const managers = users.filter((u) => u.role === "manager");
@@ -276,6 +277,16 @@ export default function AdminDashboard() {
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [initialCache?.state, refreshKey]);
+
+  useEffect(() => {
+    const refresh = () => {
+      removeDashboardCache(ADMIN_DASHBOARD_CACHE_KEY);
+      setRefreshKey((k) => k + 1);
+    };
+
+    window.addEventListener(TEAM_UPDATED_EVENT, refresh);
+    return () => window.removeEventListener(TEAM_UPDATED_EVENT, refresh);
+  }, []);
 
   const { managers, unassigned, byManager } = groupUsers(users);
   const totalEmployees = users.filter((u) => u.role === "employee").length;

@@ -8,6 +8,7 @@ type LoggedInUser = {
   last_name?: string;
   username?: string;
   email?: string;
+  role?: string;
 };
 
 export function getLoggedInUser(): LoggedInUser | null {

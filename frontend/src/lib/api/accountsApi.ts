@@ -60,6 +60,7 @@ function normalizeAccount(item: BackendAccount): AccountRecord {
       item.owner_email ??
       item.owner_details?.name ??
       (item.account_owner || item.owner ? `User #${item.account_owner ?? item.owner}` : "Assigned to you"),
+    ownerEmail: item.owner_email ?? item.owner_details?.email ?? undefined,
     accountSite: "",
     parentAccount: "",
     accountNumber: "",

@@ -160,6 +160,7 @@ function normalizeLeadList(item: BackendLeadList): LeadRecord {
     createdAt: item.created_at ?? "",
     updatedBy: "",
     updatedAt: "",
+    ownerEmail: item.owner_email ?? item.owner_details?.email ?? undefined,
     nextActivity: item.latest_activity ?? undefined,
   };
 }
@@ -197,6 +198,7 @@ function normalizeLeadDetail(item: BackendLeadDetail): LeadRecord {
     createdAt: item.created_at ?? "",
     updatedBy: "",
     updatedAt: item.updated_at ?? "",
+    ownerEmail: item.owner_email ?? item.owner_details?.email ?? undefined,
     tags: item.tags ?? undefined,
     convertedAccountId: item.converted_account ? String(item.converted_account) : item.converted_account_info?.id ? String(item.converted_account_info.id) : undefined,
     convertedAccountName: item.converted_account_name ?? item.converted_account_info?.name ?? undefined,
@@ -366,8 +368,16 @@ export async function getLeadEmails(id: string): Promise<EmailRecord[]> {
     parentId: id,
     subject: item.subject,
     sentAt: item.received_at || item.sent_at || "",
-    sentBy: item.from_email,
-    status: item.status === "draft" ? "Draft" : "Sent",
+    sentBy:
+      item.direction?.toLowerCase() === "outgoing"
+        ? item.to_emails?.find(Boolean) || item.from_email
+        : item.from_email,
+    status:
+      item.status === "draft"
+        ? "Draft"
+        : item.direction?.toLowerCase() === "incoming"
+          ? "Received"
+          : "Sent",
   }));
 }
 

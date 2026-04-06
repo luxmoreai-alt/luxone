@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import CRMModuleListPage from "../crm/CRMModuleListPage";
 import { leadModuleConfig } from "../../components/modules/leads/leadsMockData";
 import { deleteLead, getLeads } from "../../lib/api/leadsApi";
+import { keepEmployeeOwnedRows } from "../../lib/shared/recordVisibility";
 import type { LeadRecord } from "../../lib/shared/crmTypes";
 
 export default function LeadsPage() {
@@ -12,7 +13,7 @@ export default function LeadsPage() {
     try {
       setLoading(true);
       const data = await getLeads();
-      setRows(data);
+      setRows(keepEmployeeOwnedRows(data));
     } catch (error) {
       console.error("Failed to load leads:", error);
     } finally {

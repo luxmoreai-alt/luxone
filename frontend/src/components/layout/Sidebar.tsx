@@ -251,7 +251,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 h-screen overflow-y-auto bg-[#1f3566] text-white transition-all duration-300 md:static md:z-auto md:flex md:h-screen md:flex-col ${
+        className={`fixed inset-y-0 left-0 z-40 h-screen overflow-y-auto bg-[#7548b9] text-white transition-all duration-300 md:static md:z-auto md:flex md:h-screen md:flex-col ${
           sidebarOpen
             ? "translate-x-0 w-56"
             : "-translate-x-full w-56 md:translate-x-0 md:w-14"

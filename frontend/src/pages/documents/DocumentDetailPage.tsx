@@ -5,7 +5,6 @@ import {
   Clock,
   Download,
   Edit2,
-  ExternalLink,
   FileText,
   Loader2,
   Save,
@@ -34,9 +33,47 @@ const TYPE_COLORS: Record<string, string> = {
 
 function InfoRow({ label, value }: { label: string; value?: string | null }) {
   return (
-    <div className="grid items-start gap-1 text-sm sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-3">
-      <span className="pt-0.5 text-slate-500">{label}</span>
-      <span className="min-w-0 break-words font-medium leading-6 text-slate-800">{value || "—"}</span>
+    <div className="flex gap-2 text-sm">
+      <span className="w-36 shrink-0 text-slate-500">{label}</span>
+      <span className="font-medium text-slate-800">{value || "—"}</span>
+    </div>
+  );
+}
+
+function FilePreview({ url, name }: { url: string; name: string | null }) {
+  const ext = name?.split(".").pop()?.toLowerCase() ?? "";
+  const isImage = ["jpg", "jpeg", "png", "gif", "webp", "svg"].includes(ext);
+  const isPdf = ext === "pdf";
+
+  if (isImage) {
+    return (
+      <img
+        src={url}
+        alt={name ?? "preview"}
+        className="max-h-[400px] w-full rounded-[8px] border border-[#d9e1ef] object-contain bg-slate-50"
+      />
+    );
+  }
+  if (isPdf) {
+    return (
+      <iframe
+        src={url}
+        title={name ?? "document"}
+        className="h-[500px] w-full rounded-[8px] border border-[#d9e1ef]"
+      />
+    );
+  }
+  return (
+    <div className="flex flex-col items-center justify-center rounded-[10px] border-2 border-dashed border-[#cfd7e6] py-12 text-slate-400">
+      <FileText size={40} className="mb-3" />
+      <p className="text-sm">No preview available for this file type.</p>
+      <a
+        href={url}
+        download
+        className="mt-3 flex items-center gap-1.5 text-sm font-medium text-[#359de9] hover:underline"
+      >
+        <Download size={14} /> Download to view
+      </a>
     </div>
   );
 }
@@ -110,31 +147,8 @@ export default function DocumentDetailPage() {
     navigate("/documents");
   };
 
-  const handleDownload = async () => {
-    if (!doc?.file_url) return;
-    try {
-      const response = await fetch(doc.file_url, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("accessToken") || ""}`,
-        },
-      });
-      if (!response.ok) throw new Error("Download failed.");
-      const blob = await response.blob();
-      const objectUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = objectUrl;
-      link.download = doc.file_name || doc.title || "document";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(objectUrl);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Download failed.");
-    }
-  };
-
   const inputCls =
-    "w-full rounded-[8px] border border-[#cfd7e6] px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#4d76ff] focus:ring-2 focus:ring-[#4d76ff]/10";
+    "w-full rounded-[8px] border border-[#cfd7e6] px-3 py-2 text-sm text-slate-800 outline-none focus:border-[#359de9] focus:ring-2 focus:ring-[#359de9]/10";
 
   if (loading) {
     return (
@@ -171,21 +185,11 @@ export default function DocumentDetailPage() {
             {doc.file_url && (
               <a
                 href={doc.file_url}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-1.5 rounded-[6px] border border-[#cfd7e6] bg-white px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-              >
-                <ExternalLink size={14} /> Open File
-              </a>
-            )}
-            {doc.file_url && (
-              <button
-                type="button"
-                onClick={() => void handleDownload()}
+                download
                 className="flex items-center gap-1.5 rounded-[6px] border border-[#cfd7e6] bg-white px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
               >
                 <Download size={14} /> Download
-              </button>
+              </a>
             )}
             {!editing ? (
               <button
@@ -205,7 +209,7 @@ export default function DocumentDetailPage() {
                 <button
                   onClick={() => void handleSave()}
                   disabled={saving}
-                  className="flex items-center gap-1.5 rounded-[6px] bg-gradient-to-b from-[#4d76ff] to-[#365eea] px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                  className="flex items-center gap-1.5 rounded-[6px] bg-gradient-to-b from-[#359de9] to-[#365eea] px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
                 >
                   {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
                   Save
@@ -222,14 +226,62 @@ export default function DocumentDetailPage() {
         </div>
       </div>
 
-      <div className="space-y-4 p-6">
-        {error && (
-          <div className="rounded-[8px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
-            {error}
-          </div>
-        )}
+      <div className="grid grid-cols-1 gap-4 p-6 lg:grid-cols-[1fr_340px]">
+        {/* Left — preview */}
+        <div className="space-y-4">
+          {error && (
+            <div className="rounded-[8px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+              {error}
+            </div>
+          )}
 
-        <div className="rounded-[10px] border border-[#d9e1ef] bg-white p-5">
+          {/* File preview */}
+          <div className="rounded-[10px] border border-[#d9e1ef] bg-white p-5">
+            <h2 className="mb-4 text-[13px] font-semibold text-[#1f2d3d]">Preview</h2>
+            {doc.file_url ? (
+              <FilePreview url={doc.file_url} name={doc.file_name} />
+            ) : (
+              <p className="text-sm text-slate-400">No file attached.</p>
+            )}
+          </div>
+
+          {/* Version History */}
+          {doc.versions && doc.versions.length > 0 && (
+            <div className="rounded-[10px] border border-[#d9e1ef] bg-white p-5">
+              <h2 className="mb-4 flex items-center gap-2 text-[13px] font-semibold text-[#1f2d3d]">
+                <Clock size={14} /> Version History
+              </h2>
+              <div className="space-y-2">
+                {doc.versions.map((v) => (
+                  <div
+                    key={v.id}
+                    className="flex items-center justify-between rounded-[8px] border border-slate-100 bg-slate-50 px-4 py-2.5 text-sm"
+                  >
+                    <div>
+                      <span className="font-medium text-slate-700">v{v.version_number}</span>
+                      <span className="ml-3 text-xs text-slate-400">
+                        {v.file_name ?? "file"} · {new Date(v.uploaded_at).toLocaleString()}
+                      </span>
+                    </div>
+                    {v.file_url && (
+                      <a
+                        href={v.file_url}
+                        download
+                        className="flex items-center gap-1 text-xs font-medium text-[#359de9] hover:underline"
+                      >
+                        <Download size={12} /> Download
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Right — metadata / edit form */}
+        <div className="space-y-4">
+          <div className="rounded-[10px] border border-[#d9e1ef] bg-white p-5">
             <h2 className="mb-4 text-[13px] font-semibold text-[#1f2d3d]">
               {editing ? "Edit Document" : "Document Info"}
             </h2>
@@ -272,7 +324,7 @@ export default function DocumentDetailPage() {
                   <label className="mb-1 block text-xs font-medium text-slate-600">Replace File (optional)</label>
                   <div
                     onClick={() => fileRef.current?.click()}
-                    className="flex cursor-pointer items-center gap-2 rounded-[8px] border border-dashed border-[#cfd7e6] px-3 py-2.5 text-sm text-slate-500 hover:border-[#4d76ff] hover:text-[#4d76ff]"
+                    className="flex cursor-pointer items-center gap-2 rounded-[8px] border border-dashed border-[#cfd7e6] px-3 py-2.5 text-sm text-slate-500 hover:border-[#359de9] hover:text-[#359de9]"
                   >
                     <Upload size={14} />
                     {newFile ? newFile.name : "Click to select new file…"}
@@ -289,9 +341,9 @@ export default function DocumentDetailPage() {
               <div className="space-y-3">
                 <InfoRow label="Title" value={doc.title} />
                 <InfoRow label="Description" value={doc.description} />
-                <div className="grid items-start gap-1 text-sm sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-3">
-                  <span className="pt-0.5 text-slate-500">Type</span>
-                  <span className={`inline-flex w-fit rounded-full px-2.5 py-0.5 text-xs font-medium ${TYPE_COLORS[doc.document_type] ?? TYPE_COLORS.other}`}>
+                <div className="flex gap-2 text-sm">
+                  <span className="w-36 shrink-0 text-slate-500">Type</span>
+                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${TYPE_COLORS[doc.document_type] ?? TYPE_COLORS.other}`}>
                     {DOCUMENT_TYPE_LABELS[doc.document_type] ?? doc.document_type}
                   </span>
                 </div>
@@ -307,76 +359,7 @@ export default function DocumentDetailPage() {
               </div>
             )}
           </div>
-
-        <div className="rounded-[10px] border border-[#d9e1ef] bg-white p-5">
-          <h2 className="mb-4 text-[13px] font-semibold text-[#1f2d3d]">Open Document</h2>
-          {doc.file_url ? (
-            <div className="rounded-[10px] border border-dashed border-[#cfd7e6] bg-slate-50 p-5">
-              <div className="flex items-start gap-3">
-                <div className="rounded-[10px] bg-white p-3 text-slate-500 shadow-sm">
-                  <FileText size={22} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-[#1f2d3d]">{doc.file_name || doc.title}</p>
-                  <p className="mt-1 text-sm text-slate-500">
-                    Open the document in a new tab or download it to your device.
-                  </p>
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    <a
-                      href={doc.file_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-[6px] bg-[#4d76ff] px-4 py-2 text-sm font-medium text-white hover:bg-[#365eea]"
-                    >
-                      <ExternalLink size={14} /> Open Document
-                    </a>
-                    <button
-                      type="button"
-                      onClick={() => void handleDownload()}
-                      className="inline-flex items-center gap-1.5 rounded-[6px] border border-[#cfd7e6] bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                    >
-                      <Download size={14} /> Download
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm text-slate-400">No file attached.</p>
-          )}
         </div>
-
-        {doc.versions && doc.versions.length > 0 && (
-          <div className="rounded-[10px] border border-[#d9e1ef] bg-white p-5">
-            <h2 className="mb-4 flex items-center gap-2 text-[13px] font-semibold text-[#1f2d3d]">
-              <Clock size={14} /> Version History
-            </h2>
-            <div className="space-y-2">
-              {doc.versions.map((v) => (
-                <div
-                  key={v.id}
-                  className="flex items-center justify-between rounded-[8px] border border-slate-100 bg-slate-50 px-4 py-2.5 text-sm"
-                >
-                  <div>
-                    <span className="font-medium text-slate-700">v{v.version_number}</span>
-                    <span className="ml-3 text-xs text-slate-400">
-                      {v.file_name ?? "file"} · {new Date(v.uploaded_at).toLocaleString()}
-                    </span>
-                  </div>
-                  {v.file_url && (
-                    <a
-                      href={v.file_url}
-                      download={v.file_name ?? undefined}
-                      className="flex items-center gap-1 text-xs font-medium text-[#4d76ff] hover:underline"
-                    >
-                      <Download size={12} /> Download
-                    </a>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

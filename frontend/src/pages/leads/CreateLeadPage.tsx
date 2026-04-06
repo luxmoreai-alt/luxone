@@ -197,6 +197,8 @@ export default function CreateLeadPage() {
   }, [id]);
 
   const handleSubmit = async (values: LeadCreateValues) => {
+    // No domain restriction
+
     const payload = {
       leadOwner: values.leadOwner,
       salutation: values.salutation,

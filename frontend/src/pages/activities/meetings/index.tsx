@@ -5,6 +5,7 @@ import FilterSidebar from "../../../components/crm/FilterSidebar";
 import DashboardLayout from "../../../components/layout/DashboardLayout";
 import { apiRequest } from "../../../api/client";
 import type { FilterSection } from "../../../lib/shared/crmTypes";
+import { keepEmployeeVisibleRows } from "../../../lib/shared/recordVisibility";
 
 type FilterMap = Record<string, string>;
 
@@ -55,9 +56,9 @@ export default function MeetingsPage() {
       setError(null);
       const data = await apiRequest<Meeting[] | { results: Meeting[] }>("/meetings/", { method: "GET" });
       if (Array.isArray(data)) {
-        setMeetings(data);
+        setMeetings(keepEmployeeVisibleRows(data, (meeting) => meeting.organizer));
       } else if (data && typeof data === "object" && Array.isArray((data as { results: Meeting[] }).results)) {
-        setMeetings((data as { results: Meeting[] }).results);
+        setMeetings(keepEmployeeVisibleRows((data as { results: Meeting[] }).results, (meeting) => meeting.organizer));
       } else {
         setMeetings([]);
       }

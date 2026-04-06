@@ -4,6 +4,7 @@ import FilterSidebar from "../../../components/crm/FilterSidebar";
 import DashboardLayout from "../../../components/layout/DashboardLayout";
 import { apiRequest } from "../../../api/client";
 import type { FilterSection } from "../../../lib/shared/crmTypes";
+import { keepEmployeeOwnedRows, keepEmployeeVisibleRows } from "../../../lib/shared/recordVisibility";
 
 type FilterMap = Record<string, string>;
 type CallType = "Outbound" | "Inbound";
@@ -213,25 +214,25 @@ function useLookupData() {
 
   useEffect(() => {
     apiRequest<BackendContact[] | Paginated<BackendContact>>("/contacts/")
-      .then((data) => setContacts(toList(data).map((contact) => ({
+      .then((data) => setContacts(keepEmployeeOwnedRows(toList(data)).map((contact) => ({
         id: contact.id,
         label: `${contact.first_name} ${contact.last_name}`.trim() || contact.email || String(contact.id),
       }))))
       .catch(() => {});
 
     apiRequest<BackendLead[] | Paginated<BackendLead>>("/leads/")
-      .then((data) => setLeads(toList(data).map((lead) => ({
+      .then((data) => setLeads(keepEmployeeOwnedRows(toList(data)).map((lead) => ({
         id: lead.id,
         label: `${lead.first_name} ${lead.last_name}`.trim() || lead.company || String(lead.id),
       }))))
       .catch(() => {});
 
     apiRequest<BackendAccount[] | Paginated<BackendAccount>>("/accounts/")
-      .then((data) => setAccounts(toList(data).map((account) => ({ id: account.id, label: account.account_name }))))
+      .then((data) => setAccounts(keepEmployeeOwnedRows(toList(data)).map((account) => ({ id: account.id, label: account.account_name }))))
       .catch(() => {});
 
     apiRequest<BackendDeal[] | Paginated<BackendDeal>>("/deals/")
-      .then((data) => setDeals(toList(data).map((deal) => ({ id: deal.id, label: deal.deal_name }))))
+      .then((data) => setDeals(keepEmployeeOwnedRows(toList(data)).map((deal) => ({ id: deal.id, label: deal.deal_name }))))
       .catch(() => {});
   }, []);
 
@@ -662,7 +663,7 @@ export default function CallsPage() {
       setLoading(true);
       setError(null);
       const data = await apiRequest<ApiCall[] | Paginated<ApiCall>>("/calls/", { method: "GET" });
-      setCalls(toList(data).map(toApiRecord));
+      setCalls(keepEmployeeVisibleRows(toList(data).map(toApiRecord), (call) => call.owner));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load calls");
     } finally {

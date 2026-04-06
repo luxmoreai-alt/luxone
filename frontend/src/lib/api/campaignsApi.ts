@@ -177,6 +177,7 @@ export type CampaignSubmission = {
   email: string;
   phone: string;
   company: string;
+  website: string;
   notes: string;
   source: string;
   isConverted: boolean;
@@ -192,6 +193,7 @@ type BackendSubmission = {
   email: string;
   phone?: string | null;
   company?: string | null;
+  website?: string | null;
   notes?: string | null;
   source?: string | null;
   is_converted: boolean;
@@ -208,6 +210,7 @@ function mapSubmission(s: BackendSubmission): CampaignSubmission {
     email: s.email,
     phone: s.phone ?? "",
     company: s.company ?? "",
+    website: s.website ?? "",
     notes: s.notes ?? "",
     source: s.source ?? "",
     isConverted: s.is_converted,
@@ -254,6 +257,7 @@ export type PublicFormPayload = {
   email: string;
   phone?: string;
   company?: string;
+  website?: string;
   notes?: string;
 };
 
@@ -273,15 +277,28 @@ export async function submitCampaignForm(
       email: payload.email,
       phone: payload.phone ?? "",
       company: payload.company ?? "",
+      website: payload.website ?? "",
       notes: payload.notes ?? "",
     }),
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
+    const rawText = await res.text();
+    let err: unknown = {};
+    try {
+      err = rawText ? JSON.parse(rawText) : {};
+    } catch {
+      err = rawText;
+    }
     const msg =
-      (err as Record<string, unknown>).detail ??
-      (err as Record<string, unknown>).email ??
-      "Submission failed.";
+      (typeof err === "object" && err !== null
+        ? (err as Record<string, unknown>).detail ??
+          (err as Record<string, unknown>).message ??
+          (err as Record<string, unknown>).error ??
+          (err as Record<string, unknown>).email
+        : typeof err === "string" && err.trim()
+          ? err
+          : null) ??
+      `Submission failed (HTTP ${res.status}).`;
     throw new Error(String(msg));
   }
   return res.json() as Promise<{ message: string; id: number }>;

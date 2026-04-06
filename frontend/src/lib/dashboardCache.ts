@@ -31,3 +31,13 @@ export function writeDashboardCache<T>(key: string, state: T) {
     // Ignore storage errors so dashboards can still render from network data.
   }
 }
+
+export function removeDashboardCache(key: string) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // Ignore storage errors so cache invalidation never breaks the UI.
+  }
+}

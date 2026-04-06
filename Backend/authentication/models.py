@@ -21,6 +21,7 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
         extra_fields.setdefault('is_active', True)
+        extra_fields.setdefault('role', 'admin')
 
         if extra_fields.get('is_superuser') is not True:
             raise ValueError('Superuser must have is_superuser=True.')
@@ -39,6 +40,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         BUSINESS_DEVELOPMENT = "business_development", "Business Development"
         SOFTWARE_DEVELOPMENT = "software_development", "Software Development"
         SUPPORT_TEAM = "support_team", "Support Team"
+        SALES_MANAGER = "sales_manager", "Sales Manager"
         EMPLOYEE = "employee", "Employee"
 
     class Department(models.TextChoices):

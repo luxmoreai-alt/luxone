@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import CRMModuleListPage from "../crm/CRMModuleListPage";
 import { accountModuleConfig } from "../../components/modules/accounts/accountsMockData";
 import { deleteAccount, getAccounts } from "../../lib/api/accountsApi";
+import { keepEmployeeOwnedRows } from "../../lib/shared/recordVisibility";
 import type { AccountRecord } from "../../lib/shared/crmTypes";
 
 export default function AccountsPage() {
@@ -14,7 +15,7 @@ export default function AccountsPage() {
       setLoading(true);
       setError(null);
       const data = await getAccounts();
-      setRows(data);
+      setRows(keepEmployeeOwnedRows(data));
     } catch (err) {
       console.error("Failed to load accounts:", err);
       setError(err instanceof Error ? err.message : "Unable to load accounts");

@@ -45,6 +45,7 @@ export type LeadRecord = {
   createdAt: string;
   updatedBy: string;
   updatedAt: string;
+  ownerEmail?: string;
   tags?: string[];
   nextActivity?: {
     date: string;
@@ -66,6 +67,7 @@ export type ContactRecord = {
   lastName: string;
   accountName: string;
   contactOwner: string;
+  ownerEmail?: string;
   email: string;
   otherPhone: string;
   phone: string;
@@ -89,6 +91,7 @@ export type AccountRecord = {
   id: string;
   accountName: string;
   accountOwner: string;
+  ownerEmail?: string;
   accountSite: string;
   parentAccount: string;
   accountNumber: string;

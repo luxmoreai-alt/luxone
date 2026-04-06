@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import CRMModuleListPage from "../crm/CRMModuleListPage";
 import { dealModuleConfig } from "../../components/modules/deals/dealsConfig";
 import { deleteDeal, getDeals } from "../../lib/api/dealsApi";
+import { keepEmployeeOwnedRows } from "../../lib/shared/recordVisibility";
 import type { Deal } from "../../lib/shared/crmTypes";
 import DealsPipelinePanel from "./DealsPipelinePanel";
 
@@ -16,7 +17,7 @@ export default function DealsPage() {
       setLoading(true);
       setError(null);
       const data = await getDeals();
-      setRows(data);
+      setRows(keepEmployeeOwnedRows(data));
     } catch (err) {
       console.error("Failed to load deals:", err);
       const message = err instanceof Error ? err.message : "Unable to load deals";
