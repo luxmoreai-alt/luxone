@@ -7,7 +7,7 @@ def _resolve_role(user) -> str:
         return "admin"
 
     role = (getattr(user, "role", "") or "").strip().lower()
-    if role in {"admin", "manager", "sales", "sales_rep", "sales rep"}:
+    if role in {"admin", "manager", "sales_manager", "sales", "sales_rep", "sales rep"}:
         return role
 
     if getattr(user, "is_staff", False):
@@ -29,7 +29,7 @@ def filter_queryset_for_user(queryset: QuerySet, user) -> QuerySet:
         return queryset.none()
 
     role = _resolve_role(user)
-    if role == "admin":
+    if role in {"admin", "sales_manager"}:
         return queryset
     if role == "manager":
         reportee_ids = _team_member_ids(user)

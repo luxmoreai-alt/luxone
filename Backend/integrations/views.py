@@ -1347,14 +1347,13 @@ class CRMEmailUnreadCountAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        count = SyncedEmailMessage.objects.filter(
+        unread_queryset = SyncedEmailMessage.objects.filter(
             direction=SyncedEmailMessage.Direction.INCOMING,
             is_read=False,
-        ).count()
-        recent = SyncedEmailMessage.objects.filter(
-            direction=SyncedEmailMessage.Direction.INCOMING,
-            is_read=False,
-        ).order_by("-received_at", "-created_at").values(
+            lead__isnull=False,
+        )
+        count = unread_queryset.count()
+        recent = unread_queryset.order_by("-received_at", "-created_at").values(
             "id", "subject", "from_email", "received_at"
         )[:10]
         return Response({
@@ -1370,6 +1369,7 @@ class CRMEmailMarkAllReadAPIView(APIView):
         updated = SyncedEmailMessage.objects.filter(
             direction=SyncedEmailMessage.Direction.INCOMING,
             is_read=False,
+            lead__isnull=False,
         ).update(is_read=True)
         return Response({"marked_read": updated})
 

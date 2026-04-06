@@ -1,6 +1,8 @@
 from django.core.exceptions import ObjectDoesNotExist
+from django.db import connection
 from django.db import IntegrityError
 from django.http import Http404
+from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
@@ -34,6 +36,76 @@ from .serializers import (
     CampaignWriteSerializer,
 )
 from .services import campaign_service
+
+
+def _get_campaign_submission_columns() -> set[str]:
+    table_name = CampaignSubmission._meta.db_table
+    with connection.cursor() as cursor:
+        return {
+            column.name
+            for column in connection.introspection.get_table_description(cursor, table_name)
+        }
+
+
+def _get_campaign_submission_row(submission_id: int, campaign_id: int | None = None) -> dict | None:
+    existing_columns = _get_campaign_submission_columns()
+    fields = [
+        "id",
+        "campaign_id",
+        "first_name",
+        "last_name",
+        "email",
+        "phone",
+        "company",
+        "notes",
+        "source",
+        "is_converted",
+        "converted_lead_id",
+        "submitted_at",
+    ]
+    if "website" in existing_columns:
+        fields.insert(7, "website")
+
+    queryset = CampaignSubmission.objects.values(*fields).filter(id=submission_id)
+    if campaign_id is not None:
+        queryset = queryset.filter(campaign_id=campaign_id)
+    return queryset.first()
+
+
+def _create_public_submission_record(*, campaign: Campaign, data: dict) -> int:
+    table_name = CampaignSubmission._meta.db_table
+    existing_columns = _get_campaign_submission_columns()
+
+    with connection.cursor() as cursor:
+        row: dict[str, object | None] = {
+            "campaign_id": campaign.id,
+            "first_name": data["first_name"],
+            "last_name": data["last_name"],
+            "email": data["email"],
+            "phone": data.get("phone") or None,
+            "company": data.get("company") or None,
+            "notes": data.get("notes") or None,
+            "source": "Campaign Form",
+            "is_converted": False,
+            "converted_lead_id": None,
+            "submitted_at": timezone.now(),
+        }
+        if "website" in existing_columns:
+            row["website"] = data.get("website") or None
+
+        columns = [column for column in row.keys() if column in existing_columns]
+        placeholders = ", ".join(["%s"] * len(columns))
+        quoted_columns = ", ".join(connection.ops.quote_name(column) for column in columns)
+
+        cursor.execute(
+            f"""
+            INSERT INTO {connection.ops.quote_name(table_name)} ({quoted_columns})
+            VALUES ({placeholders})
+            RETURNING id
+            """,
+            [row[column] for column in columns],
+        )
+        return cursor.fetchone()[0]
 
 
 class CampaignViewSet(viewsets.ModelViewSet):
@@ -244,14 +316,52 @@ class CampaignViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"], url_path="submissions")
     def submissions(self, request, pk=None):
         campaign = self.get_object()
-        qs = CampaignSubmission.objects.filter(campaign=campaign)
+        existing_columns = _get_campaign_submission_columns()
+        fields = [
+            "id",
+            "campaign_id",
+            "first_name",
+            "last_name",
+            "email",
+            "phone",
+            "company",
+            "notes",
+            "source",
+            "is_converted",
+            "converted_lead_id",
+            "submitted_at",
+        ]
+        if "website" in existing_columns:
+            fields.insert(7, "website")
+
+        qs = CampaignSubmission.objects.filter(campaign=campaign).values(*fields)
         # Optional filter: ?converted=true|false
         converted_param = request.query_params.get("converted")
         if converted_param == "true":
             qs = qs.filter(is_converted=True)
         elif converted_param == "false":
             qs = qs.filter(is_converted=False)
-        return Response(CampaignSubmissionSerializer(qs, many=True).data)
+
+        payload = []
+        for row in qs:
+            payload.append(
+                {
+                    "id": row["id"],
+                    "campaign": row["campaign_id"],
+                    "first_name": row["first_name"],
+                    "last_name": row["last_name"],
+                    "email": row["email"],
+                    "phone": row.get("phone"),
+                    "company": row.get("company"),
+                    "website": row.get("website"),
+                    "notes": row.get("notes"),
+                    "source": row.get("source"),
+                    "is_converted": row["is_converted"],
+                    "converted_lead": row.get("converted_lead_id"),
+                    "submitted_at": row["submitted_at"],
+                }
+            )
+        return Response(payload)
 
     @action(detail=True, methods=["post"], url_path="convert-submissions")
     def convert_submissions(self, request, pk=None):
@@ -261,16 +371,15 @@ class CampaignViewSet(viewsets.ModelViewSet):
         ids = serializer.validated_data["submission_ids"]
         results = []
         for sub_id in ids:
-            try:
-                submission = CampaignSubmission.objects.get(pk=sub_id, campaign=campaign)
-            except CampaignSubmission.DoesNotExist:
+            submission_row = _get_campaign_submission_row(sub_id, campaign.id)
+            if not submission_row:
                 results.append({"id": sub_id, "success": False, "error": "Submission not found."})
                 continue
-            if submission.is_converted:
+            if submission_row["is_converted"]:
                 results.append({"id": sub_id, "success": False, "error": "Already converted."})
                 continue
             try:
-                lead = _convert_submission(submission, request.user)
+                lead = _convert_submission_row(submission_row, request.user)
                 results.append({"id": sub_id, "success": True, "lead_id": lead.id})
             except (ValidationError, IntegrityError) as exc:
                 msg = exc.detail[0] if hasattr(exc, "detail") else str(exc)
@@ -336,19 +445,54 @@ def _convert_submission(submission: CampaignSubmission, user):
     return lead
 
 
+def _convert_submission_row(submission_row: dict, user):
+    """Create a Lead from a schema-safe CampaignSubmission row and mark it converted."""
+    from leads.models import Lead
+    from .models import CampaignLead
+
+    if submission_row["is_converted"]:
+        raise ValidationError("This submission has already been converted to a lead.")
+
+    try:
+        lead = Lead.objects.create(
+            first_name=submission_row["first_name"],
+            last_name=submission_row["last_name"],
+            email=submission_row["email"],
+            phone=submission_row.get("phone") or "",
+            company=submission_row.get("company") or "Unknown",
+            lead_source="Campaign",
+            lead_status="New",
+            owner=user,
+            campaign_id=submission_row["campaign_id"],
+            description=submission_row.get("notes") or "",
+        )
+    except IntegrityError:
+        raise ValidationError(
+            f"A lead with email '{submission_row['email']}' already exists."
+        )
+
+    CampaignSubmission.objects.filter(pk=submission_row["id"]).update(
+        is_converted=True,
+        converted_lead=lead,
+    )
+
+    CampaignLead.objects.get_or_create(campaign_id=submission_row["campaign_id"], lead=lead)
+
+    return lead
+
+
 # ── Single-submission convert view ────────────────────────────────────────
 
 class CampaignSubmissionConvertAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, submission_id: int):
-        try:
-            submission = CampaignSubmission.objects.select_related("campaign").get(pk=submission_id)
-        except CampaignSubmission.DoesNotExist:
+        submission_row = _get_campaign_submission_row(submission_id)
+        if not submission_row:
             return Response({"detail": "Submission not found."}, status=status.HTTP_404_NOT_FOUND)
 
         try:
-            lead = _convert_submission(submission, request.user)
+            lead = _convert_submission_row(submission_row, request.user)
         except ValidationError as exc:
             msg = exc.detail[0] if hasattr(exc, "detail") else str(exc)
             return Response({"detail": str(msg)}, status=status.HTTP_400_BAD_REQUEST)
@@ -375,19 +519,10 @@ class CampaignPublicSubmitAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        submission = CampaignSubmission.objects.create(
-            campaign=campaign,
-            first_name=data["first_name"],
-            last_name=data["last_name"],
-            email=data["email"],
-            phone=data.get("phone") or None,
-            company=data.get("company") or None,
-            notes=data.get("notes") or None,
-            source="Campaign Form",
-        )
+        submission_id = _create_public_submission_record(campaign=campaign, data=data)
 
         return Response(
-            {"message": "Thank you! Your response has been recorded.", "id": submission.id},
+            {"message": "Thank you! Your response has been recorded.", "id": submission_id},
             status=status.HTTP_201_CREATED,
         )
 

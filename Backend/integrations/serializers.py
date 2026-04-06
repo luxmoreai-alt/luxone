@@ -326,6 +326,7 @@ class SalesInboxSettingSerializer(serializers.ModelSerializer):
 
 class SalesInboxFeedSerializer(serializers.ModelSerializer):
     sent_by_email = serializers.EmailField(source="from_email", read_only=True)
+    counterparty_email = serializers.SerializerMethodField()
     preview_text = serializers.SerializerMethodField()
     lead_id = serializers.IntegerField(source="lead.id", read_only=True, allow_null=True)
     lead_name = serializers.SerializerMethodField()
@@ -344,6 +345,7 @@ class SalesInboxFeedSerializer(serializers.ModelSerializer):
             "id",
             "subject",
             "sent_by_email",
+            "counterparty_email",
             "from_email",
             "preview_text",
             "direction",
@@ -380,6 +382,17 @@ class SalesInboxFeedSerializer(serializers.ModelSerializer):
 
     def get_support_case_name(self, obj):
         return record_display_name(obj.support_case)
+
+    def get_counterparty_email(self, obj):
+        if obj.direction == SyncedEmailMessage.Direction.OUTGOING:
+            for email in [*(obj.to_emails or []), *(obj.cc_emails or []), *(obj.bcc_emails or [])]:
+                if email:
+                    return email
+            if getattr(obj.lead, "email", None):
+                return obj.lead.email
+            if getattr(obj.contact, "email", None):
+                return obj.contact.email
+        return obj.from_email
 
     def get_preview_text(self, obj):
         preview_source = obj.body_text or strip_tags(obj.body_html or "")

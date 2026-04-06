@@ -159,8 +159,8 @@ class CampaignWriteSerializer(serializers.ModelSerializer):
         instance = getattr(self, "instance", None)
         start_date = attrs.get("start_date", getattr(instance, "start_date", None))
         end_date = attrs.get("end_date", getattr(instance, "end_date", None))
-        if start_date and end_date and start_date >= end_date:
-            raise serializers.ValidationError({"end_date": "end_date must be after start_date."})
+        if start_date and end_date and end_date < start_date:
+            raise serializers.ValidationError({"end_date": "end_date must be on or after start_date."})
 
         owner = attrs.get("campaign_owner", getattr(instance, "campaign_owner", None))
         if request and owner and not can_access_campaign_owner(user=request.user, owner_id=owner.id):
@@ -273,6 +273,7 @@ class CampaignSubmissionSerializer(serializers.ModelSerializer):
             "email",
             "phone",
             "company",
+            "website",
             "notes",
             "source",
             "is_converted",
@@ -288,7 +289,15 @@ class CampaignPublicSubmitSerializer(serializers.Serializer):
     email = serializers.EmailField()
     phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
     company = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    website = serializers.URLField(required=False, allow_blank=True, max_length=500)
     notes = serializers.CharField(required=False, allow_blank=True)
+
+    def validate_phone(self, value: str) -> str:
+        if not value:
+            return value
+        if not value.isdigit() or len(value) != 10:
+            raise serializers.ValidationError("Phone number must be exactly 10 digits.")
+        return value
 
 
 class BulkConvertSerializer(serializers.Serializer):

@@ -137,6 +137,7 @@ class CampaignSubmission(models.Model):
     email = models.EmailField()
     phone = models.CharField(max_length=20, blank=True, null=True)
     company = models.CharField(max_length=255, blank=True, null=True)
+    website = models.URLField(max_length=500, blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
     source = models.CharField(max_length=100, blank=True, null=True)
     is_converted = models.BooleanField(default=False, db_index=True)

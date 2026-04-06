@@ -399,7 +399,11 @@ class ModulePermissionsView(APIView):
         role = getattr(request.user, "role", "employee")
         department = getattr(request.user, "department", "") or ""
         allowed = get_allowed_modules(role, department)
-        return Response({"allowed_modules": allowed, "role": role, "department": department})
+        return Response({
+            "allowed_modules": allowed,
+            "role": role,
+            "department": department,
+        })
 
 
 # ── User Management ViewSet ────────────────────────────────────────────────────

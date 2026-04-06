@@ -77,6 +77,7 @@ INSTALLED_APPS = [
     'integrations',
     'django_filters',
     'documents',
+    'reports',
 ]
 
 MIDDLEWARE = [

@@ -62,6 +62,7 @@ urlpatterns = [
     path('api/', include('project.urls')),
     path('api/', include('projectdesk.urls')),
     path('api/', include('documents.urls')),
+    path('api/', include('reports.urls')),
     path('api/send-email', send_email_view, name='send-email'),
     path('api/imports', import_file_view, name='import-file'),
     

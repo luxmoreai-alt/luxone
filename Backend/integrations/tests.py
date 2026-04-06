@@ -241,6 +241,48 @@ class IntegrationLinkingTests(APITestCase):
         self.assertEqual(record_response.status_code, status.HTTP_200_OK)
         self.assertEqual(record_response.data[0]["contact_id"], self.contact.pk)
 
+    def test_unread_count_only_returns_lead_linked_incoming_messages(self):
+        lead = Lead.objects.create(
+            first_name="Prospect",
+            last_name="One",
+            company="Acme",
+            email="prospect@acme.com",
+            owner=self.user,
+        )
+
+        lead_message = create_synced_email_message(
+            provider_integration=self.provider,
+            payload={
+                "external_message_id": "gmail-lead-unread-1",
+                "subject": "Lead follow up",
+                "from_email": lead.email,
+                "to_emails": ["crm@zora.com"],
+                "body_text": "Please share the demo schedule.",
+            },
+            owner=self.user,
+        )
+        lead_message.lead = lead
+        lead_message.save(update_fields=["lead", "updated_at"])
+
+        create_synced_email_message(
+            provider_integration=self.provider,
+            payload={
+                "external_message_id": "gmail-nonlead-unread-1",
+                "subject": "Newsletter",
+                "from_email": "hello@use.ai",
+                "to_emails": ["crm@zora.com"],
+                "body_text": "Product update for subscribers.",
+            },
+            owner=self.user,
+        )
+
+        response = self.client.get("/api/email/unread-count/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["unread_count"], 1)
+        self.assertEqual(len(response.data["recent"]), 1)
+        self.assertEqual(response.data["recent"][0]["id"], lead_message.id)
+
     def test_record_email_list_endpoint_returns_body_fields_for_crm_modules(self):
         message = create_synced_email_message(
             provider_integration=self.provider,

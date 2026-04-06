@@ -6,7 +6,7 @@ def _resolve_role(user) -> str:
         return "admin"
 
     role = (getattr(user, "role", "") or "").strip().lower()
-    if role in {"admin", "sub_admin", "manager", "team_lead", "employee"}:
+    if role in {"admin", "sub_admin", "manager", "team_lead", "employee", "sales_manager"}:
         return role
 
     if getattr(user, "is_staff", False):
@@ -28,7 +28,7 @@ def filter_queryset_for_user(queryset: QuerySet, user) -> QuerySet:
         return queryset.none()
 
     role = _resolve_role(user)
-    if role == "admin" or role == "sub_admin":
+    if role in {"admin", "sub_admin", "sales_manager"}:
         return queryset
     if role in {"manager", "team_lead"}:
         reportee_ids = _team_member_ids(user)
@@ -42,7 +42,7 @@ def filter_queryset_for_user(queryset: QuerySet, user) -> QuerySet:
 
 def can_access_lead_owner(*, user, owner_id: int | None) -> bool:
     role = _resolve_role(user)
-    if role in {"admin", "sub_admin"}:
+    if role in {"admin", "sub_admin", "sales_manager"}:
         return True
     if role in {"manager", "team_lead"}:
         return owner_id is None or owner_id == user.id or owner_id in _team_member_ids(user)

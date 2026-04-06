@@ -27,7 +27,18 @@ def _team_member_ids(user) -> list[int]:
 def filter_queryset_for_user(queryset: QuerySet, user) -> QuerySet:
     if not user.is_authenticated:
         return queryset.none()
-    return queryset
+
+    role = _resolve_role(user)
+    if role in {"admin", "sales_manager"}:
+        return queryset
+    if role == "manager":
+        team_ids = _team_member_ids(user)
+        scoped = Q(account_owner=user)
+        if team_ids:
+          scoped |= Q(account_owner_id__in=team_ids)
+        scoped |= Q(account_owner__isnull=True)
+        return queryset.filter(scoped)
+    return queryset.filter(Q(account_owner=user) | Q(account_owner__isnull=True))
 
 
 def can_access_account_owner(*, user, owner_id: int | None) -> bool:
