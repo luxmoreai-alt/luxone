@@ -409,7 +409,15 @@ class MyRequestsDashboardView(APIView):
 
         task_qs = Task.objects.filter(Q(assigned_to=user) | Q(owner=user))
         meeting_qs = Meeting.objects.filter(organizer=user)
-        case_qs = SupportCase.objects.filter(owner=user)
+        case_qs = SupportCase.objects.filter(owner=user).only(
+            "id",
+            "case_number",
+            "subject",
+            "status",
+            "priority",
+            "created_at",
+            "updated_at",
+        )
         appointment_qs = ServiceAppointment.objects.filter(assigned_member=user)
 
         items = []

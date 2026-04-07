@@ -177,11 +177,11 @@ export default function HomePage() {
   return (
     <DashboardLayout>
       <div className="mx-auto w-full max-w-[1400px] space-y-5">
-        <div className="relative overflow-hidden rounded-[28px] border border-[#c9d7f2] bg-[linear-gradient(135deg,#f7fbff_0%,#eef4ff_44%,#ffffff_100%)] shadow-[0_18px_42px_rgba(79,110,207,0.10)]">
-          <div className="pointer-events-none absolute right-0 top-0 h-40 w-40 rounded-full bg-[#4f6ecf]/10 blur-3xl" />
+        <div className="relative overflow-hidden rounded-[28px] border border-[#d8cdf8] bg-[linear-gradient(135deg,#fbf9ff_0%,#f3eeff_44%,#ffffff_100%)] shadow-[0_18px_42px_rgba(109,40,217,0.10)]">
+          <div className="pointer-events-none absolute right-0 top-0 h-40 w-40 rounded-full bg-[#8b5cf6]/10 blur-3xl" />
           <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0 flex-1">
-              <div className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-700">
+              <div className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-violet-700">
                 <Sparkles className="h-3.5 w-3.5" />
                 Customer Command Center
               </div>
@@ -197,7 +197,7 @@ export default function HomePage() {
             <button
               type="button"
               onClick={() => navigate("/accounts")}
-              className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-b from-blue-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:shadow-sm"
+              className="inline-flex items-center gap-2 rounded-2xl border border-[#d7c5fb] bg-[linear-gradient(135deg,#a97df4_0%,#8b5cf6_100%)] px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(139,92,246,0.24)] transition hover:brightness-105"
             >
               Open Customers
               <ArrowRight className="h-4 w-4" />

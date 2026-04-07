@@ -35,6 +35,7 @@ import {
   Wrench,
   X,
 } from "lucide-react";
+import companyLogo from "../../assets/Picsart_26-04-04_13-24-20-688-removebg-preview.png";
 import { useAuth } from "../../hooks/useAuth";
 import { preloadRouteResources } from "../../lib/routePreload";
 
@@ -251,7 +252,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 h-screen overflow-y-auto bg-[#7548b9] text-white transition-all duration-300 md:static md:z-auto md:flex md:h-screen md:flex-col ${
+        className={`fixed inset-y-0 left-0 z-40 h-screen overflow-y-auto bg-[whitesmoke] text-slate-800 transition-all duration-300 md:static md:z-auto md:flex md:h-screen md:flex-col ${
           sidebarOpen
             ? "translate-x-0 w-56"
             : "-translate-x-full w-56 md:translate-x-0 md:w-14"
@@ -261,14 +262,14 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
           {sidebarOpen ? (
             <div className="flex items-center justify-between px-3 pt-3 pb-2">
               <div className="flex items-center">
-                <img src="/logo.png" alt="Zora CRM Logo" className="h-7 w-7 rounded-md object-contain" />
+                <img src={companyLogo} alt="Zora CRM Logo" className="h-[34px] w-[34px] -translate-y-[2px] rounded-md object-contain" />
                 <div className="ml-2.5 text-[17px] font-bold">Zora CRM</div>
               </div>
 
               <button
                 type="button"
                 onClick={() => setSidebarOpen(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-md transition hover:bg-white/10"
+                className="flex h-8 w-8 items-center justify-center rounded-md transition hover:bg-slate-300/60"
                 aria-label="Collapse sidebar"
               >
                 <span className="hidden md:block">
@@ -287,7 +288,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
                 className="rounded-md transition hover:opacity-90"
                 aria-label="Expand sidebar"
               >
-                <img src="/logo.png" alt="Zora CRM Logo" className="h-7 w-7 rounded-md object-contain" />
+                <img src={companyLogo} alt="Zora CRM Logo" className="h-[34px] w-[34px] -translate-y-[2px] rounded-md object-contain" />
               </button>
             </div>
           )}
@@ -309,8 +310,8 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
                         "flex w-full items-center rounded-lg text-left text-[14px] transition",
                         sidebarOpen ? "gap-2 px-2.5 py-2" : "justify-center px-2 py-2.5",
                         location.pathname === item.path || location.pathname.startsWith(`${item.path}/`)
-                          ? "bg-white/12 font-semibold"
-                          : "text-white hover:bg-white/8",
+                          ? "bg-slate-300/70 font-semibold text-slate-900"
+                          : "text-slate-700 hover:bg-slate-200",
                       ].join(" ")}
                     >
                       <Icon size={17} />
@@ -329,7 +330,9 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
                     className={[
                       "flex w-full items-center rounded-lg text-left text-[14px] transition",
                       sidebarOpen ? "gap-2 px-2.5 py-2" : "justify-center px-2 py-2.5",
-                      location.pathname.startsWith("/team") ? "bg-white/12 font-semibold" : "text-white hover:bg-white/8",
+                      location.pathname.startsWith("/team")
+                        ? "bg-slate-300/70 font-semibold text-slate-900"
+                        : "text-slate-700 hover:bg-slate-200",
                     ].join(" ")}
                   >
                     <Users size={17} />
@@ -339,12 +342,12 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
               </div>
             </nav>
 
-            <div className={`my-3 border-t border-white/15 ${sidebarOpen ? "mx-2.5" : "mx-2"}`} />
+            <div className={`my-3 border-t border-slate-300 ${sidebarOpen ? "mx-2.5" : "mx-2"}`} />
 
             {sidebarOpen ? (
               <div className="px-2.5">
                 <div className="px-2.5 pb-2.5 text-[14px] font-semibold">CRM Teamspace</div>
-                <div className="mx-1 mb-2.5 flex items-center gap-2 rounded-lg border border-white/15 px-2.5 py-2 text-slate-200">
+                <div className="mx-1 mb-2.5 flex items-center gap-2 rounded-lg border border-slate-300 px-2.5 py-2 text-slate-600">
                   <Search size={15} />
                   <span className="text-[14px]">Search</span>
                 </div>
@@ -356,7 +359,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
 
                     return (
                       <div key={item.label}>
-                        <div className="group flex items-center justify-between rounded-lg px-2.5 py-2 text-[14px] transition hover:bg-white/8">
+                        <div className="group flex items-center justify-between rounded-lg px-2.5 py-2 text-[14px] transition hover:bg-slate-200">
                           <button
                             type="button"
                             onClick={() =>
@@ -377,7 +380,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
                               <button
                                 type="button"
                                 onClick={() => undefined}
-                                className="rounded p-1 hover:bg-white/10"
+                                className="rounded p-1 hover:bg-slate-300/70"
                                 aria-label={`Add item in ${item.label}`}
                               >
                                 <Plus size={13} />
@@ -385,7 +388,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
                               <button
                                 type="button"
                                 onClick={() => handleToggleMenu(item.label)}
-                                className="rounded p-1 hover:bg-white/10"
+                                className="rounded p-1 hover:bg-slate-300/70"
                                 aria-label={`Toggle ${item.label} submenu`}
                               >
                                 <ChevronDown
@@ -412,8 +415,8 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
                                   onFocus={() => preloadRouteResources(child.path)}
                                   className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] transition ${
                                     location.pathname === child.path || location.pathname.startsWith(`${child.path}/`)
-                                      ? "bg-white/12 font-semibold text-white"
-                                      : "text-slate-200 hover:bg-white/8"
+                                      ? "bg-slate-300/70 font-semibold text-slate-900"
+                                      : "text-slate-600 hover:bg-slate-200"
                                   }`}
                                 >
                                   <ChildIcon size={13} />
@@ -442,7 +445,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
                         onClick={() => handleNavigate(fallbackPath)}
                         onMouseEnter={() => preloadRouteResources(fallbackPath)}
                         onFocus={() => preloadRouteResources(fallbackPath)}
-                        className="flex w-full items-center justify-center rounded-lg px-2 py-2.5 transition hover:bg-white/8"
+                        className="flex w-full items-center justify-center rounded-lg px-2 py-2.5 text-slate-700 transition hover:bg-slate-200"
                       >
                         <Icon size={17} />
                       </button>

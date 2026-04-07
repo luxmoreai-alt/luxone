@@ -114,6 +114,14 @@ export default function ModuleToolbar({
     return "/leads";
   }, [baseRoute, singularModuleName]);
 
+  const isDealsToolbar = singularModuleName.toLowerCase() === "deal";
+  const primaryActionClass = isDealsToolbar
+    ? "cursor-pointer rounded-md border border-[#d7c5fb] bg-[linear-gradient(135deg,#a97df4_0%,#8b5cf6_100%)] px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(139,92,246,0.24)] transition duration-150 hover:brightness-105"
+    : "cursor-pointer rounded-md bg-gradient-to-b from-blue-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white transition duration-150 hover:shadow-sm";
+  const primaryDropdownClass = isDealsToolbar
+    ? "cursor-pointer rounded-md border border-[#d7c5fb] bg-[linear-gradient(135deg,#a97df4_0%,#8b5cf6_100%)] px-3 py-2 text-white shadow-[0_12px_28px_rgba(139,92,246,0.24)] transition duration-150 hover:brightness-105"
+    : "cursor-pointer rounded-md bg-gradient-to-b from-blue-500 to-blue-600 px-3 py-2 text-white transition duration-150 hover:shadow-sm";
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -189,7 +197,7 @@ export default function ModuleToolbar({
           <button
             type="button"
             onClick={onCreateClick}
-            className="cursor-pointer rounded-md bg-gradient-to-b from-blue-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white transition duration-150 hover:shadow-sm"
+            className={primaryActionClass}
           >
             {createButtonLabel}
           </button>
@@ -199,7 +207,7 @@ export default function ModuleToolbar({
               <button
                 type="button"
                 onClick={() => setImportMenuOpen((prev) => !prev)}
-                className="cursor-pointer rounded-md bg-gradient-to-b from-blue-500 to-blue-600 px-3 py-2 text-white transition duration-150 hover:shadow-sm"
+                className={primaryDropdownClass}
               >
                 <ChevronDown size={16} />
               </button>

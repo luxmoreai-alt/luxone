@@ -99,7 +99,7 @@ function DealsViewToggle({
           onClick={() => onChange("pipeline")}
           className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
             viewMode === "pipeline"
-              ? "bg-blue-600 text-white shadow-sm"
+              ? "border border-[#d7c5fb] bg-[linear-gradient(135deg,#a97df4_0%,#8b5cf6_100%)] text-white shadow-[0_12px_28px_rgba(139,92,246,0.24)]"
               : "text-slate-600 hover:bg-white"
           }`}
         >
@@ -110,7 +110,7 @@ function DealsViewToggle({
           onClick={() => onChange("list")}
           className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
             viewMode === "list"
-              ? "bg-blue-600 text-white shadow-sm"
+              ? "border border-[#d7c5fb] bg-[linear-gradient(135deg,#a97df4_0%,#8b5cf6_100%)] text-white shadow-[0_12px_28px_rgba(139,92,246,0.24)]"
               : "text-slate-600 hover:bg-white"
           }`}
         >
