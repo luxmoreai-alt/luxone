@@ -41,6 +41,12 @@ If you do not want the default admin seed command, use only:
 python manage.py migrate --noinput
 ```
 
+`create_default_admin` reads these backend env keys:
+
+- `SEED_ADMIN_EMAIL`
+- `SEED_ADMIN_PASSWORD`
+- `SEED_ADMIN_NAME` (optional)
+
 ## 3. Environment Variables
 
 ## Frontend env (`frontend/.env`)
@@ -97,6 +103,7 @@ Database behavior:
 
 5. Add environment variables for each component.
 For backend production env, set Neon `DATABASE_URL` in App Platform.
+If you use admin seed in post-deploy, also set `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD`.
 6. In backend settings, set **Post Deploy Command**:
 
 ```bash
