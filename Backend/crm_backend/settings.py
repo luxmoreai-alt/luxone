@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 import os
+from urllib.parse import parse_qs, unquote, urlparse
 from dotenv import load_dotenv
 from corsheaders.defaults import default_headers
 
@@ -114,22 +115,46 @@ WSGI_APPLICATION = 'crm_backend.wsgi.application'
 
 
 # Database
-# Single PostgreSQL database configuration
-DB_NAME = os.getenv('DB_NAME', 'tenant_zora')
-DB_USER = os.getenv('DB_USER', 'postgres')
-DB_PASSWORD = os.getenv('DB_PASSWORD', 'zora')
-DB_HOST = os.getenv('DB_HOST', 'localhost')
-DB_PORT = os.getenv('DB_PORT', '5432')
+# Supports Neon-style DATABASE_URL for production and DB_* for local development.
+def get_database_config() -> dict:
+    database_url = os.getenv('DATABASE_URL', '').strip()
+    if database_url:
+        parsed = urlparse(database_url)
+        scheme = parsed.scheme.split('+', 1)[0]
+        if scheme not in {'postgres', 'postgresql'}:
+            raise ValueError('Only postgres/postgresql DATABASE_URL schemes are supported.')
+
+        query_options = {key: values[-1] for key, values in parse_qs(parsed.query).items() if values}
+        if 'sslmode' not in query_options:
+            query_options['sslmode'] = os.getenv('DB_SSLMODE', 'require')
+
+        config = {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': unquote((parsed.path or '').lstrip('/')),
+            'USER': unquote(parsed.username or ''),
+            'PASSWORD': unquote(parsed.password or ''),
+            'HOST': parsed.hostname or '',
+            'PORT': str(parsed.port or ''),
+        }
+        if query_options:
+            config['OPTIONS'] = query_options
+        return config
+
+    config = {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.getenv('DB_NAME', 'tenant_zora'),
+        'USER': os.getenv('DB_USER', 'postgres'),
+        'PASSWORD': os.getenv('DB_PASSWORD', 'zora'),
+        'HOST': os.getenv('DB_HOST', 'localhost'),
+        'PORT': os.getenv('DB_PORT', '5432'),
+    }
+    db_sslmode = os.getenv('DB_SSLMODE', '').strip()
+    if db_sslmode:
+        config['OPTIONS'] = {'sslmode': db_sslmode}
+    return config
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': DB_NAME,
-        'USER': DB_USER,
-        'PASSWORD': DB_PASSWORD,
-        'HOST': DB_HOST,
-        'PORT': DB_PORT,
-    }
+    'default': get_database_config()
 }
 
 # Password validation

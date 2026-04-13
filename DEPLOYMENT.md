@@ -1,10 +1,63 @@
-# CRM Deployment Guide
+# CRM Deployment Guide (DigitalOcean App Platform)
 
-This document covers the remaining non-code setup needed to run the CRM in a production-like environment.
+This project is now configured for source-based deployment (no Docker files).
 
-## 1. Backend Environment
+## 1. What To Deploy
 
-Create `Backend/.env` from `Backend/.env.example` and set real values:
+Deploy as one **DigitalOcean App Platform app** with 2 components:
+
+1. `backend` (Python web service) from `Backend/`
+2. `frontend` (Node web service) from `frontend/`
+
+## 2. Commands You Need
+
+### Frontend
+
+- Build command: `npm ci && npm run build`
+- Run command: `npm run start`
+
+`frontend/package.json` now includes:
+
+```json
+"start": "vite preview --host 0.0.0.0 --port 8080"
+```
+
+### Backend
+
+- Build command: `pip install -r requirements.txt && python manage.py collectstatic --noinput`
+- Run command: `gunicorn crm_backend.wsgi:application --bind 0.0.0.0:$PORT --workers 3 --timeout 120`
+
+### Post Deploy (backend)
+
+Use this as your post-deploy command:
+
+```bash
+python manage.py migrate --noinput && python manage.py create_default_admin
+```
+
+If you do not want the default admin seed command, use only:
+
+```bash
+python manage.py migrate --noinput
+```
+
+## 3. Environment Variables
+
+## Frontend env (`frontend/.env`)
+
+```env
+VITE_API_BASE_URL=/api
+```
+
+If frontend and backend are on different domains, use:
+
+```env
+VITE_API_BASE_URL=https://your-backend-name.ondigitalocean.app/api
+```
+
+## Backend env (`Backend/.env`)
+
+Use `Backend/.env.example` as template. Minimum production keys:
 
 - `DJANGO_SECRET_KEY`
 - `DEBUG=false`
@@ -12,161 +65,73 @@ Create `Backend/.env` from `Backend/.env.example` and set real values:
 - `FRONTEND_URL`
 - `CORS_ALLOWED_ORIGINS`
 - `CSRF_TRUSTED_ORIGINS`
-- database credentials
-- SMTP credentials
+- `DATABASE_URL` (for Neon in production)
+- SMTP keys if email is required
 
-Important:
+Database behavior:
 
-- do not use the default `django-insecure-...` secret key in production
-- set `SECURE_SSL_REDIRECT=true` when HTTPS termination is ready
+- local development: uses `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`
+- production (Neon): set `DATABASE_URL` and it will override `DB_*`
 
-## 2. Frontend Environment
+## 4. DigitalOcean App Platform Setup (Step By Step)
 
-Create `frontend/.env` from `frontend/.env.example`.
+1. Go to **Create App** in DigitalOcean.
+2. Connect your Git repository.
+3. Add backend component:
+- Type: `Web Service`
+- Source directory: `Backend`
+- Environment: `Python`
+- Build command: `pip install -r requirements.txt && python manage.py collectstatic --noinput`
+- Run command: `gunicorn crm_backend.wsgi:application --bind 0.0.0.0:$PORT --workers 3 --timeout 120`
+- HTTP route: `/api`
+- Add second route for health check: `/health`
 
-Use one of these:
+4. Add frontend component:
+- Type: `Web Service`
+- Source directory: `frontend`
+- Environment: `Node`
+- Build command: `npm ci && npm run build`
+- Run command: `npm run start`
+- HTTP route: `/`
+- HTTP port: `8080`
 
-- `VITE_API_BASE_URL=/api` when frontend and backend are served behind the same domain/reverse proxy
-- `VITE_API_BASE_URL=https://api.your-domain.com/api` when backend is hosted separately
+5. Add environment variables for each component.
+For backend production env, set Neon `DATABASE_URL` in App Platform.
+6. In backend settings, set **Post Deploy Command**:
 
-## 3. Backend Setup
-
-From `Backend/`:
-
-```powershell
-.\env\Scripts\python.exe -m pip install -r requirements.txt
-.\env\Scripts\python.exe manage.py migrate
-.\env\Scripts\python.exe manage.py collectstatic --noinput
+```bash
+python manage.py migrate --noinput && python manage.py create_default_admin
 ```
 
-Optional verification:
+7. Deploy the app.
 
-```powershell
-.\env\Scripts\python.exe manage.py check --deploy
-.\env\Scripts\python.exe manage.py test leads inventory services support integrations authentication deals --keepdb --noinput
-```
+## 5. Verification Checklist
 
-## 4. Frontend Build
+After deployment, verify:
 
-From `frontend/`:
+- Frontend opens from `/`
+- Backend health: `/health/`
+- API root: `/api/`
+- Login and authenticated API calls work
+- CORS and CSRF values match your frontend domain
 
-```powershell
-npm install
+## 6. Local Build/Run Reference
+
+### Frontend local
+
+```bash
+cd frontend
+npm ci
 npm run build
+npm run start
 ```
 
-Deploy the `frontend/dist/` output through Nginx, Apache, IIS, or a static hosting service.
+### Backend local
 
-## 5. Docker Deployment
-
-The repository now includes:
-
-- `Backend/Dockerfile`
-- `Backend/entrypoint.sh`
-- `frontend/Dockerfile`
-- `frontend/nginx.conf`
-- `docker-compose.yml`
-- `deploy/nginx/default.conf`
-- `deploy/nginx/crm.example.conf`
-- `deploy/systemd/crm-backend.service`
-- `deploy/env/Backend.production.env.example`
-- `deploy/scripts/generate-django-secret.ps1`
-
-Quick start:
-
-```powershell
-copy Backend\.env.example Backend\.env
-copy frontend\.env.example frontend\.env
-docker compose up --build -d
+```bash
+cd Backend
+pip install -r requirements.txt
+python manage.py collectstatic --noinput
+python manage.py migrate --noinput
+gunicorn crm_backend.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120
 ```
-
-After that:
-
-- frontend: `http://localhost/`
-- backend health: `http://localhost/health/`
-- API: `http://localhost/api/`
-- smoke check: `.\deploy\scripts\smoke-check.ps1`
-
-## 6. Reverse Proxy
-
-Recommended setup:
-
-- serve frontend from `/`
-- proxy backend API through `/api/`
-- expose backend health endpoint at `/health/`
-- serve uploaded files from `/media/`
-
-## 7. Production Checklist
-
-- HTTPS enabled
-- strong secret key configured
-- `DEBUG=false`
-- real allowed hosts configured
-- CORS restricted to known frontend domains
-- CSRF trusted origins configured
-- PostgreSQL backups scheduled
-- error logs collected
-- health check monitored
-- SMTP credentials tested
-
-## 8. Backup And Restore Helpers
-
-PowerShell helper scripts are included for Docker-based deployments:
-
-```powershell
-.\deploy\scripts\backup-db.ps1
-.\deploy\scripts\restore-db.ps1 -BackupFile .\deploy\backups\crm-backup-YYYYMMDD-HHMMSS.sql
-```
-
-These use the running `db` container and create SQL dump files under `deploy/backups/`.
-
-## 9. Smoke Test Helper
-
-After deployment, run:
-
-```powershell
-.\deploy\scripts\smoke-check.ps1
-```
-
-Optional custom URL:
-
-```powershell
-.\deploy\scripts\smoke-check.ps1 -BaseUrl https://crm.your-domain.com
-```
-
-## 10. Non-Docker VPS Setup Helpers
-
-If you deploy directly on a Linux VPS instead of Docker:
-
-- copy `deploy/nginx/crm.example.conf` and replace `crm.example.com`
-- copy `deploy/systemd/crm-backend.service` and adjust paths if needed
-- use `deploy/env/Backend.production.env.example` as your production backend env template
-
-To generate a strong Django secret locally:
-
-```powershell
-.\deploy\scripts\generate-django-secret.ps1
-```
-
-## 11. What Is Still Manual
-
-These items cannot be completed from the local codebase alone:
-
-- buying or assigning production domains
-- server provisioning
-- SSL certificate setup
-- Nginx / IIS / Apache installation
-- database backup scheduling
-- monitoring and alerting setup
-- production `.env` secret values
-- Docker installation on the target server if you use the compose setup
-
-## 12. Health Endpoint
-
-Backend health URL:
-
-```text
-/health/
-```
-
-It returns a simple JSON response to confirm the backend is reachable.
