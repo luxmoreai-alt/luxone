@@ -83,6 +83,7 @@ function normalizeContact(item: BackendContact): ContactRecord {
 
   return {
     id: String(item.id),
+    contactId: item.lead_conversion_reference ? String(item.lead_conversion_reference.id) : String(item.id),
     contactName: item.contact_name ?? `${first} ${last}`.trim(),
     firstName: first,
     lastName: last,

@@ -159,7 +159,7 @@ export default function ContactDetailPage() {
         }}
         onAction={(action) => {
           if (action === "Edit") navigate(`/contacts/${id}/edit`);
-          if (action === "Convert to Deal") openConvertModal();
+          if (action === "Convert" || action === "Convert to Deal") openConvertModal();
         }}
         onNavigate={(type, navId) => {
           navigate(`/${type}s/${navId}`);

@@ -55,7 +55,6 @@ export default function ServiceDetailPage() {
         <CRMDetailHeader
           title={service.serviceName}
           subtitle={service.status}
-          avatar={service.serviceName.slice(0, 2).toUpperCase()}
           actions={["Edit"]}
           onBack={() => navigate("/services/catalog")}
           onActionClick={(action) => {

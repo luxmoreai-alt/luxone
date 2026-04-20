@@ -133,7 +133,6 @@ export default function InventoryDetailPage({ moduleKey }: InventoryDetailPagePr
         <CRMDetailHeader
           title={detail.name}
           subtitle={detail.subtitle}
-          avatar={detail.avatar}
           actions={headerActions}
           onBack={() => navigate(meta.baseRoute)}
           onAction={async (action) => {

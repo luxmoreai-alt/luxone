@@ -20,6 +20,7 @@ type ProductFormState = {
 function normalizeDeal(data: CRMDeal): CRMDeal {
   return {
     id: data.id,
+    dealId: data.contactId || data.leadId || data.id,
     parentId: data.parentId || data.id,
     dealName: data.dealName,
     amount: data.amount,

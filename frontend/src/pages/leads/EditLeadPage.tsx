@@ -10,6 +10,22 @@ import {
   SALUTATION_OPTIONS,
 } from "../../config/crm/createOptions";
 
+const sanitizeAlphaSpace = (value: string) => value.replace(/[^A-Za-z ]+/g, "");
+const sanitizeDigits = (value: string) => value.replace(/\D+/g, "");
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const validateRequired = (label: string) => (value: string) =>
+  value.trim() ? null : `${label} is required.`;
+const validateRequiredEmail = (value: string) => {
+  if (!value.trim()) return "Email is required.";
+  if (!emailPattern.test(value.trim())) return "Please enter a valid email address.";
+  return null;
+};
+const validateRequiredPhone = (value: string) => {
+  if (!value.trim()) return "Phone number is required.";
+  if (value.length !== 10) return "Phone number must be exactly 10 digits.";
+  return null;
+};
+
 type LeadEditValues = {
   leadOwner: string;
   salutation: string;
@@ -48,22 +64,74 @@ const sections: CRMCreateSection[] = [
     title: "Lead Information",
     fields: [
       { name: "leadOwner", label: "Lead Owner", type: "owner", readOnly: true },
-      { name: "salutation", label: "First Name", type: "name-composite", options: SALUTATION_OPTIONS, secondaryName: "firstName" },
-      { name: "title", label: "Title", type: "text" },
-      { name: "phone", label: "Phone", type: "text" },
-      { name: "mobile", label: "Mobile", type: "text" },
+      {
+        name: "firstName",
+        label: "First Name",
+        type: "text",
+        sanitizeValue: sanitizeAlphaSpace,
+        maxLength: 30,
+        validateValue: validateRequired("First Name"),
+      },
+      {
+        name: "lastName",
+        label: "Last Name",
+        type: "text",
+        sanitizeValue: sanitizeAlphaSpace,
+        maxLength: 30,
+      },
+      {
+        name: "title",
+        label: "Title",
+        type: "text",
+        sanitizeValue: sanitizeAlphaSpace,
+      },
+      {
+        name: "phone",
+        label: "Phone",
+        type: "text",
+        sanitizeValue: sanitizeDigits,
+        inputMode: "numeric",
+        maxLength: 10,
+        validateValue: validateRequiredPhone,
+      },
+      {
+        name: "mobile",
+        label: "Mobile",
+        type: "text",
+        sanitizeValue: sanitizeDigits,
+        inputMode: "numeric",
+        maxLength: 10,
+      },
+      { name: "salutation", label: "Salutation", type: "select", options: SALUTATION_OPTIONS },
       { name: "leadSource", label: "Lead Source", type: "select", options: LEAD_SOURCE_OPTIONS },
       { name: "industry", label: "Industry", type: "select", options: INDUSTRY_OPTIONS },
-      { name: "annualRevenue", label: "Annual Revenue", type: "currency" },
+      {
+        name: "annualRevenue",
+        label: "Annual Revenue",
+        type: "currency",
+        sanitizeValue: sanitizeDigits,
+        inputMode: "numeric",
+      },
       { name: "emailOptOut", label: "Email Opt Out", type: "checkbox" },
 
-      { name: "company", label: "Company", type: "text" },
-      { name: "lastName", label: "Last Name", type: "text" },
-      { name: "email", label: "Email", type: "email" },
+      {
+        name: "company",
+        label: "Company",
+        type: "text",
+        sanitizeValue: sanitizeAlphaSpace,
+        validateValue: validateRequired("Company"),
+      },
+      { name: "email", label: "Email", type: "email", validateValue: validateRequiredEmail },
       { name: "fax", label: "Fax", type: "text" },
       { name: "website", label: "Website", type: "text" },
       { name: "leadStatus", label: "Lead Status", type: "select", options: LEAD_STATUS_OPTIONS },
-      { name: "noOfEmployees", label: "No. of Employees", type: "number" },
+      {
+        name: "noOfEmployees",
+        label: "No. of Employees",
+        type: "number",
+        sanitizeValue: sanitizeDigits,
+        inputMode: "numeric",
+      },
       { name: "rating", label: "Rating", type: "select", options: RATING_OPTIONS },
       { name: "skypeId", label: "Skype ID", type: "text" },
       { name: "secondaryEmail", label: "Secondary Email", type: "email" },

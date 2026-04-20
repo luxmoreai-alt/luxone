@@ -494,19 +494,12 @@ export default function CRMModuleDetailPage<T extends CRMRecord>({
     return String(value);
   };
 
-  const avatarValue = (record as { avatar?: unknown }).avatar;
-  const avatar =
-    typeof avatarValue === "string" && avatarValue.trim().length > 0
-      ? avatarValue
-      : String(record[config.nameKey] || "").slice(0, 2).toUpperCase();
-
   return (
     <DashboardLayout>
       <div className="space-y-4">
         <CRMDetailHeader
           title={String(record[config.nameKey] || "")}
           subtitle={String(record[config.subtitleKey] || "")}
-          avatar={avatar}
           actions={config.headerActions}
           onAction={onAction}
           onBack={() => navigate(config.baseRoute)}

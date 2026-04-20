@@ -22,9 +22,11 @@ type ModuleToolbarProps = {
   importPrimaryLabel?: string;
   showImportActions?: boolean;
   sortFields?: string[];
+  sortFieldKeyMap?: Partial<Record<string, string>>;
   isFilterOpen: boolean;
   onToggleFilter: () => void;
   onCreateClick: () => void;
+  onApplySort?: (columnKey: string | null, direction: "asc" | "desc") => void;
   onMassAction?: (action: "mass-delete" | "mass-update") => void;
 };
 
@@ -54,9 +56,11 @@ export default function ModuleToolbar({
   importPrimaryLabel,
   showImportActions = true,
   sortFields,
+  sortFieldKeyMap,
   isFilterOpen,
   onToggleFilter,
   onCreateClick,
+  onApplySort,
   onMassAction,
 }: ModuleToolbarProps) {
   const navigate = useNavigate();
@@ -70,7 +74,7 @@ export default function ModuleToolbar({
   const [ellipsisMenuOpen, setEllipsisMenuOpen] = useState(false);
   const ellipsisMenuRef = useRef<HTMLDivElement | null>(null);
 
-  const [selectedField, setSelectedField] = useState("None");
+  const [selectedField, setSelectedField] = useState(fields[0] ?? "None");
   const [selectedOrder, setSelectedOrder] = useState<"Ascending" | "Descending">(
     "Ascending"
   );
@@ -114,7 +118,10 @@ export default function ModuleToolbar({
     return "/leads";
   }, [baseRoute, singularModuleName]);
 
-  const isDealsToolbar = singularModuleName.toLowerCase() === "deal";
+  const normalizedModuleName = singularModuleName.toLowerCase();
+  const isDealsToolbar = normalizedModuleName === "deal";
+  const hidePostSortIconStrip = ["lead", "contact", "account", "deal"].includes(normalizedModuleName);
+
   const primaryActionClass = isDealsToolbar
     ? "cursor-pointer rounded-md border border-[#d7c5fb] bg-[linear-gradient(135deg,#a97df4_0%,#8b5cf6_100%)] px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(139,92,246,0.24)] transition duration-150 hover:brightness-105"
     : "cursor-pointer rounded-md bg-gradient-to-b from-blue-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white transition duration-150 hover:shadow-sm";
@@ -150,11 +157,21 @@ export default function ModuleToolbar({
     };
   }, []);
 
+  useEffect(() => {
+    if (fields.length === 0) {
+      setSelectedField("None");
+      return;
+    }
+
+    if (!fields.includes(selectedField)) {
+      setSelectedField(fields[0]);
+    }
+  }, [fields, selectedField]);
+
   const handleApplySort = () => {
-    console.log("Apply sort:", {
-      field: selectedField,
-      order: selectedOrder,
-    });
+    const mappedKey = sortFieldKeyMap?.[selectedField] ?? null;
+    const direction = selectedOrder === "Ascending" ? "asc" : "desc";
+    onApplySort?.(mappedKey, direction);
     setSortModalOpen(false);
     setFieldDropdownOpen(false);
     setOrderDropdownOpen(false);
@@ -296,35 +313,39 @@ export default function ModuleToolbar({
             <span>Sort</span>
           </button>
 
-          <div className="mx-1 h-5 w-px bg-slate-200" />
+          {!hidePostSortIconStrip && (
+            <>
+              <div className="mx-1 h-5 w-px bg-slate-200" />
 
-          <button className="flex cursor-pointer items-center justify-center rounded-md bg-blue-50 p-2 text-blue-600 transition duration-150 hover:bg-blue-100 hover:shadow-sm active:bg-blue-100">
-            <ListFilter size={16} />
-          </button>
+              <button className="flex cursor-pointer items-center justify-center rounded-md bg-blue-50 p-2 text-blue-600 transition duration-150 hover:bg-blue-100 hover:shadow-sm active:bg-blue-100">
+                <ListFilter size={16} />
+              </button>
 
-          <button className={toolbarIconButtonClass}>
-            <PanelsTopLeft size={16} />
-          </button>
+              <button className={toolbarIconButtonClass}>
+                <PanelsTopLeft size={16} />
+              </button>
 
-          <button className={toolbarIconButtonClass}>
-            <Table size={16} />
-          </button>
+              <button className={toolbarIconButtonClass}>
+                <Table size={16} />
+              </button>
 
-          <button className={toolbarIconButtonClass}>
-            <ChartPie size={16} />
-          </button>
+              <button className={toolbarIconButtonClass}>
+                <ChartPie size={16} />
+              </button>
 
-          <button className={toolbarIconButtonClass}>
-            <LayoutGrid size={16} />
-          </button>
+              <button className={toolbarIconButtonClass}>
+                <LayoutGrid size={16} />
+              </button>
 
-          <button className={toolbarIconButtonClass}>
-            <MapPin size={16} />
-          </button>
+              <button className={toolbarIconButtonClass}>
+                <MapPin size={16} />
+              </button>
 
-          <button className={toolbarIconButtonClass}>
-            <ChevronDown size={16} />
-          </button>
+              <button className={toolbarIconButtonClass}>
+                <ChevronDown size={16} />
+              </button>
+            </>
+          )}
         </div>
 
         {sortModalOpen && (

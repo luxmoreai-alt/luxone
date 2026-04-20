@@ -70,6 +70,7 @@ function normalizeDeal(item: BackendDeal): DealRecord {
 
   return {
     id: String(item.id),
+    dealId: item.contact ? String(item.contact) : item.lead ? String(item.lead) : String(item.id),
     parentId: item.lead ? String(item.lead) : item.contact ? String(item.contact) : String(item.account ?? ""),
     dealName,
     amount: Number(amount ?? 0),

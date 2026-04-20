@@ -2,10 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Bell,
   CalendarDays,
-  Grid2x2,
   Menu,
-  Plus,
-  Search,
   User,
   X,
   Mail,
@@ -250,7 +247,6 @@ export default function Topbar({
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [readNotificationIds, setReadNotificationIds] = useState<string[]>([]);
   const [dismissedNotificationIds, setDismissedNotificationIds] = useState<string[]>([]);
-  const [searchValue, setSearchValue] = useState("");
 
   useEffect(() => {
     const savedUser = localStorage.getItem("loggedInUser");
@@ -446,11 +442,6 @@ export default function Topbar({
   ]);
 
   useEffect(() => {
-    setSearchValue("");
-    window.dispatchEvent(new CustomEvent("topbar:search", { detail: "" }));
-  }, [location.pathname, location.search]);
-
-  useEffect(() => {
     const fetchUnread = () => {
       if (!localStorage.getItem("accessToken")) {
         setUnreadEmailCount(0);
@@ -506,7 +497,7 @@ export default function Topbar({
   return (
     <>
       <header className="flex h-[62px] items-center justify-between border-b border-slate-200 bg-white px-4">
-        <div className="flex items-center">
+        <div className="flex min-w-0 items-center">
           <button
             type="button"
             onClick={() => setSidebarOpen((prev) => !prev)}
@@ -516,29 +507,10 @@ export default function Topbar({
             <Menu size={18} />
           </button>
 
-          <h1 className="text-[18px] font-medium text-slate-800">{pageTitle}</h1>
+          <h1 className="truncate text-[18px] font-medium text-slate-800">{pageTitle}</h1>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="hidden h-[32px] w-[235px] items-center gap-2 rounded-md bg-[#eef3fb] px-3 md:flex">
-            <Search size={16} />
-            <input
-              type="text"
-              placeholder="Search records"
-              value={searchValue}
-              onChange={(event) => {
-                const nextValue = event.target.value;
-                setSearchValue(nextValue);
-                window.dispatchEvent(new CustomEvent("topbar:search", { detail: nextValue }));
-              }}
-              className="w-full bg-transparent text-[14px] outline-none"
-            />
-          </div>
-
-          <button className="flex h-[32px] w-[32px] items-center justify-center rounded-md border border-[#4c6fff] text-[#4c6fff]">
-            <Plus size={16} />
-          </button>
-
+        <div className="flex items-center gap-1 sm:gap-2">
           <div className="relative">
             <button
               onClick={() => { setNotificationsOpen((prev) => !prev); setEmailInboxOpen(false); }}
@@ -731,10 +703,6 @@ export default function Topbar({
               className="flex h-[32px] w-[32px] items-center justify-center rounded-md hover:bg-slate-100"
             >
               <User size={16} />
-            </button>
-
-            <button className="flex h-[32px] w-[32px] items-center justify-center rounded-md hover:bg-slate-100">
-              <Grid2x2 size={16} />
             </button>
         </div>
       </header>

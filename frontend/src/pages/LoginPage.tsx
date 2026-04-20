@@ -4,6 +4,12 @@ import { login, storeAuthSession } from "../lib/api/authApi";
 import { getResolvedApiBaseUrl } from "../api/config";
 
 type Step = "login" | "forgot-email" | "forgot-otp" | "forgot-reset";
+type LoginFieldErrors = { email?: string; password?: string };
+
+const EMAIL_MAX_LENGTH = 30;
+const PASSWORD_MIN_LENGTH = 8;
+const PASSWORD_MAX_LENGTH = 16;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function extractErrorMessage(value: unknown): string | null {
   if (typeof value === "string") {
@@ -60,6 +66,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [loginErrors, setLoginErrors] = useState<LoginFieldErrors>({});
   const [loading, setLoading] = useState(false);
 
   // Forgot password state
@@ -104,11 +111,34 @@ export default function LoginPage() {
     return match && !allowedModules.includes(match.module) ? "/home" : path;
   };
 
+  const validateLoginFields = (nextEmail: string, nextPassword: string): LoginFieldErrors => {
+    const nextErrors: LoginFieldErrors = {};
+    const trimmedEmail = nextEmail.trim();
+
+    if (!trimmedEmail) {
+      nextErrors.email = "Email is required.";
+    } else if (trimmedEmail.length > EMAIL_MAX_LENGTH) {
+      nextErrors.email = `Email must be at most ${EMAIL_MAX_LENGTH} characters.`;
+    } else if (!EMAIL_PATTERN.test(trimmedEmail)) {
+      nextErrors.email = "Enter a valid email address.";
+    }
+
+    if (!nextPassword) {
+      nextErrors.password = "Password is required.";
+    } else if (nextPassword.length < PASSWORD_MIN_LENGTH || nextPassword.length > PASSWORD_MAX_LENGTH) {
+      nextErrors.password = `Password must be ${PASSWORD_MIN_LENGTH}-${PASSWORD_MAX_LENGTH} characters.`;
+    }
+
+    return nextErrors;
+  };
+
   // ── Login ──────────────────────────────────────────────────────────────────
   const handleSubmit = async (e: { preventDefault(): void }) => {
     e.preventDefault();
     setError("");
-    if (!email.trim() || !password) { setError("Email and password are required."); return; }
+    const nextErrors = validateLoginFields(email, password);
+    setLoginErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
     setLoading(true);
     try {
       const res = await login(email.trim(), password);
@@ -212,9 +242,18 @@ export default function LoginPage() {
                   </label>
                   <input
                     id="email" type="email" autoComplete="email" autoFocus
-                    value={email} onChange={(e) => setEmail(e.target.value)}
+                    maxLength={EMAIL_MAX_LENGTH}
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value.replace(/\s/g, "").slice(0, EMAIL_MAX_LENGTH));
+                      setLoginErrors((current) => ({ ...current, email: undefined }));
+                      if (error) setError("");
+                    }}
                     placeholder="you@example.com" className={inputCls}
                   />
+                  {loginErrors.email && (
+                    <p className="mt-1.5 text-xs text-red-600">{loginErrors.email}</p>
+                  )}
                 </div>
 
                 <div>
@@ -233,8 +272,14 @@ export default function LoginPage() {
                   <div className="relative">
                     <input
                       id="password" type={showPassword ? "text" : "password"}
-                      autoComplete="current-password" value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      autoComplete="current-password"
+                      maxLength={PASSWORD_MAX_LENGTH}
+                      value={password}
+                      onChange={(e) => {
+                        setPassword(e.target.value.replace(/\s/g, "").slice(0, PASSWORD_MAX_LENGTH));
+                        setLoginErrors((current) => ({ ...current, password: undefined }));
+                        if (error) setError("");
+                      }}
                       placeholder="Enter your password"
                       className={inputCls + " pr-10"}
                     />
@@ -243,6 +288,9 @@ export default function LoginPage() {
                       {showPassword ? "Hide" : "Show"}
                     </button>
                   </div>
+                  {loginErrors.password && (
+                    <p className="mt-1.5 text-xs text-red-600">{loginErrors.password}</p>
+                  )}
                 </div>
 
                 {error && (

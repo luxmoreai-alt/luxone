@@ -22,7 +22,6 @@ import {
   PanelLeft,
   Phone,
   PieChart,
-  Plus,
   ReceiptText,
   Search,
   Settings2,
@@ -347,10 +346,6 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
             {sidebarOpen ? (
               <div className="px-2.5">
                 <div className="px-2.5 pb-2.5 text-[14px] font-semibold">CRM Teamspace</div>
-                <div className="mx-1 mb-2.5 flex items-center gap-2 rounded-lg border border-slate-300 px-2.5 py-2 text-slate-600">
-                  <Search size={15} />
-                  <span className="text-[14px]">Search</span>
-                </div>
 
                 <div className="flex flex-col gap-0.5">
                   {visibleWorkspaceItems.map((item) => {
@@ -377,14 +372,6 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
                                 isOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100"
                               }`}
                             >
-                              <button
-                                type="button"
-                                onClick={() => undefined}
-                                className="rounded p-1 hover:bg-slate-300/70"
-                                aria-label={`Add item in ${item.label}`}
-                              >
-                                <Plus size={13} />
-                              </button>
                               <button
                                 type="button"
                                 onClick={() => handleToggleMenu(item.label)}

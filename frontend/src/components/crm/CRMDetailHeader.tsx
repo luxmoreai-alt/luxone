@@ -4,7 +4,6 @@ import { useRef, useState } from "react";
 type CRMDetailHeaderProps = {
   title: string;
   subtitle: string;
-  avatar: string;
   actions: string[];
   onAction?: (action: string) => void;
   onBack: () => void;
@@ -14,7 +13,6 @@ type CRMDetailHeaderProps = {
 export default function CRMDetailHeader({
   title,
   subtitle,
-  avatar,
   actions,
   onAction,
   onBack,
@@ -34,21 +32,16 @@ export default function CRMDetailHeader({
   return (
     <header className="rounded-xl border border-slate-200 bg-white p-4">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-200 text-sm font-semibold text-slate-700">
-            {avatar}
-          </div>
-          <div>
-            <button
-              type="button"
-              onClick={onBack}
-              className="mb-2 rounded-md border border-slate-300 px-2.5 py-1 text-sm text-slate-700 hover:bg-slate-50"
-            >
-              Back
-            </button>
-            <h1 className="text-2xl font-semibold text-slate-900">{title}</h1>
-            <p className="break-all text-sm text-slate-500">{subtitle}</p>
-          </div>
+        <div>
+          <button
+            type="button"
+            onClick={onBack}
+            className="mb-2 rounded-md border border-slate-300 px-2.5 py-1 text-sm text-slate-700 hover:bg-slate-50"
+          >
+            Back
+          </button>
+          <h1 className="text-2xl font-semibold text-slate-900">{title}</h1>
+          <p className="break-all text-sm text-slate-500">{subtitle}</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -80,7 +73,7 @@ export default function CRMDetailHeader({
 
               {moreOpen && (
                 <div className="absolute right-0 z-30 mt-1 w-44 rounded-lg border border-slate-200 bg-white shadow-lg">
-                  {["Convert to Deal", "Clone", "Delete"].map((item) => (
+                  {["Clone", "Delete"].map((item) => (
                     <button
                       key={item}
                       type="button"
@@ -89,7 +82,7 @@ export default function CRMDetailHeader({
                         handleAction(item);
                       }}
                       className={`w-full px-4 py-2.5 text-left text-sm transition hover:bg-slate-50 ${
-                        item === "Delete" ? "text-red-600 hover:bg-red-50" : item === "Convert to Deal" ? "text-blue-700 hover:bg-blue-50" : "text-slate-700"
+                        item === "Delete" ? "text-red-600 hover:bg-red-50" : "text-slate-700"
                       }`}
                     >
                       {item}

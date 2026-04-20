@@ -71,7 +71,6 @@ export default function SupportDetailPageCore({ moduleKey }: Props) {
         <CRMDetailHeader
           title={payload.subject || payload.solutionTitle}
           subtitle={payload.subtitle}
-          avatar={payload.avatar}
           actions={moduleKey === "cases" ? ["Convert to Solution", "Edit"] : ["Edit"]}
           onBack={() => navigate(meta.baseRoute)}
           onActionClick={async (action) => {

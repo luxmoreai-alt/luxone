@@ -9,6 +9,7 @@ import type {
 } from "../../../lib/shared/crmTypes";
 
 const dealColumns: CRMColumn<Deal>[] = [
+  { key: "dealId", label: "Deal ID", minWidth: "min-w-[180px]" },
   { key: "dealName", label: "Deal Name", minWidth: "min-w-[220px]" },
   { key: "accountName", label: "Account Name" },
   { key: "dealOwner", label: "Deal Owner" },
@@ -102,4 +103,9 @@ export const dealModuleConfig: CRMModuleConfig<Deal> = {
   headerActions: ["Add Tags", "Send Email", "Create Task", "More"],
   rowActions: dealRowActions,
   filterSections: dealFilterSections,
+  sortFields: ["Deal ID", "Deal Name"],
+  sortFieldKeyMap: {
+    "Deal ID": "dealId",
+    "Deal Name": "dealName",
+  },
 };

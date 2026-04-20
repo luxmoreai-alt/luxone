@@ -432,12 +432,25 @@ export default function CRMModuleListPage<T extends CRMRecord>({
         <ModuleToolbar
           viewName={config.subtitle}
           createButtonLabel={`Create ${config.title.slice(0, -1)}`}
+          sortFields={config.sortFields}
+          sortFieldKeyMap={config.sortFieldKeyMap}
           isFilterOpen={filterOpen}
           onToggleFilter={() => {
             if (!config.filterSections) return;
             setFilterOpen((prev) => !prev);
           }}
           onCreateClick={() => navigate(`${config.baseRoute}/create`)}
+          onApplySort={
+            config.sortFieldKeyMap
+              ? (columnKey, direction) => {
+                  if (!columnKey) {
+                    setSortState(null);
+                    return;
+                  }
+                  setSortState({ key: columnKey, direction });
+                }
+              : undefined
+          }
           onMassAction={(action) => setActiveModal(action)}
         />
 

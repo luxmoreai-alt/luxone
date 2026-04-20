@@ -980,6 +980,16 @@ def is_junk_lead_candidate(
     junk_markers = (
         "job",
         "jobs",
+        "study",
+        "studies",
+        "education",
+        "educational",
+        "college",
+        "university",
+        "campus",
+        "scholarship",
+        "admission",
+        "admissions",
         "career",
         "careers",
         "opening",
@@ -999,6 +1009,19 @@ def is_junk_lead_candidate(
         "top mncs",
     )
     return any(marker in content for marker in junk_markers)
+
+
+def should_skip_incoming_email_payload(payload: dict[str, Any]) -> bool:
+    direction = payload.get("direction") or SyncedEmailMessage.Direction.INCOMING
+    if direction != SyncedEmailMessage.Direction.INCOMING:
+        return False
+    return is_junk_lead_candidate(
+        from_email=payload.get("from_email"),
+        from_name=payload.get("from_name"),
+        subject=payload.get("subject"),
+        body_text=payload.get("body_text"),
+        body_html=payload.get("body_html"),
+    )
 
 
 def is_internal_sender(email: str | None) -> bool:
@@ -1911,8 +1934,12 @@ def run_provider_sync(*, provider_integration: EmailProviderIntegration, sync_ty
             raise ValueError("Provider token has expired. Refresh the connection and retry.")
         logger.info("Starting provider sync provider=%s sync_type=%s", provider_integration.pk, sync_type)
         created_ids = []
+        skipped_messages = 0
         messages = fetch_provider_messages(provider_integration)
         for payload in messages:
+            if should_skip_incoming_email_payload(payload):
+                skipped_messages += 1
+                continue
             message = save_synced_message(
                 provider_integration=provider_integration,
                 payload=payload,
@@ -1926,6 +1953,7 @@ def run_provider_sync(*, provider_integration: EmailProviderIntegration, sync_ty
             **log.metadata,
             "message_ids": created_ids,
             "messages_processed": len(created_ids),
+            "messages_skipped": skipped_messages,
             "lead_matches": SyncedEmailMessage.objects.filter(id__in=created_ids, lead__isnull=False).count(),
             "sync_source": sync_source,
         }

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import DashboardLayout from "../../components/layout/DashboardLayout";
-import { ChevronDown, Info, UserPlus } from "lucide-react";
+import { ChevronDown, UserPlus } from "lucide-react";
 import { createCampaign, getCampaignById, updateCampaign, type CampaignFormData } from "../../lib/api/campaignsApi";
 
 type CampaignFormState = {
@@ -140,15 +140,11 @@ function CurrencyField({
         name={name}
         value={value}
         onChange={onChange}
-        className={`${inputClass} pr-10 pl-11`}
+        className={`${inputClass} pl-11`}
       />
       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[14px] text-slate-600">
         Rs.
       </span>
-      <Info
-        size={15}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500"
-      />
     </div>
   );
 }
@@ -268,7 +264,7 @@ export default function CreateCampaignPage() {
                 type="button"
                 onClick={() => navigate(isEdit ? `/campaigns/${id}` : "/campaigns")}
                 disabled={saving}
-                className="h-[32px] rounded-[6px] border border-[#cfd7e6] bg-white px-6 text-[14px] text-[#334155] hover:bg-slate-50 disabled:opacity-60"
+                className="h-[32px] w-[140px] rounded-[6px] border border-[#cfd7e6] bg-white px-4 text-[14px] text-[#334155] hover:bg-slate-50 disabled:opacity-60"
               >
                 Cancel
               </button>
@@ -276,7 +272,7 @@ export default function CreateCampaignPage() {
                 type="button"
                 onClick={() => void handleSave(true)}
                 disabled={saving}
-                className="h-[32px] rounded-[6px] border border-[#cfd7e6] bg-white px-6 text-[14px] text-[#334155] hover:bg-slate-50 disabled:opacity-60"
+                className="h-[32px] w-[140px] rounded-[6px] border border-[#cfd7e6] bg-white px-4 text-[14px] text-[#334155] hover:bg-slate-50 disabled:opacity-60"
               >
                 {saving ? "Saving..." : "Save and New"}
               </button>
@@ -284,7 +280,7 @@ export default function CreateCampaignPage() {
                 type="button"
                 onClick={() => void handleSave(false)}
                 disabled={saving}
-                className="h-[32px] rounded-[6px] bg-gradient-to-b from-[#359de9] to-[#365eea] px-8 text-[14px] font-medium text-white disabled:opacity-60"
+                className="h-[32px] w-[140px] rounded-[6px] bg-gradient-to-b from-[#359de9] to-[#365eea] px-4 text-[14px] font-medium text-white disabled:opacity-60"
               >
                 {saving ? "Saving..." : "Save"}
               </button>
@@ -446,31 +442,7 @@ export default function CreateCampaignPage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-5 border-t border-[#d9e1ef] px-8 py-3">
-              <button
-                type="button"
-                className="text-[14px] text-[#1d4ed8] hover:underline"
-              >
-                Create Form Views
-              </button>
-
-              <div className="relative">
-                <select className="h-[36px] rounded-[6px] border border-[#cfd7e6] bg-white px-4 pr-9 text-[14px] text-slate-700 outline-none">
-                  <option>Standard View</option>
-                </select>
-                <ChevronDown
-                  size={14}
-                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500"
-                />
-              </div>
-
-              <button
-                type="button"
-                className="h-[36px] rounded-[6px] border border-[#cfd7e6] bg-white px-5 text-[14px] text-slate-700 hover:bg-slate-50"
-              >
-                Create a custom form page
-              </button>
-            </div>
+            
           </div>
         </div>
       </div>

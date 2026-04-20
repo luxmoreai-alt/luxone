@@ -1442,7 +1442,7 @@ class RecordEmailListAPIView(APIView):
         )
         if self.exclude_notification_senders:
             queryset = queryset.exclude(
-                from_email__iregex=r"(noreply|no-reply|donotreply|do-not-reply|notification|notifications|jobnotification|jobs2web|mailer-daemon|postmaster)"
+                from_email__iregex=r"(noreply|no-reply|donotreply|do-not-reply|notification|notifications|jobnotification|jobs2web|mailer-daemon|postmaster|jobalert|linkedin|naukri|indeed|workday|internshala|college|university|admission|scholarship)"
             )
         return queryset
 

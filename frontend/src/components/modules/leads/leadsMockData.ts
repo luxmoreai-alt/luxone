@@ -36,8 +36,8 @@ export const leadRowActions: CRMRowAction[] = [
   { key: "edit", label: "Edit" },
   { key: "send-email", label: "Send Email" },
   { key: "create-task", label: "Create Task" },
-  { key: "add-tags", label: "Add Tags" },
   { key: "convert", label: "Convert" },
+  { key: "add-tags", label: "Add Tags" },
   { key: "delete", label: "Delete", destructive: true },
   { key: "copy-url", label: "Copy URL" },
   {
@@ -165,7 +165,12 @@ export const leadModuleConfig: CRMModuleConfig<LeadRecord> = {
   summaryFields: leadSummaryFields,
   detailSections: leadSections,
   relatedListItems: [...leadRelatedList],
-  headerActions: ["Add Tags", "Send Email", "Convert", "Edit", "More"],
+  headerActions: ["Convert", "Add Tags", "Send Email", "Edit", "More"],
   rowActions: leadRowActions,
   filterSections: leadFilterSections,
+  sortFields: ["Lead ID", "Lead Name"],
+  sortFieldKeyMap: {
+    "Lead ID": "id",
+    "Lead Name": "leadName",
+  },
 };

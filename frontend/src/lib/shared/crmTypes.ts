@@ -62,6 +62,7 @@ export type LeadRecord = {
 
 export type ContactRecord = {
   id: string;
+  contactId?: string;
   contactName: string;
   firstName: string;
   lastName: string;
@@ -112,6 +113,7 @@ export type AccountRecord = {
 
 export type Deal = {
   id: string;
+  dealId?: string;
   parentId: string;
   dealName: string;
   amount: number;
@@ -516,4 +518,6 @@ export type CRMModuleConfig<T extends CRMRecord> = {
   headerActions: string[];
   rowActions: CRMRowAction[];
   filterSections?: FilterSection[];
+  sortFields?: string[];
+  sortFieldKeyMap?: Partial<Record<string, keyof T & string>>;
 };

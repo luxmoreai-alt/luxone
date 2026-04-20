@@ -26,6 +26,16 @@ export type CRMCreateField = {
   type: CRMCreateFieldType;
   options?: string[];
   secondaryName?: string;
+  sanitizeValue?: (value: string) => string;
+  validateValue?: (value: string, formData: Record<string, unknown>) => string | null;
+  maxLength?: number;
+  inputMode?: "text" | "numeric" | "decimal" | "email" | "tel" | "url" | "search";
+  helperText?: string;
+  secondarySanitizeValue?: (value: string) => string;
+  secondaryValidateValue?: (value: string, formData: Record<string, unknown>) => string | null;
+  secondaryMaxLength?: number;
+  secondaryInputMode?: "text" | "numeric" | "decimal" | "email" | "tel" | "url" | "search";
+  secondaryHelperText?: string;
   placeholder?: string;
   rows?: number;
   readOnly?: boolean;
@@ -98,6 +108,7 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
   const [countryModule, setCountryModule] = useState<CountryModule | null>(null);
   const [stateModule, setStateModule] = useState<StateModule | null>(null);
   const [isDirty, setIsDirty] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const lastInitialValuesRef = useRef(initialValues);
 
   const needsGeoData = useMemo(
@@ -148,6 +159,24 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
     return [value, ...options];
   };
 
+  const findFieldByInputName = (name: string): { field: CRMCreateField | undefined; isSecondary: boolean } => {
+    for (const section of sections) {
+      for (const field of section.fields) {
+        if (field.name === name) return { field, isSecondary: false };
+        if (field.secondaryName === name) return { field, isSecondary: true };
+      }
+    }
+    return { field: undefined, isSecondary: false };
+  };
+
+  const getFieldMessage = (fieldName: string) => {
+    const error = fieldErrors[fieldName];
+    if (error) {
+      return <p className="mt-1 text-[11px] text-red-600">{error}</p>;
+    }
+    return null;
+  };
+
   const countryList = useMemo(() => {
     if (!countryModule) {
       return ["-None-"];
@@ -166,12 +195,31 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
     const { name, value, type } = e.target;
     const checked =
       e.target instanceof HTMLInputElement ? e.target.checked : false;
+    const { field, isSecondary } = findFieldByInputName(name);
+    const sanitizeValue = isSecondary ? field?.secondarySanitizeValue : field?.sanitizeValue;
+    const maxLength = isSecondary ? field?.secondaryMaxLength : field?.maxLength;
+    let nextValue = value;
+
+    if (type !== "checkbox") {
+      if (sanitizeValue) {
+        nextValue = sanitizeValue(nextValue);
+      }
+      if (typeof maxLength === "number") {
+        nextValue = nextValue.slice(0, maxLength);
+      }
+    }
 
     setFormData((prev) => ({
       ...prev,
-      [name]: type === "checkbox" ? checked : value,
+      [name]: type === "checkbox" ? checked : nextValue,
     }));
     setIsDirty(true);
+    setFieldErrors((prev) => {
+      if (!prev[name]) return prev;
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
     if (errorMsg) {
       setErrorMsg(null);
     }
@@ -181,14 +229,40 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
     setFormData(initialValues);
     setIsDirty(false);
     setErrorMsg(null);
+    setFieldErrors({});
   };
 
   const handleSave = async (goToNew = false) => {
     try {
       setSaving(true);
       setErrorMsg(null);
+      const validationErrors: Record<string, string> = {};
+
+      sections.forEach((section) => {
+        section.fields.forEach((field) => {
+          if (field.validateValue) {
+            const message = field.validateValue(String(formData[field.name] ?? ""), formData);
+            if (message) validationErrors[field.name] = message;
+          }
+          if (field.secondaryName && field.secondaryValidateValue) {
+            const message = field.secondaryValidateValue(
+              String(formData[field.secondaryName] ?? ""),
+              formData
+            );
+            if (message) validationErrors[field.secondaryName] = message;
+          }
+        });
+      });
+
+      if (Object.keys(validationErrors).length > 0) {
+        setFieldErrors(validationErrors);
+        setErrorMsg("Please fix the highlighted fields.");
+        return;
+      }
+
       const result = await onSubmit(formData);
       setIsDirty(false);
+      setFieldErrors({});
 
       if (goToNew) {
         resetForm();
@@ -214,14 +288,18 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
 
     if (field.type === "textarea") {
       return (
-        <textarea
-          name={field.name}
-          value={value}
-          onChange={handleChange}
-          rows={field.rows ?? 4}
-          placeholder={field.placeholder ?? ""}
-          className="min-h-[34px] w-full rounded-[4px] border border-[#cfd7e6] bg-white px-3 py-2 text-[14px] text-slate-700 outline-none focus:border-[#6d8dff]"
-        />
+        <div>
+          <textarea
+            name={field.name}
+            value={value}
+            onChange={handleChange}
+            rows={field.rows ?? 4}
+            placeholder={field.placeholder ?? ""}
+            maxLength={field.maxLength}
+            className="min-h-[34px] w-full rounded-[4px] border border-[#cfd7e6] bg-white px-3 py-2 text-[14px] text-slate-700 outline-none focus:border-[#6d8dff]"
+          />
+          {getFieldMessage(field.name)}
+        </div>
       );
     }
 
@@ -310,21 +388,26 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
 
     if (field.type === "owner") {
       return (
-        <input
-          name={field.name}
-          value={value}
-          onChange={handleChange}
-          className={inputClass}
-          placeholder={field.placeholder ?? ""}
-          readOnly={field.readOnly}
-        />
+        <div>
+          <input
+            name={field.name}
+            value={value}
+            onChange={handleChange}
+            className={inputClass}
+            placeholder={field.placeholder ?? ""}
+            readOnly={field.readOnly}
+            maxLength={field.maxLength}
+            inputMode={field.inputMode}
+          />
+          {getFieldMessage(field.name)}
+        </div>
       );
     }
 
     if (field.type === "lookup") {
       const listId = `${field.name}-lookup-options`;
       return (
-        <>
+        <div>
           <input
             name={field.name}
             value={value}
@@ -333,32 +416,40 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
             placeholder={field.placeholder ?? ""}
             list={listId}
             readOnly={field.readOnly}
+            maxLength={field.maxLength}
+            inputMode={field.inputMode}
           />
           <datalist id={listId}>
             {(field.options ?? []).map((option) => (
               <option key={option} value={option} />
             ))}
           </datalist>
-        </>
+          {getFieldMessage(field.name)}
+        </div>
       );
     }
 
     if (field.type === "name-composite") {
       return (
-        <div className="grid grid-cols-[94px_minmax(0,1fr)]">
-          <SelectField
-            name={field.name}
-            value={value}
-            onChange={handleChange}
-            options={field.options ?? ["-None-"]}
-          />
-          <input
-            name={field.secondaryName!}
-            value={String(formData[field.secondaryName!] ?? "")}
-            onChange={handleChange}
-            className="h-[34px] w-full rounded-r-[4px] border border-l-0 border-[#cfd7e6] bg-white px-3 text-[14px] text-slate-700 outline-none"
-            placeholder={field.placeholder ?? ""}
-          />
+        <div>
+          <div className="grid grid-cols-[94px_minmax(0,1fr)]">
+            <SelectField
+              name={field.name}
+              value={value}
+              onChange={handleChange}
+              options={field.options ?? ["-None-"]}
+            />
+            <input
+              name={field.secondaryName!}
+              value={String(formData[field.secondaryName!] ?? "")}
+              onChange={handleChange}
+              className="h-[34px] w-full rounded-r-[4px] border border-l-0 border-[#cfd7e6] bg-white px-3 text-[14px] text-slate-700 outline-none"
+              placeholder={field.placeholder ?? ""}
+              maxLength={field.secondaryMaxLength}
+              inputMode={field.secondaryInputMode}
+            />
+          </div>
+          {getFieldMessage(field.secondaryName ?? "")}
         </div>
       );
     }
@@ -372,24 +463,32 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
             onChange={handleChange}
             className={`${inputClass} pr-4 pl-11`}
             placeholder={field.placeholder ?? ""}
+            maxLength={field.maxLength}
+            inputMode={field.inputMode}
           />
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[14px] text-slate-600">
             Rs.
           </span>
+          {getFieldMessage(field.name)}
         </div>
       );
     }
 
     return (
-      <input
-        type={field.type === "email" ? "email" : field.type === "number" ? "number" : "text"}
-        name={field.name}
-        value={value}
-        onChange={handleChange}
-        placeholder={field.placeholder ?? ""}
-        className={inputClass}
-        readOnly={field.readOnly}
-      />
+      <div>
+        <input
+          type={field.type === "email" ? "email" : field.type === "number" ? "number" : "text"}
+          name={field.name}
+          value={value}
+          onChange={handleChange}
+          placeholder={field.placeholder ?? ""}
+          className={inputClass}
+          readOnly={field.readOnly}
+          maxLength={field.maxLength}
+          inputMode={field.inputMode}
+        />
+        {getFieldMessage(field.name)}
+      </div>
     );
   };
 

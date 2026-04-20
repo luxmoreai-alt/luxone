@@ -52,7 +52,6 @@ export default function AppointmentDetailPage() {
         <CRMDetailHeader
           title={appointment.appointmentForDisplay || appointment.appointmentNumber}
           subtitle={appointment.status}
-          avatar={appointment.serviceName.slice(0, 2).toUpperCase()}
           actions={["Edit"]}
           onBack={() => navigate("/services/appointments")}
           onActionClick={(action) => {

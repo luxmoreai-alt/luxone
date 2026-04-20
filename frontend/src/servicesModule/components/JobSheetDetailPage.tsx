@@ -65,7 +65,6 @@ export default function JobSheetDetailPage() {
         <CRMDetailHeader
           title={jobSheet.title}
           subtitle={jobSheet.status}
-          avatar={jobSheet.title.slice(0, 2).toUpperCase()}
           actions={["Edit"]}
           onBack={() => navigate("/services/job-sheets")}
           onActionClick={(action) => {
