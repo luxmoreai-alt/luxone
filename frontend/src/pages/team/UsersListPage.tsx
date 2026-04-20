@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Loader2, UserPlus, RefreshCw, Search,
+  Loader2, UserPlus, Search,
   ShieldCheck, UserX, UserCheck, Trash2, ChevronRight,
 } from "lucide-react";
 import { apiRequest } from "../../api/client";
@@ -129,14 +129,7 @@ export default function UsersListPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={loadUsers}
-            className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 transition"
-          >
-            <RefreshCw size={14} />
-            Refresh
-          </button>
+
           {isAdmin && (
             <button
               type="button"

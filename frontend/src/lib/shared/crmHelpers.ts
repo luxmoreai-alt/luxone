@@ -31,12 +31,20 @@ export function sortRecords<T extends CRMRecord>(
 export function filterRecords<T extends CRMRecord>(
   rows: T[],
   columns: CRMColumn<T>[],
-  filters: Partial<Record<string, string>>
+  filters: Partial<Record<string, string>>,
+  searchTerm?: string
 ): T[] {
   const columnKeys = new Set(columns.map((c) => c.key));
+  const normalizedSearch = (searchTerm ?? "").trim().toLowerCase();
 
   return rows.filter((row) => {
-    // Column-based filters (only keys that match visible columns)
+    // 1. Global search term (across all visible columns)
+    if (normalizedSearch) {
+      const matchesSearch = visibleColumnsMatch(row, columns, normalizedSearch);
+      if (!matchesSearch) return false;
+    }
+
+    // 2. Column-based filters (header filters)
     const columnMatch = columns.every((column) => {
       const filterValue = (filters[column.key] ?? "").trim().toLowerCase();
       if (!filterValue) return true;
@@ -45,16 +53,39 @@ export function filterRecords<T extends CRMRecord>(
 
     if (!columnMatch) return false;
 
-    // Extra filters (sidebar filters for keys not in visible columns)
+    // 3. Extra filters (sidebar filters)
     return Object.entries(filters).every(([key, value]) => {
-      if (typeof key === "string" && columnKeys.has(key as keyof T & string)) return true; // already handled above
+      if (typeof key === "string" && columnKeys.has(key as keyof T & string)) return true; // already handled
       const filterValue = (value ?? "").trim().toLowerCase();
       if (!filterValue) return true;
-      // Type guard: only use key if it's a property of row
-      if (key in row) {
-        return String((row as Record<string, unknown>)[key] ?? "").toLowerCase().includes(filterValue);
-      }
-      return true;
+      
+      // Fallback: try direct key access or find a mapping
+      const rowValue = String(findRowValue(row, key) ?? "").toLowerCase();
+      return rowValue.includes(filterValue);
     });
   });
 }
+
+function visibleColumnsMatch<T extends CRMRecord>(row: T, columns: CRMColumn<T>[], search: string): boolean {
+  return columns.some((column) => {
+    return String(row[column.key] ?? "").toLowerCase().includes(search);
+  });
+}
+
+/** 
+ * Handles key mismatches like 'product_name' vs 'productName' 
+ */
+function findRowValue<T extends CRMRecord>(row: T, key: string): any {
+  if (key in row) return (row as any)[key];
+  
+  // Try camelCase conversion
+  const camelKey = key.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
+  if (camelKey in row) return (row as any)[camelKey];
+
+  // Try snake_case conversion
+  const snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+  if (snakeKey in row) return (row as any)[snakeKey];
+
+  return null;
+}
+

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Users, UserCheck, UserCog, ChevronRight, ChevronDown,
-  RefreshCw, Loader2, Plus, Building2, UserPlus, Check, X,
+  Loader2, Plus, Building2, UserPlus, Check, X,
 } from "lucide-react";
 import { apiRequest } from "../../api/client";
 import { readDashboardCache, writeDashboardCache, removeDashboardCache } from "../../lib/dashboardCache";
@@ -385,13 +385,7 @@ export default function AdminDashboard() {
             <Plus size={15} />
             Add User
           </button>
-          <button
-            type="button"
-            onClick={refresh}
-            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-          >
-            <RefreshCw size={14} />
-          </button>
+
         </div>
       </div>
 

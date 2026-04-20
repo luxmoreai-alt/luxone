@@ -268,27 +268,7 @@ export default function CreateProjectPage() {
                 />
               </FormField>
 
-              <FormField label="Source Module">
-                <input
-                  type="text"
-                  value={formData.source_module || ""}
-                  readOnly
-                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-500 outline-none"
-                />
-              </FormField>
 
-              <FormField label="Source Record">
-                <input
-                  type="text"
-                  value={
-                    formData.source_record_id
-                      ? `${formData.source_record_label || "Record"} (#${formData.source_record_id})`
-                      : ""
-                  }
-                  readOnly
-                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-500 outline-none"
-                />
-              </FormField>
             </div>
 
             <FormField label="Project Description">
