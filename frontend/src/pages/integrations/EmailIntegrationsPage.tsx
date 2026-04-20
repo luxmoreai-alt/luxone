@@ -158,7 +158,7 @@ export default function EmailIntegrationsPage() {
         integrationsApi.listOrganizationEmails().catch(() => []),
         integrationsApi.listCustomEmailFields().catch(() => []),
         integrationsApi.listSalesInboxSettings().catch(() => []),
-        integrationsApi.listSalesInboxFeedPaginated({ page: salesInboxPage, page_size: SALES_INBOX_PAGE_SIZE, only_related: true }).catch(() => ({ count: 0, next: null, previous: null, results: [] })),
+        integrationsApi.listSalesInboxFeedPaginated({ page: salesInboxPage, page_size: SALES_INBOX_PAGE_SIZE }).catch(() => ({ count: 0, next: null, previous: null, results: [] })),
         integrationsApi.listEmailParsers().catch(() => []),
         integrationsApi.listBCCDropboxSettings().catch(() => []),
         integrationsApi.listEmailDomains().catch(() => []),
