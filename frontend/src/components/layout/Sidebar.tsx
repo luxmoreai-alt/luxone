@@ -29,7 +29,6 @@ import {
   Share2,
   ShoppingBag,
   ShoppingCart,
-  SquareKanban,
   Truck,
   Users,
   Wrench,
@@ -139,7 +138,6 @@ const workspaceItems: NavItem[] = [
     ],
   },
   { label: "Projects", icon: Folder, module: "projects", path: "/projects" },
-  { label: "Voice of the Customer", icon: SquareKanban },
 ];
 
 const getParentMenuByPath = (pathname: string, items: NavItem[]) => {
@@ -165,6 +163,7 @@ const initialOpenMenus: Record<string, boolean> = {
 export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  console.log("Sidebar rendered, Voice of Customer should be gone.");
   const { user, isAdmin, isManager, canAccess } = useAuth();
   const userDepartment = user?.department ?? "";
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>(initialOpenMenus);

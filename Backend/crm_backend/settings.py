@@ -39,7 +39,7 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-#02on6j-^m-dodq#tyr
 
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = env_bool('DEBUG', True)
+DEBUG = True
 
 ALLOWED_HOSTS = env_list('ALLOWED_HOSTS', '127.0.0.1,localhost')
 
@@ -258,7 +258,7 @@ SECURE_REFERRER_POLICY = os.getenv('SECURE_REFERRER_POLICY', 'same-origin')
 SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', '0' if DEBUG else '31536000'))
 SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool('SECURE_HSTS_INCLUDE_SUBDOMAINS', not DEBUG)
 SECURE_HSTS_PRELOAD = env_bool('SECURE_HSTS_PRELOAD', not DEBUG)
-SECURE_SSL_REDIRECT = env_bool('SECURE_SSL_REDIRECT', not DEBUG)
+SECURE_SSL_REDIRECT = False
 
 # Swagger Configuration
 SWAGGER_SETTINGS = {

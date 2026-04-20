@@ -93,13 +93,7 @@ export default function TasksPage() {
             )}
           </div>
 
-          <button
-            type="button"
-            className="flex items-center justify-center rounded-md p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
-            title="Edit grouping"
-          >
-            <Pencil size={14} />
-          </button>
+
         </div>
 
         {/* Board area */}

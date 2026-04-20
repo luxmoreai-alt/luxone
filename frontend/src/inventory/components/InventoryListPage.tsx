@@ -29,6 +29,17 @@ export default function InventoryListPage({ moduleKey }: InventoryListPageProps)
   const [sidebarFilters, setSidebarFilters] = useState<Record<string, string>>({});
   const [sortState, setSortState] = useState<{ key: string; direction: "asc" | "desc" } | null>(null);
   const [filterOpen, setFilterOpen] = useState(true);
+  const [globalSearch, setGlobalSearch] = useState("");
+
+  useEffect(() => {
+    const handleSearch = (event: Event) => {
+      const customEvent = event as CustomEvent<string>;
+      setGlobalSearch(customEvent.detail);
+      setPage(1);
+    };
+    window.addEventListener("topbar:search", handleSearch);
+    return () => window.removeEventListener("topbar:search", handleSearch);
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -53,7 +64,7 @@ export default function InventoryListPage({ moduleKey }: InventoryListPageProps)
 
   const processedRows = useMemo(() => {
     const combined = { ...sidebarFilters, ...columnFilters };
-    let output = filterRecords(rows, visibleColumns as any, combined);
+    let output = filterRecords(rows, visibleColumns as any, combined, globalSearch);
     if (sortState) {
       output = sortRecords(output as any, sortState.key as never, sortState.direction) as CRMRecord[];
     }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Users, ChevronRight, RefreshCw, Plus, UserCog, ChevronDown, X,
+  Users, ChevronRight, Plus, UserCog, ChevronDown, X,
 } from "lucide-react";
 import { apiRequest } from "../../api/client";
 import { useAuth } from "../../hooks/useAuth";
@@ -325,13 +325,7 @@ export default function ManagerDashboard() {
             <Plus size={15} />
             Add Employee
           </button>
-          <button
-            type="button"
-            onClick={() => setRefreshKey((k) => k + 1)}
-            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-          >
-            <RefreshCw size={14} />
-          </button>
+
         </div>
       </div>
 
