@@ -274,7 +274,11 @@ export default function SupportDetailPageCore({ moduleKey }: Props) {
                           <div key={item.id} className="rounded-md border border-slate-200 p-3 text-sm">
                             <div className="font-medium text-slate-800">{item.subject}</div>
                             <div className="mt-1 text-xs text-slate-500">{item.sentBy} | {item.status} | {item.sentAt}</div>
-                            {item.previewText ? <div className="mt-2 line-clamp-2 text-sm text-slate-600">{item.previewText}</div> : null}
+                            {item.bodyText || item.previewText ? (
+                              <div className="mt-2 whitespace-pre-wrap text-sm text-slate-600">
+                                {item.bodyText || item.previewText}
+                              </div>
+                            ) : null}
                           </div>
                         )) : <div className="text-sm text-slate-500">No emails logged yet.</div>}
                       </div>

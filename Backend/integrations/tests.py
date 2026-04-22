@@ -198,6 +198,56 @@ class IntegrationLinkingTests(APITestCase):
         self.assertIsNotNone(first_message)
         self.assertTrue(EmailRecordLink.objects.filter(email_message=first_message).exists())
 
+    @patch("integrations.services.fetch_provider_messages")
+    def test_provider_sync_skips_unwanted_job_study_mail(self, fetch_provider_messages_mock):
+        fetch_provider_messages_mock.return_value = [
+            {
+                "external_message_id": "gmail-junk-mail-1",
+                "subject": "Job alert: internship opportunities",
+                "from_email": "noreply@internshala.com",
+                "to_emails": ["crm@zora.com"],
+                "body_text": "Latest internships for students. Unsubscribe any time.",
+                "direction": "incoming",
+            }
+        ]
+
+        log = run_provider_sync(
+            provider_integration=self.provider,
+            sync_type="incremental_sync",
+            triggered_by=self.user,
+        )
+
+        self.assertEqual(log.status, "success")
+        self.assertEqual(log.metadata.get("messages_processed"), 0)
+        self.assertEqual(log.metadata.get("messages_skipped"), 1)
+        self.assertFalse(
+            self.provider.synced_messages.filter(external_message_id="gmail-junk-mail-1").exists()
+        )
+
+    @patch("integrations.services.fetch_provider_messages")
+    def test_provider_sync_keeps_known_contact_mail_even_with_junk_keywords(self, fetch_provider_messages_mock):
+        fetch_provider_messages_mock.return_value = [
+            {
+                "external_message_id": "gmail-known-contact-mail-1",
+                "subject": "Career plan for CRM rollout",
+                "from_email": self.contact.email,
+                "to_emails": ["crm@zora.com"],
+                "body_text": "Need your CRM rollout proposal and pricing details.",
+                "direction": "incoming",
+            }
+        ]
+
+        log = run_provider_sync(
+            provider_integration=self.provider,
+            sync_type="incremental_sync",
+            triggered_by=self.user,
+        )
+
+        self.assertEqual(log.status, "success")
+        self.assertEqual(log.metadata.get("messages_processed"), 1)
+        message = self.provider.synced_messages.get(external_message_id="gmail-known-contact-mail-1")
+        self.assertEqual(message.contact_id, self.contact.pk)
+
     def test_public_tracker_collect_endpoint_creates_event(self):
         portal_key = build_portal_tracking_key(self.portal.pk, self.portal.portal_name)
 

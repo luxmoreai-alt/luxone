@@ -96,6 +96,9 @@ export const integrationsApi = {
       enable_crm_sync: payload.crm_sync_enabled,
       enable_sales_inbox: payload.sales_inbox_enabled,
       enable_notifications: payload.instant_notification_enabled,
+      access_token: payload.access_token?.trim() || null,
+      refresh_token: payload.refresh_token?.trim() || null,
+      token_expiry: payload.token_expiry?.trim() || null,
     });
     return response.data;
   },
@@ -112,6 +115,9 @@ export const integrationsApi = {
       ...(payload.crm_sync_enabled !== undefined ? { enable_crm_sync: payload.crm_sync_enabled } : {}),
       ...(payload.sales_inbox_enabled !== undefined ? { enable_sales_inbox: payload.sales_inbox_enabled } : {}),
       ...(payload.instant_notification_enabled !== undefined ? { enable_notifications: payload.instant_notification_enabled } : {}),
+      ...(payload.access_token !== undefined ? { access_token: payload.access_token.trim() || null } : {}),
+      ...(payload.refresh_token !== undefined ? { refresh_token: payload.refresh_token.trim() || null } : {}),
+      ...(payload.token_expiry !== undefined ? { token_expiry: payload.token_expiry.trim() || null } : {}),
     });
     return response.data;
   },
@@ -141,11 +147,31 @@ export const integrationsApi = {
   listSalesInboxFeed: (filters?: IntegrationFilters) => getList<SalesInboxFeedItem>("/integrations/email/sales-inbox/feed", filters),
   listSalesInboxFeedPaginated: (filters?: IntegrationFilters) => getPaginatedList<SalesInboxFeedItem>("/integrations/email/sales-inbox/feed", filters),
   listSyncedEmailMessages: (filters?: IntegrationFilters) => getList<SalesInboxFeedItem>("/integrations/email/messages", filters),
-  listLeadRecordEmails: (id: string | number) => getList<SalesInboxFeedItem>(`/integrations/leads/${id}/emails`),
-  listContactRecordEmails: (id: string | number) => getList<SalesInboxFeedItem>(`/integrations/contacts/${id}/emails`),
-  listAccountRecordEmails: (id: string | number) => getList<SalesInboxFeedItem>(`/integrations/accounts/${id}/emails`),
-  listDealRecordEmails: (id: string | number) => getList<SalesInboxFeedItem>(`/integrations/deals/${id}/emails`),
-  listCaseRecordEmails: (id: string | number) => getList<SalesInboxFeedItem>(`/integrations/cases/${id}/emails`),
+  listLeadRecordEmails: (id: string | number) =>
+    apiRequest<SalesInboxFeedItem[] | PaginatedResponse<SalesInboxFeedItem>>(`/integrations/leads/${id}/emails`, {
+      forceFresh: true,
+      cacheTtlMs: 0,
+    }).then((data) => toList(data)),
+  listContactRecordEmails: (id: string | number) =>
+    apiRequest<SalesInboxFeedItem[] | PaginatedResponse<SalesInboxFeedItem>>(`/integrations/contacts/${id}/emails`, {
+      forceFresh: true,
+      cacheTtlMs: 0,
+    }).then((data) => toList(data)),
+  listAccountRecordEmails: (id: string | number) =>
+    apiRequest<SalesInboxFeedItem[] | PaginatedResponse<SalesInboxFeedItem>>(`/integrations/accounts/${id}/emails`, {
+      forceFresh: true,
+      cacheTtlMs: 0,
+    }).then((data) => toList(data)),
+  listDealRecordEmails: (id: string | number) =>
+    apiRequest<SalesInboxFeedItem[] | PaginatedResponse<SalesInboxFeedItem>>(`/integrations/deals/${id}/emails`, {
+      forceFresh: true,
+      cacheTtlMs: 0,
+    }).then((data) => toList(data)),
+  listCaseRecordEmails: (id: string | number) =>
+    apiRequest<SalesInboxFeedItem[] | PaginatedResponse<SalesInboxFeedItem>>(`/integrations/cases/${id}/emails`, {
+      forceFresh: true,
+      cacheTtlMs: 0,
+    }).then((data) => toList(data)),
   getSyncedEmailMessage: (id: number) => apiRequest<CRMEmailDetail>(`/email/${id}/`),
   updateSyncedEmailMessage: (id: number, payload: Partial<Pick<CRMEmailDetail, "is_read" | "is_starred">>) =>
     apiRequest<CRMEmailDetail>(`/email/${id}/`, {
@@ -229,4 +255,5 @@ export const integrationsApi = {
 
   listLeadSourceEvents: (filters?: IntegrationFilters) => getList<IntegrationLeadSourceEvent>("/integrations/lead-source-events", filters),
   listEmailSyncLogs: () => getList<EmailSyncLog>("/integrations/email/sync-logs"),
+  getEmailSyncLog: (id: number) => apiRequest<EmailSyncLog>(`/integrations/email/sync-logs/${id}`),
 };

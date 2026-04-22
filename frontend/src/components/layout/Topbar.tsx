@@ -91,7 +91,13 @@ type NotificationItem = {
   description: string;
   dateLabel: string;
   route: string;
-  category: "task" | "meeting";
+  category: "task" | "meeting" | "email";
+  sortTs?: number;
+};
+
+type UnreadEmailSummary = {
+  unread_count: number;
+  recent: { id: number; subject: string; from_email: string; received_at: string }[];
 };
 
 type FullUserDetail = {
@@ -334,7 +340,7 @@ export default function Topbar({
       if (!notificationsOpen) return;
       setNotificationsLoading(true);
       try {
-        const [tasksRes, meetingsRes, projectTasksRes, projectMeetingsRes] = await Promise.allSettled([
+        const [tasksRes, meetingsRes, projectTasksRes, projectMeetingsRes, unreadEmailsRes] = await Promise.allSettled([
           canViewActivities
             ? apiRequest<ApiList<ActivityTask>>("/tasks/", { query: { page_size: 25 }, cacheTtlMs: 60 * 1000 })
             : Promise.resolve([] as ActivityTask[]),
@@ -347,6 +353,7 @@ export default function Topbar({
           canViewProjects
             ? apiRequest<ApiList<ProjectDeskMeeting>>("/projectdesk/meetings/", { query: { page_size: 25 }, cacheTtlMs: 60 * 1000 })
             : Promise.resolve([] as ProjectDeskMeeting[]),
+          apiRequest<UnreadEmailSummary>("/email/unread-count/", { cacheTtlMs: 30 * 1000 }),
         ]);
 
         if (!active) return;
@@ -364,6 +371,7 @@ export default function Topbar({
                 dateLabel: formatNotificationDate(task.due_date),
                 route: `/tasks/${task.id}`,
                 category: "task",
+                sortTs: new Date(task.due_date || "").getTime() || 0,
               });
             });
         }
@@ -379,6 +387,7 @@ export default function Topbar({
                 dateLabel: formatNotificationDate(meeting.start_datetime || meeting.from_datetime),
                 route: `/meetings/${meeting.id}`,
                 category: "meeting",
+                sortTs: new Date(meeting.start_datetime || meeting.from_datetime || "").getTime() || 0,
               });
             });
         }
@@ -395,6 +404,7 @@ export default function Topbar({
                 dateLabel: formatNotificationDate(task.due_date),
                 route: `/projects/${task.project_id}?tab=tasks`,
                 category: "task",
+                sortTs: new Date(task.due_date || "").getTime() || 0,
               });
             });
         }
@@ -417,11 +427,29 @@ export default function Topbar({
                 dateLabel: formatNotificationDate(meeting.start_datetime),
                 route: `/projects/${meeting.project_id}?tab=meetings`,
                 category: "meeting",
+                sortTs: new Date(meeting.start_datetime || "").getTime() || 0,
               });
             });
         }
 
-        nextNotifications.sort((left, right) => left.dateLabel.localeCompare(right.dateLabel));
+        if (unreadEmailsRes.status === "fulfilled") {
+          (unreadEmailsRes.value.recent || [])
+            .filter((email) => isRelevantEmailAddress(email.from_email, allowedEmailDomains))
+            .filter((email) => isSameDay(email.received_at))
+            .forEach((email) => {
+              nextNotifications.push({
+                id: `email-${email.id}`,
+                title: email.subject || "(No subject)",
+                description: `Email received from ${email.from_email || "Unknown sender"}`,
+                dateLabel: formatNotificationDate(email.received_at),
+                route: `/email/${email.id}`,
+                category: "email",
+                sortTs: new Date(email.received_at || "").getTime() || 0,
+              });
+            });
+        }
+
+        nextNotifications.sort((left, right) => (right.sortTs || 0) - (left.sortTs || 0));
         setNotifications(nextNotifications.filter((item) => !dismissedNotificationIds.includes(item.id)));
       } finally {
         if (active) setNotificationsLoading(false);
@@ -436,6 +464,7 @@ export default function Topbar({
     canManageProjectAttendance,
     canViewActivities,
     canViewProjects,
+    allowedEmailDomains,
     currentUserKeys,
     dismissedNotificationIds,
     notificationsOpen,
@@ -477,6 +506,19 @@ export default function Topbar({
     const nextReadIds = Array.from(new Set([...readNotificationIds, item.id]));
     setReadNotificationIds(nextReadIds);
     localStorage.setItem(notificationStorageKey, JSON.stringify(nextReadIds));
+
+    if (item.category === "email") {
+      const emailId = item.id.replace(/^email-/, "");
+      if (emailId) {
+        void apiRequest(`/email/${emailId}/`, {
+          method: "PATCH",
+          body: JSON.stringify({ is_read: true }),
+        }).catch(() => {});
+      }
+      setUnreadEmailCount((count) => Math.max(0, count - 1));
+      setRecentUnreadEmails((prev) => prev.filter((email) => String(email.id) !== emailId));
+    }
+
     setNotificationsOpen(false);
     navigate(item.route);
   };
@@ -822,7 +864,9 @@ function isRelevantEmailAddress(email?: string | null, allowedDomains: string[] 
   if (!email) return false;
   const value = email.trim().toLowerCase();
   if (allowedDomains.length > 0) {
-    return allowedDomains.some((domain) => value.endsWith(domain.toLowerCase()));
+    if (allowedDomains.some((domain) => value.endsWith(domain.toLowerCase()))) {
+      return true;
+    }
   }
   return !BLOCKED_EMAIL_SUBSTRINGS.some((needle) => value.includes(needle.toLowerCase()));
 }

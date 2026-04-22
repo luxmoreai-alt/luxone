@@ -666,7 +666,6 @@ export function ConvertLeadModal({
   leadName?: string;
   onConvert?: (payload: { create_deal: boolean; deal_name?: string }) => Promise<void>;
 }) {
-  const [createDeal, setCreateDeal] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -675,8 +674,7 @@ export function ConvertLeadModal({
       setSaving(true);
       setError(null);
       await onConvert?.({
-        create_deal: createDeal,
-        deal_name: createDeal ? `${leadName || "Lead"} Deal` : undefined,
+        create_deal: false,
       });
       onClose();
     } catch (err) {
@@ -703,10 +701,6 @@ export function ConvertLeadModal({
       <div className="space-y-3 text-sm text-slate-700">
         <label className="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2"><input type="checkbox" checked readOnly />Create New Account</label>
         <label className="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2"><input type="checkbox" checked readOnly />Create New Contact</label>
-        <label className="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2">
-          <input type="checkbox" checked={createDeal} onChange={(e) => setCreateDeal(e.target.checked)} />
-          Create a new Deal for this Account
-        </label>
       </div>
       {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
     </CRMModalBase>

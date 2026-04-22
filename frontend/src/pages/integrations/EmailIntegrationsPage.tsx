@@ -111,6 +111,7 @@ export default function EmailIntegrationsPage() {
   const [presetProviderType, setPresetProviderType] = useState<EmailProviderIntegration["provider_type"] | undefined>();
   const [providerSubmitting, setProviderSubmitting] = useState(false);
   const [syncingProviderId, setSyncingProviderId] = useState<number | null>(null);
+  const [togglingSyncProviderId, setTogglingSyncProviderId] = useState<number | null>(null);
 
   const [organizationModalOpen, setOrganizationModalOpen] = useState(false);
   const [editingOrganizationEmail, setEditingOrganizationEmail] = useState<OrganizationEmailAddress | null>(null);
@@ -132,6 +133,60 @@ export default function EmailIntegrationsPage() {
   const primaryBcc = bccSettings[0] || null;
   const primaryInsight = insights[0] || null;
 
+  const loadSalesInboxFeed = async () => {
+    const nextSalesInboxFeed = await integrationsApi
+      .listSalesInboxFeedPaginated({ page: salesInboxPage, page_size: SALES_INBOX_PAGE_SIZE })
+      .catch(() => ({ count: 0, next: null, previous: null, results: [] }));
+
+    setSalesInboxFeed(nextSalesInboxFeed.results);
+    setSalesInboxCount(nextSalesInboxFeed.count);
+    setSelectedInboxEmailId((current) =>
+      current && nextSalesInboxFeed.results.some((item) => item.id === current) ? current : null
+    );
+  };
+
+  const wait = (ms: number) =>
+    new Promise<void>((resolve) => {
+      window.setTimeout(resolve, ms);
+    });
+
+  const watchSyncLogUntilDone = async (providerId: number, logId: number) => {
+    for (let attempt = 0; attempt < 24; attempt += 1) {
+      await wait(5000);
+      const log = await integrationsApi.getEmailSyncLog(logId).catch(() => null);
+      if (!log) {
+        continue;
+      }
+      if (log.status === "failed") {
+        setError(new Error(log.error_message || "Provider sync failed."));
+        return;
+      }
+      if (log.status === "success") {
+        const lastSyncedAt = log.last_synced_at || new Date().toISOString();
+        setProviders((current) =>
+          current.map((item) =>
+            item.id === providerId
+              ? { ...item, last_synced_at: lastSyncedAt, updated_at: lastSyncedAt }
+              : item
+          )
+        );
+        const syncSource = String((log.metadata as Record<string, unknown> | undefined)?.sync_source || "");
+        if (syncSource === "project_records") {
+          setError(
+            new Error(
+              "Sync completed with fallback sample records. Configure mailbox credentials for this provider to fetch real subject/body from inbox."
+            )
+          );
+        } else {
+          setSuccess("Provider synced successfully.");
+        }
+        await loadSalesInboxFeed();
+        return;
+      }
+    }
+    setSuccess("Sync is still running in background. Please refresh in a moment.");
+  };
+
   const load = async () => {
     try {
       setLoading(true);
@@ -142,7 +197,6 @@ export default function EmailIntegrationsPage() {
         nextOrganizationEmails,
         nextCustomFields,
         nextSalesInboxSettings,
-        nextSalesInboxFeed,
         nextParsers,
         nextBccSettings,
         nextDomains,
@@ -158,7 +212,6 @@ export default function EmailIntegrationsPage() {
         integrationsApi.listOrganizationEmails().catch(() => []),
         integrationsApi.listCustomEmailFields().catch(() => []),
         integrationsApi.listSalesInboxSettings().catch(() => []),
-        integrationsApi.listSalesInboxFeedPaginated({ page: salesInboxPage, page_size: SALES_INBOX_PAGE_SIZE }).catch(() => ({ count: 0, next: null, previous: null, results: [] })),
         integrationsApi.listEmailParsers().catch(() => []),
         integrationsApi.listBCCDropboxSettings().catch(() => []),
         integrationsApi.listEmailDomains().catch(() => []),
@@ -174,11 +227,6 @@ export default function EmailIntegrationsPage() {
       setOrganizationEmails(nextOrganizationEmails);
       setCustomFields(nextCustomFields);
       setSalesInboxSettings(nextSalesInboxSettings);
-      setSalesInboxFeed(nextSalesInboxFeed.results);
-      setSalesInboxCount(nextSalesInboxFeed.count);
-      setSelectedInboxEmailId((current) =>
-        current && nextSalesInboxFeed.results.some((item) => item.id === current) ? current : null
-      );
       setParsers(nextParsers);
       setBccSettings(nextBccSettings);
       setDomains(nextDomains);
@@ -187,6 +235,7 @@ export default function EmailIntegrationsPage() {
       setCredibilityReport(nextCredibilityReport);
       setInsights(nextInsights);
       setUnsubscribeLinks(nextUnsubscribeLinks);
+      await loadSalesInboxFeed();
     } finally {
       setLoading(false);
     }
@@ -247,12 +296,14 @@ export default function EmailIntegrationsPage() {
   const setSuccess = (message: string) => setNotice({ tone: "success", message });
   const setError = (error: unknown) => setNotice({ tone: "error", message: error instanceof Error ? error.message : "Action failed." });
 
-  const runAction = async (action: () => Promise<unknown>, message: string, after?: () => void) => {
+  const runAction = async (action: () => Promise<unknown>, message: string, after?: () => void, reload = true) => {
     try {
       await action();
       setSuccess(message);
       after?.();
-      await load();
+      if (reload) {
+        await load();
+      }
     } catch (error) {
       setError(error);
     }
@@ -314,15 +365,32 @@ export default function EmailIntegrationsPage() {
       }
       running = true;
       try {
-        for (const provider of autoSyncProviders) {
-          if (cancelled) {
-            return;
+        const results = await Promise.allSettled(
+          autoSyncProviders.map((provider) => integrationsApi.syncEmailProvider(provider.id))
+        );
+        if (cancelled) {
+          return;
+        }
+
+        const nowIso = new Date().toISOString();
+        const lastSyncedByProviderId = new Map<number, string>();
+        autoSyncProviders.forEach((provider, index) => {
+          const result = results[index];
+          if (result?.status === "fulfilled") {
+            lastSyncedByProviderId.set(provider.id, result.value.log?.last_synced_at || nowIso);
           }
-          await integrationsApi.syncEmailProvider(provider.id);
+        });
+        if (lastSyncedByProviderId.size > 0) {
+          setProviders((current) =>
+            current.map((provider) => {
+              const lastSyncedAt = lastSyncedByProviderId.get(provider.id);
+              return lastSyncedAt
+                ? { ...provider, last_synced_at: lastSyncedAt, updated_at: lastSyncedAt }
+                : provider;
+            })
+          );
         }
-        if (!cancelled) {
-          await load();
-        }
+        await loadSalesInboxFeed();
       } catch (error) {
         console.error("Automatic email sync failed.", error);
       } finally {
@@ -375,6 +443,7 @@ export default function EmailIntegrationsPage() {
           <EmailProvidersList
             providers={providers}
             syncingProviderId={syncingProviderId}
+            togglingSyncProviderId={togglingSyncProviderId}
             onCreate={openCreateProvider}
             onEdit={(provider) => {
               setEditingProvider(provider);
@@ -386,18 +455,61 @@ export default function EmailIntegrationsPage() {
                 try {
                   setSyncingProviderId(provider.id);
                   const result = await integrationsApi.syncEmailProvider(provider.id);
-                  setSuccess(result.message || `Synced ${result.emails_synced} emails successfully.`);
-                  await load();
+                  if (result.log?.status === "running") {
+                    setSuccess(result.message || "Sync started. This may take a minute.");
+                    setSyncingProviderId(null);
+                    if (result.log?.id) {
+                      void watchSyncLogUntilDone(provider.id, result.log.id);
+                    }
+                  } else {
+                    const lastSyncedAt = result.log?.last_synced_at || new Date().toISOString();
+                    setProviders((current) =>
+                      current.map((item) =>
+                        item.id === provider.id
+                          ? { ...item, last_synced_at: lastSyncedAt, updated_at: lastSyncedAt }
+                          : item
+                      )
+                    );
+                    setSuccess(result.message || `Synced ${result.emails_synced} emails successfully.`);
+                    await loadSalesInboxFeed();
+                    setSyncingProviderId(null);
+                  }
+                } catch (error) {
+                  setError(error);
+                  setSyncingProviderId(null);
+                }
+              })();
+            }}
+            onToggleSync={(provider, enabled) => {
+              void (async () => {
+                try {
+                  setTogglingSyncProviderId(provider.id);
+                  await integrationsApi.updateEmailProvider(provider.id, { sync_enabled: enabled });
+                  setProviders((current) =>
+                    current.map((item) =>
+                      item.id === provider.id
+                        ? { ...item, sync_enabled: enabled, updated_at: new Date().toISOString() }
+                        : item
+                    )
+                  );
+                  setSuccess(enabled ? "Sync enabled successfully." : "Provider unsynced successfully.");
                 } catch (error) {
                   setError(error);
                 } finally {
-                  setSyncingProviderId(null);
+                  setTogglingSyncProviderId(null);
                 }
               })();
             }}
             onDelete={(provider) => {
               if (!window.confirm(`Delete provider ${provider.email_address}?`)) return;
-              void runAction(() => integrationsApi.deleteEmailProvider(provider.id), "Provider deleted successfully.");
+              void runAction(
+                () => integrationsApi.deleteEmailProvider(provider.id),
+                "Provider deleted successfully.",
+                () => {
+                  setProviders((current) => current.filter((item) => item.id !== provider.id));
+                },
+                false
+              );
             }}
           />
         </CRMSectionCard>

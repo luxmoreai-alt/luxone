@@ -32,14 +32,14 @@ const sections: CRMCreateSection[] = [
     title: "Contact Information",
     fields: [
       { name: "contactOwner", label: "Contact Owner", type: "owner", readOnly: true },
-      { name: "salutation", label: "First Name", type: "name-composite", options: SALUTATION_OPTIONS, secondaryName: "firstName" },
-      { name: "accountName", label: "Account Name", type: "text" },
+      { name: "salutation", label: "First Name", type: "name-composite", options: SALUTATION_OPTIONS, secondaryName: "firstName", secondaryRequired: true },
+      { name: "accountName", label: "Account Name", type: "text", required: true },
       { name: "title", label: "Title", type: "text" },
       { name: "department", label: "Department", type: "text" },
       { name: "email", label: "Email", type: "email" },
       { name: "phone", label: "Phone", type: "text" },
 
-      { name: "lastName", label: "Last Name", type: "text" },
+      { name: "lastName", label: "Last Name", type: "text", required: true },
       { name: "mobile", label: "Mobile", type: "text" },
       { name: "otherPhone", label: "Other Phone", type: "text" },
       { name: "fax", label: "Fax", type: "text" },

@@ -337,7 +337,8 @@ function mapInvoice(parentId: string, item: InventoryInvoiceDto): Invoice {
 
 function mapIntegrationEmail(parentId: string, item: SalesInboxFeedItem): EmailRecord {
   const direction = asString(item.direction).toLowerCase();
-  const previewText = asString(item.preview_text).trim() || asString(item.body_text).trim() || stripHtmlPreview(item.body_html);
+  const bodyText = asString(item.body_text).trim() || stripHtmlPreview(item.body_html);
+  const previewText = asString(item.preview_text).trim() || bodyText;
   return {
     id: asString(item.id),
     parentId,
@@ -346,6 +347,7 @@ function mapIntegrationEmail(parentId: string, item: SalesInboxFeedItem): EmailR
     sentBy: asString(item.counterparty_email || item.from_email),
     status: item.status === "draft" ? "Draft" : direction === "incoming" ? "Received" : "Sent",
     previewText,
+    bodyText,
   };
 }
 

@@ -7,13 +7,24 @@ import IntegrationStatusBadge from "./IntegrationStatusBadge";
 type Props = {
   providers: EmailProviderIntegration[];
   syncingProviderId?: number | null;
+  togglingSyncProviderId?: number | null;
   onCreate: (providerType?: IntegrationProviderType) => void;
   onEdit: (provider: EmailProviderIntegration) => void;
   onSync: (provider: EmailProviderIntegration) => void;
+  onToggleSync: (provider: EmailProviderIntegration, enabled: boolean) => void;
   onDelete: (provider: EmailProviderIntegration) => void;
 };
 
-export default function EmailProvidersList({ providers, syncingProviderId, onCreate, onEdit, onSync, onDelete }: Props) {
+export default function EmailProvidersList({
+  providers,
+  syncingProviderId,
+  togglingSyncProviderId,
+  onCreate,
+  onEdit,
+  onSync,
+  onToggleSync,
+  onDelete,
+}: Props) {
   return (
     <div className="space-y-4">
       <CRMSectionCard
@@ -57,7 +68,17 @@ export default function EmailProvidersList({ providers, syncingProviderId, onCre
                 </tr>
               </thead>
               <tbody>
-                {providers.map((provider) => (
+                {providers.map((provider) => {
+                  const isSyncing = syncingProviderId === provider.id;
+                  const isTogglingSync = togglingSyncProviderId === provider.id;
+                  const syncLabel = isSyncing
+                    ? "Syncing..."
+                    : provider.last_synced_at
+                      ? "Synced"
+                      : "Sync Now";
+                  const toggleSyncLabel = provider.sync_enabled ? "Unsync" : "Enable Sync";
+
+                  return (
                   <tr key={provider.id} className="border-t border-slate-100 align-top">
                     <td className="px-3 py-3">{getProviderLabel(provider.provider_type)}</td>
                     <td className="px-3 py-3">{getProtocolLabel(provider.protocol_type)}</td>
@@ -80,17 +101,26 @@ export default function EmailProvidersList({ providers, syncingProviderId, onCre
                         <button
                           type="button"
                           onClick={() => onSync(provider)}
-                          disabled={syncingProviderId === provider.id}
+                          disabled={isSyncing || !provider.sync_enabled}
                           className="rounded-md border border-slate-200 px-3 py-1.5 text-xs text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          {syncingProviderId === provider.id ? "Syncing..." : "Sync"}
+                          {syncLabel}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onToggleSync(provider, !provider.sync_enabled)}
+                          disabled={isTogglingSync}
+                          className="rounded-md border border-slate-200 px-3 py-1.5 text-xs text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {isTogglingSync ? "Saving..." : toggleSyncLabel}
                         </button>
                         <button type="button" onClick={() => onEdit(provider)} className="rounded-md border border-slate-200 px-3 py-1.5 text-xs text-slate-700">Edit</button>
                         <button type="button" onClick={() => onDelete(provider)} className="rounded-md border border-rose-200 px-3 py-1.5 text-xs text-rose-700">Delete</button>
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

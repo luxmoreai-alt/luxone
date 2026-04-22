@@ -38,7 +38,17 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 const inputCls =
   "w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500";
 
-function SendEmailModal({ leadEmail, leadId, onClose }: { leadEmail: string; leadId: string; onClose: () => void }) {
+function SendEmailModal({
+  leadEmail,
+  leadId,
+  onClose,
+  onSent,
+}: {
+  leadEmail: string;
+  leadId: string;
+  onClose: () => void;
+  onSent?: () => void | Promise<void>;
+}) {
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [loading, setLoading] = useState(false);
@@ -59,6 +69,7 @@ function SendEmailModal({ leadEmail, leadId, onClose }: { leadEmail: string; lea
         method: "POST",
         body: JSON.stringify({ subject, body }),
       });
+      await onSent?.();
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to send email");
@@ -100,9 +111,6 @@ function ConvertModal({
   onClose: () => void;
   onConverted: (result: { account_id: number; contact_id: number; deal_id?: number | null }) => void;
 }) {
-  const [createDeal, setCreateDeal] = useState(false);
-  const [dealName, setDealName] = useState("");
-  const [dealValue, setDealValue] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -114,9 +122,7 @@ function ConvertModal({
         {
           method: "POST",
           body: JSON.stringify({
-            create_deal: createDeal,
-            ...(createDeal && dealName ? { deal_name: dealName } : {}),
-            ...(createDeal && dealValue ? { deal_value: parseFloat(dealValue) } : {}),
+            create_deal: false,
           }),
         }
       );
@@ -136,20 +142,6 @@ function ConvertModal({
         <p className="mb-4 text-sm text-slate-600">
           Converting this lead will create an <strong>Account</strong> and a <strong>Contact</strong>.
         </p>
-        <label className="mb-4 flex items-center gap-2 text-sm text-slate-700">
-          <input type="checkbox" checked={createDeal} onChange={(e) => setCreateDeal(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-blue-600" />
-          Also create a Deal
-        </label>
-        {createDeal && (
-          <>
-            <Field label="Deal Name">
-              <input className={inputCls} value={dealName} onChange={(e) => setDealName(e.target.value)} placeholder="Deal name" />
-            </Field>
-            <Field label="Deal Value">
-              <input type="number" className={inputCls} value={dealValue} onChange={(e) => setDealValue(e.target.value)} placeholder="0.00" />
-            </Field>
-          </>
-        )}
       </div>
       <div className="flex justify-end gap-2 border-t border-slate-200 px-6 py-3">
         <button type="button" onClick={onClose} className="rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">Cancel</button>
@@ -385,6 +377,16 @@ export default function LeadDetailPage() {
     setNotes(refreshedNotes);
   };
 
+  const refreshLeadRelatedData = async () => {
+    if (!id || !lead) return;
+    const [timelineData, related] = await Promise.all([
+      getLeadTimeline(id).catch(() => []),
+      loadLeadLinkedData(lead, { forceRefresh: true }).catch(() => null),
+    ]);
+    setTimeline(timelineData);
+    setLinkedData(related);
+  };
+
   return (
     <>
       <CRMModuleDetailPage
@@ -470,7 +472,12 @@ export default function LeadDetailPage() {
       )}
 
       {activeModal === "send-email" && (
-        <SendEmailModal leadEmail={leadEmail} leadId={id!} onClose={() => setActiveModal(null)} />
+        <SendEmailModal
+          leadEmail={leadEmail}
+          leadId={id!}
+          onClose={() => setActiveModal(null)}
+          onSent={refreshLeadRelatedData}
+        />
       )}
 
       {activeModal === "convert" && (

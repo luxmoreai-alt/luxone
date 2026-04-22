@@ -642,14 +642,11 @@ function CallDetailModal({
 }
 
 export default function CallsPage() {
-  const createMenuRef = useRef<HTMLDivElement>(null);
-
   const [calls, setCalls] = useState<CallRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const [, setFilters] = useState<FilterMap>({});
-  const [showCreateMenu, setShowCreateMenu] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
   const [showLog, setShowLog] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -674,17 +671,6 @@ export default function CallsPage() {
   useEffect(() => {
     void loadCalls();
   }, [loadCalls]);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (createMenuRef.current && !createMenuRef.current.contains(event.target as Node)) {
-        setShowCreateMenu(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   const createCall = async (payload: Record<string, unknown>) => {
     try {
@@ -780,52 +766,13 @@ export default function CallsPage() {
               <span>Filters</span>
             </button>
 
-            <div className="relative" ref={createMenuRef}>
-              <div className="flex overflow-hidden rounded-md shadow-sm">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowCreateMenu(false);
-                    setShowSchedule(true);
-                  }}
-                  className="rounded-l-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-                >
-                  Create Call
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowCreateMenu((prev) => !prev)}
-                  className="rounded-r-md border-l border-blue-500 bg-blue-600 px-2 text-white hover:bg-blue-700"
-                >
-                  <ChevronDown size={14} />
-                </button>
-              </div>
-
-              {showCreateMenu && (
-                <div className="absolute right-0 z-20 mt-1 w-44 rounded-md border border-slate-200 bg-white shadow-lg">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowCreateMenu(false);
-                      setShowSchedule(true);
-                    }}
-                    className="block w-full px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50"
-                  >
-                    Schedule a call
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowCreateMenu(false);
-                      setShowLog(true);
-                    }}
-                    className="block w-full px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50"
-                  >
-                    Log a call
-                  </button>
-                </div>
-              )}
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowSchedule(true)}
+              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              Create Call
+            </button>
           </div>
         </div>
 

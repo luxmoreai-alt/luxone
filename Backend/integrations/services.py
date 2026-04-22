@@ -160,6 +160,35 @@ def _provider_env_password(provider: EmailProviderIntegration) -> str | None:
     host_password = os.getenv("EMAIL_HOST_PASSWORD")
     if host_user and host_password and normalize_email(host_user) == normalize_email(provider.email_address):
         return host_password
+
+    # Provider-specific override by provider id, for example:
+    # EMAIL_HOST_PASSWORD_PROVIDER_6=app_password_here
+    password_by_provider_id = os.getenv(f"EMAIL_HOST_PASSWORD_PROVIDER_{provider.id}")
+    if password_by_provider_id:
+        return password_by_provider_id.strip()
+
+    # Provider-specific override by email local-part, for example:
+    # EMAIL_HOST_PASSWORD_MMUNI6467=app_password_here
+    local_part = (normalize_email(provider.email_address) or "").split("@", 1)[0]
+    if local_part:
+        normalized_local_key = re.sub(r"[^A-Za-z0-9]", "_", local_part).upper()
+        password_by_local_part = os.getenv(f"EMAIL_HOST_PASSWORD_{normalized_local_key}")
+        if password_by_local_part:
+            return password_by_local_part.strip()
+
+    # Flexible map in .env (semicolon/comma/newline separated), for example:
+    # EMAIL_PROVIDER_PASSWORDS=mmuni6467@gmail.com=pass1;vinishar2004@gmail.com=pass2
+    providers_map = os.getenv("EMAIL_PROVIDER_PASSWORDS") or ""
+    if providers_map.strip():
+        entries = re.split(r"[;,\n]+", providers_map)
+        lookup_email = normalize_email(provider.email_address)
+        for entry in entries:
+            if "=" not in entry:
+                continue
+            email_part, password_part = entry.split("=", 1)
+            if normalize_email(email_part.strip()) == lookup_email and password_part.strip():
+                return password_part.strip()
+
     return None
 
 
@@ -978,35 +1007,29 @@ def is_junk_lead_candidate(
         return False
 
     junk_markers = (
-        "job",
-        "jobs",
-        "study",
-        "studies",
-        "education",
-        "educational",
-        "college",
-        "university",
-        "campus",
-        "scholarship",
-        "admission",
-        "admissions",
-        "career",
-        "careers",
-        "opening",
-        "openings",
-        "vacancy",
-        "vacancies",
-        "referral",
-        "referrals",
+        "job alert",
+        "job opening",
+        "job openings",
+        "hiring now",
         "internship",
         "internships",
         "internshala",
-        "candidate",
-        "developer news",
+        "study abroad",
+        "scholarship",
+        "admission",
+        "admissions",
+        "campus placement",
         "newsletter",
         "unsubscribe",
         "view web version",
+        "view in browser",
+        "daily digest",
+        "weekly digest",
         "top mncs",
+        "naukri",
+        "indeed",
+        "workday",
+        "dare2compete",
     )
     return any(marker in content for marker in junk_markers)
 
@@ -1014,6 +1037,11 @@ def is_junk_lead_candidate(
 def should_skip_incoming_email_payload(payload: dict[str, Any]) -> bool:
     direction = payload.get("direction") or SyncedEmailMessage.Direction.INCOMING
     if direction != SyncedEmailMessage.Direction.INCOMING:
+        return False
+    # Always keep mail from already-known CRM people, even if the subject/body
+    # contains generic keywords (e.g. "career growth", "study plan").
+    sender_match = match_crm_records_by_email(payload.get("from_email"))
+    if _has_crm_match(sender_match):
         return False
     return is_junk_lead_candidate(
         from_email=payload.get("from_email"),
@@ -1597,7 +1625,16 @@ def create_synced_email_message(
         provider_integration=provider_integration,
         external_message_id=payload["external_message_id"],
     ).first()
+    incoming_direction = payload.get("direction") or SyncedEmailMessage.Direction.INCOMING
     incoming_is_read = bool(payload.get("is_read", False))
+    # New inbound messages should show up in CRM notifications even if the
+    # provider mailbox already marks them as seen. We still preserve existing
+    # read state for messages already synced earlier.
+    is_read_value = (
+        bool(getattr(existing_message, "is_read", False))
+        if existing_message
+        else (False if incoming_direction == SyncedEmailMessage.Direction.INCOMING else incoming_is_read)
+    )
     logger.info(
         "Saving synced email for provider=%s external_message_id=%s matched_lead=%s",
         provider_integration.pk,
@@ -1616,11 +1653,11 @@ def create_synced_email_message(
             "bcc_emails": [normalize_email(email) for email in payload.get("bcc_emails", []) if normalize_email(email)],
             "body_text": payload.get("body_text"),
             "body_html": payload.get("body_html"),
-            "direction": payload.get("direction") or SyncedEmailMessage.Direction.INCOMING,
+            "direction": incoming_direction,
             "status": payload.get("status") or SyncedEmailMessage.Status.RECEIVED,
             "received_at": payload.get("received_at") or timezone.now(),
             "sent_at": payload.get("sent_at"),
-            "is_read": incoming_is_read or bool(getattr(existing_message, "is_read", False)),
+            "is_read": is_read_value,
             "is_starred": bool(payload.get("is_starred", False)),
             "has_attachments": bool(payload.get("has_attachments", False)),
             "lead": match.lead,
@@ -1891,10 +1928,10 @@ def fetch_provider_messages(provider_integration: EmailProviderIntegration) -> l
         logger.info("Live IMAP sync returned no messages for provider=%s", provider_integration.pk)
         return []
     logger.info(
-        "Provider %s does not have enough credentials for live sync. Falling back to project-linked messages.",
+        "Provider %s does not have enough credentials for live sync. Skipping fallback demo/project messages.",
         provider_integration.pk,
     )
-    return build_project_provider_messages(provider_integration)
+    return []
 
 
 def get_auto_sync_email_providers():
@@ -1922,13 +1959,31 @@ def sync_all_active_tenant_email_providers(*, sync_type: str = "incremental_sync
 
 
 @transaction.atomic
-def run_provider_sync(*, provider_integration: EmailProviderIntegration, sync_type: str, triggered_by=None) -> EmailSyncLog:
-    log = EmailSyncLog.objects.create(
-        provider_integration=provider_integration,
-        sync_type=sync_type,
-        status=EmailSyncLog.Status.RUNNING,
-        metadata={"triggered_by": getattr(triggered_by, "id", None)},
-    )
+def run_provider_sync(
+    *,
+    provider_integration: EmailProviderIntegration,
+    sync_type: str,
+    triggered_by=None,
+    existing_log: EmailSyncLog | None = None,
+) -> EmailSyncLog:
+    if existing_log is not None:
+        log = existing_log
+        base_metadata = log.metadata if isinstance(log.metadata, dict) else {}
+        log.sync_type = sync_type
+        log.status = EmailSyncLog.Status.RUNNING
+        log.error_message = ""
+        log.metadata = {
+            **base_metadata,
+            "triggered_by": getattr(triggered_by, "id", None),
+        }
+        log.save(update_fields=["sync_type", "status", "error_message", "metadata", "updated_at"])
+    else:
+        log = EmailSyncLog.objects.create(
+            provider_integration=provider_integration,
+            sync_type=sync_type,
+            status=EmailSyncLog.Status.RUNNING,
+            metadata={"triggered_by": getattr(triggered_by, "id", None)},
+        )
     try:
         if provider_integration.token_expiry and provider_integration.token_expiry <= timezone.now():
             raise ValueError("Provider token has expired. Refresh the connection and retry.")

@@ -304,7 +304,13 @@ export type CRMRecord =
   | InventoryInvoiceRecord
   | ConfiguratorRecord;
 
-export type FilterSectionItem = string | { label: string; key: string };
+export type FilterSectionItem =
+  | string
+  | {
+      label: string;
+      key: string;
+      value?: string;
+    };
 
 export type FilterSection = {
   title: string;
@@ -414,6 +420,7 @@ export type EmailRecord = {
   sentBy: string;
   status: "Draft" | "Sent" | "Received";
   previewText?: string;
+  bodyText?: string;
 };
 
 export type Attachment = {

@@ -77,6 +77,10 @@ function asNumber(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function stripHtmlPreview(value: unknown): string {
+  return asString(value).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
 function mapTimelineFromRelated(
   parentId: string,
   notes: Note[],
@@ -235,6 +239,7 @@ function mapAttachment(parentId: string, item: any): Attachment {
 }
 
 function mapEmail(parentId: string, item: any): EmailRecord {
+  const bodyText = asString(item.body || item.body_text).trim() || stripHtmlPreview(item.body_html);
   return {
     id: asString(item.id),
     parentId,
@@ -242,17 +247,24 @@ function mapEmail(parentId: string, item: any): EmailRecord {
     sentAt: asString(item.created_at),
     sentBy: asString(item.sent_by_email),
     status: "Sent",
+    previewText: bodyText,
+    bodyText,
   };
 }
 
 function mapIntegrationEmail(parentId: string, item: SalesInboxFeedItem): EmailRecord {
+  const direction = asString(item.direction).toLowerCase();
+  const bodyText = asString(item.body_text).trim() || stripHtmlPreview(item.body_html);
+  const previewText = asString(item.preview_text).trim() || bodyText;
   return {
     id: `integration-${asString(item.id)}`,
     parentId,
     subject: asString(item.subject) || "(No subject)",
     sentAt: asString(item.sent_at || item.received_at),
     sentBy: asString(item.counterparty_email || item.from_email),
-    status: "Sent",
+    status: direction === "incoming" ? "Received" : "Sent",
+    previewText,
+    bodyText,
   };
 }
 

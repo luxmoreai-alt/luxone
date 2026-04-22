@@ -63,6 +63,7 @@ export type EmailProviderIntegration = {
   has_refresh_token?: boolean;
   created_at: string;
   updated_at: string;
+  last_synced_at?: string | null;
 };
 
 export type EmailProviderFormValues = {

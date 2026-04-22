@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+import threading
 from django.conf import settings
 from django.core import signing
 from django.http import HttpResponse, HttpResponseRedirect
@@ -120,6 +121,7 @@ from .services import (
     sync_social_account,
     link_visitor_event_to_lead,
     provider_supports_real_mail_sync,
+    upsert_email_record_link,
     verify_bcc_address,
     visible_queryset,
 )
@@ -129,6 +131,10 @@ from accounts.models import Account
 from contacts.models import Contact
 from deals.models import Deal
 from support.models import SupportCase
+
+# Hide synthetic starter/template messages in CRM lists/notifications.
+# This keeps only real provider-synced emails (exact subject/body) visible.
+DEMO_EMAIL_EXTERNAL_ID_REGEX = r"^\d+-(starter-message|(lead|contact|case)-\d+(-incoming)?)$"
 
 
 TRACKER_SCRIPT_TEMPLATE = """
@@ -590,16 +596,51 @@ class EmailProviderIntegrationViewSet(IntegrationBaseViewSet):
         serializer = self.get_serializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
         sync_type = serializer.validated_data.get("sync_type", "incremental_sync")
-        log = run_provider_sync(
+
+        running_log = (
+            EmailSyncLog.objects.filter(
+                provider_integration=provider,
+                status=EmailSyncLog.Status.RUNNING,
+            )
+            .order_by("-created_at")
+            .first()
+        )
+        if running_log and running_log.created_at and running_log.created_at >= timezone.now() - timedelta(minutes=10):
+            return Response(
+                {
+                    "message": "Provider sync is already running.",
+                    "emails_synced": 0,
+                    "lead_matches": 0,
+                    "log": EmailSyncLogSerializer(running_log).data,
+                },
+                status=status.HTTP_202_ACCEPTED,
+            )
+
+        log = EmailSyncLog.objects.create(
             provider_integration=provider,
             sync_type=sync_type,
-            triggered_by=request.user,
+            status=EmailSyncLog.Status.RUNNING,
+            metadata={"triggered_by": getattr(request.user, "id", None)},
         )
+
+        def _run_sync_in_background():
+            try:
+                run_provider_sync(
+                    provider_integration=provider,
+                    sync_type=sync_type,
+                    triggered_by=request.user,
+                    existing_log=log,
+                )
+            except Exception:
+                # Errors are already recorded into the sync log by run_provider_sync.
+                return
+
+        threading.Thread(target=_run_sync_in_background, daemon=True).start()
         return Response(
             {
-                "message": "Provider sync completed successfully.",
-                "emails_synced": log.metadata.get("messages_processed", 0),
-                "lead_matches": log.metadata.get("lead_matches", 0),
+                "message": "Provider sync started successfully.",
+                "emails_synced": 0,
+                "lead_matches": 0,
                 "log": EmailSyncLogSerializer(log).data,
             },
             status=status.HTTP_202_ACCEPTED,
@@ -1351,6 +1392,8 @@ class CRMEmailUnreadCountAPIView(APIView):
             direction=SyncedEmailMessage.Direction.INCOMING,
             is_read=False,
             lead__isnull=False,
+        ).exclude(
+            external_message_id__regex=DEMO_EMAIL_EXTERNAL_ID_REGEX,
         )
         count = unread_queryset.count()
         recent = unread_queryset.order_by("-received_at", "-created_at").values(
@@ -1370,6 +1413,8 @@ class CRMEmailMarkAllReadAPIView(APIView):
             direction=SyncedEmailMessage.Direction.INCOMING,
             is_read=False,
             lead__isnull=False,
+        ).exclude(
+            external_message_id__regex=DEMO_EMAIL_EXTERNAL_ID_REGEX,
         ).update(is_read=True)
         return Response({"marked_read": updated})
 
@@ -1420,7 +1465,9 @@ class CRMEmailRecordAPIView(APIView):
             "account",
             "deal",
             "support_case",
-        ).prefetch_related("attachments").filter(**filters_q)
+        ).prefetch_related("attachments").filter(**filters_q).exclude(
+            external_message_id__regex=DEMO_EMAIL_EXTERNAL_ID_REGEX
+        )
         if module in {"lead", "leads", "contact", "contacts", "account", "accounts", "deal", "deals"}:
             queryset = queryset.filter(support_case__isnull=True)
         queryset = queryset.order_by("-received_at", "-created_at")
@@ -1438,7 +1485,7 @@ class RecordEmailListAPIView(APIView):
         # Hide generated project/demo inbox messages from CRM record views so
         # users only see real synced emails for leads/contacts/accounts/deals.
         queryset = queryset.exclude(
-            external_message_id__regex=r"^\d+-(starter-message|lead-\d+(?:-incoming)?|contact-\d+|case-\d+)$"
+            external_message_id__regex=DEMO_EMAIL_EXTERNAL_ID_REGEX
         )
         if self.exclude_notification_senders:
             queryset = queryset.exclude(
@@ -1513,7 +1560,146 @@ class ContactVisitorEventListAPIView(APIView):
 class LeadEmailListAPIView(RecordEmailListAPIView):
     lookup_field = "lead"
     exclude_support_linked_messages = True
-    exclude_notification_senders = True
+    # Keep notification emails visible on lead records so inbox cards match
+    # the notification feed behavior.
+    exclude_notification_senders = False
+
+    def filter_demo_messages(self, queryset):
+        # For lead detail pages, keep provider-linked project records visible
+        # so users can still see inbox conversations while live IMAP/OAuth
+        # credentials are being finalized.
+        queryset = queryset.exclude(
+            external_message_id__regex=r"^\d+-starter-message$"
+        )
+        if self.exclude_notification_senders:
+            queryset = queryset.exclude(
+                from_email__iregex=r"(noreply|no-reply|donotreply|do-not-reply|notification|notifications|jobnotification|jobs2web|mailer-daemon|postmaster|jobalert|linkedin|naukri|indeed|workday|internshala|college|university|admission|scholarship)"
+            )
+        return queryset
+
+    def _lead_email_aliases(self, lead: Lead) -> list[str]:
+        aliases: set[str] = set()
+        for candidate in [
+            getattr(lead, "email", None),
+            getattr(lead, "secondary_email", None),
+            getattr(getattr(lead, "converted_contact", None), "email", None),
+            getattr(getattr(lead, "converted_contact", None), "secondary_email", None),
+        ]:
+            if isinstance(candidate, str):
+                value = candidate.strip().lower()
+                if value:
+                    aliases.add(value)
+        return sorted(aliases)
+
+    def _participant_query(self, aliases: list[str]) -> Q:
+        participant_q = Q()
+        for email in aliases:
+            participant_q |= (
+                Q(from_email__iexact=email)
+                | Q(to_emails__contains=[email])
+                | Q(cc_emails__contains=[email])
+                | Q(bcc_emails__contains=[email])
+            )
+        return participant_q
+
+    def _active_provider_emails(self) -> list[str]:
+        values = (
+            EmailProviderIntegration.objects.filter(is_active=True)
+            .values_list("email_address", flat=True)
+        )
+        return sorted({str(value).strip().lower() for value in values if value})
+
+    def _provider_recipient_query(self, provider_emails: list[str]) -> Q:
+        provider_q = Q()
+        for email in provider_emails:
+            provider_q |= (
+                Q(to_emails__contains=[email])
+                | Q(cc_emails__contains=[email])
+                | Q(bcc_emails__contains=[email])
+            )
+        return provider_q
+
+    def _provider_sender_query(self, provider_emails: list[str]) -> Q:
+        sender_q = Q()
+        for email in provider_emails:
+            sender_q |= Q(from_email__iexact=email)
+        return sender_q
+
+    def _lead_recipient_query(self, aliases: list[str]) -> Q:
+        lead_recipient_q = Q()
+        for email in aliases:
+            lead_recipient_q |= (
+                Q(to_emails__contains=[email])
+                | Q(cc_emails__contains=[email])
+                | Q(bcc_emails__contains=[email])
+            )
+        return lead_recipient_q
+
+    def _provider_thread_query(self, aliases: list[str], provider_emails: list[str]) -> Q:
+        if not aliases or not provider_emails:
+            return Q()
+
+        provider_recipient_q = self._provider_recipient_query(provider_emails)
+        provider_sender_q = self._provider_sender_query(provider_emails)
+        inbound_to_provider_q = Q()
+        for lead_email in aliases:
+            inbound_to_provider_q |= Q(from_email__iexact=lead_email) & provider_recipient_q
+        outbound_from_provider_q = provider_sender_q & self._lead_recipient_query(aliases)
+        return inbound_to_provider_q | outbound_from_provider_q
+
+    def _backfill_lead_links(self, *, lead: Lead, aliases: list[str], provider_emails: list[str]) -> None:
+        provider_thread_q = self._provider_thread_query(aliases, provider_emails)
+        if not provider_thread_q:
+            return
+        stale_ids = list(
+            self.get_base_queryset()
+            .filter(lead__isnull=True)
+            .filter(provider_thread_q)
+            .values_list("id", flat=True)[:200]
+        )
+        if not stale_ids:
+            return
+
+        SyncedEmailMessage.objects.filter(id__in=stale_ids).update(
+            lead=lead,
+            updated_at=timezone.now(),
+        )
+
+        refreshed_messages = list(
+            SyncedEmailMessage.objects.filter(id__in=stale_ids).select_related(
+                "lead", "contact", "account", "deal", "support_case"
+            )
+        )
+        for message in refreshed_messages:
+            upsert_email_record_link(message)
+
+        IntegrationLeadSourceEvent.objects.filter(
+            source_type=IntegrationLeadSourceEvent.SourceType.EMAIL,
+            source_reference__in=[message.external_message_id for message in refreshed_messages],
+        ).update(
+            lead=lead,
+            updated_at=timezone.now(),
+        )
+
+    def get_queryset(self):
+        lead = get_object_or_404(Lead.objects.select_related("converted_contact"), pk=self.kwargs["pk"])
+        aliases = self._lead_email_aliases(lead)
+        provider_emails = self._active_provider_emails()
+        base_queryset = self.get_base_queryset()
+        if not aliases:
+            return base_queryset.filter(lead_id=lead.id).order_by("-received_at", "-created_at")
+
+        participant_q = self._participant_query(aliases)
+        provider_thread_q = self._provider_thread_query(aliases, provider_emails)
+        return base_queryset.filter(Q(lead_id=lead.id) | participant_q | provider_thread_q).order_by("-received_at", "-created_at")
+
+    def get(self, request, pk=None):
+        _auto_sync_email_providers_if_stale(request)
+        lead = get_object_or_404(Lead.objects.select_related("converted_contact"), pk=pk)
+        aliases = self._lead_email_aliases(lead)
+        provider_emails = self._active_provider_emails()
+        self._backfill_lead_links(lead=lead, aliases=aliases, provider_emails=provider_emails)
+        return Response(CRMEmailDetailSerializer(self.get_queryset(), many=True).data)
 
 
 class ContactEmailListAPIView(RecordEmailListAPIView):

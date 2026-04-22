@@ -294,7 +294,7 @@ export default function EmailProviderForm({
             {renderFieldError("reply_to_address")}
           </label>
 
-          {[
+          {[ 
             ["is_active", "Active"],
             ["is_default_from", "Default From"],
             ["sync_enabled", "Enable Sync"],
@@ -316,6 +316,28 @@ export default function EmailProviderForm({
               {label}
             </label>
           ))}
+
+          <label className="space-y-1 text-sm sm:col-span-2">
+            <span className="text-slate-600">App Password / Access Token</span>
+            <input
+              type="password"
+              value={values.access_token || ""}
+              onChange={(event) => setField("access_token", event.target.value)}
+              className="w-full rounded-md border border-slate-300 px-3 py-2 outline-none transition focus:border-blue-500"
+              placeholder="Required for live inbox sync"
+            />
+          </label>
+
+          <label className="space-y-1 text-sm sm:col-span-2">
+            <span className="text-slate-600">Refresh Token (Optional)</span>
+            <input
+              type="password"
+              value={values.refresh_token || ""}
+              onChange={(event) => setField("refresh_token", event.target.value)}
+              className="w-full rounded-md border border-slate-300 px-3 py-2 outline-none transition focus:border-blue-500"
+              placeholder="Optional"
+            />
+          </label>
         </div>
       </form>
     </CRMModalBase>

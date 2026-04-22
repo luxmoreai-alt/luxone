@@ -24,8 +24,10 @@ export type CRMCreateField = {
   name: string;
   label: string;
   type: CRMCreateFieldType;
+  required?: boolean;
   options?: string[];
   secondaryName?: string;
+  secondaryRequired?: boolean;
   sanitizeValue?: (value: string) => string;
   validateValue?: (value: string, formData: Record<string, unknown>) => string | null;
   maxLength?: number;
@@ -70,16 +72,18 @@ function SelectField({
   name,
   value,
   onChange,
+  onBlur,
   options,
 }: {
   name: string;
   value: string;
   onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+  onBlur?: (e: React.FocusEvent<HTMLSelectElement>) => void;
   options: string[];
 }) {
   return (
     <div className="relative">
-      <select name={name} value={value} onChange={onChange} className={selectClass}>
+      <select name={name} value={value} onChange={onChange} onBlur={onBlur} className={selectClass}>
         {options.map((option) => (
           <option key={option} value={option === "-None-" ? "" : option}>
             {option}
@@ -169,6 +173,63 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
     return { field: undefined, isSecondary: false };
   };
 
+  const validateFieldValue = ({
+    field,
+    isSecondary,
+    value,
+    sourceName,
+  }: {
+    field: CRMCreateField;
+    isSecondary: boolean;
+    value: string;
+    sourceName: string;
+  }): string | null => {
+    if (isSecondary) {
+      if (field.secondaryValidateValue) {
+        return field.secondaryValidateValue(value, formData);
+      }
+      if (field.secondaryRequired && !value.trim()) {
+        return `${field.label} is required.`;
+      }
+      return null;
+    }
+
+    if (field.validateValue) {
+      return field.validateValue(value, formData);
+    }
+    if (field.required && !value.trim()) {
+      return `${field.label} is required.`;
+    }
+    if (field.type === "name-composite" && sourceName === field.name && field.secondaryRequired) {
+      const secondaryValue = String(formData[field.secondaryName ?? ""] ?? "");
+      if (!secondaryValue.trim()) {
+        return `${field.label} is required.`;
+      }
+    }
+    return null;
+  };
+
+  const handleFieldBlur = (name: string) => {
+    const { field, isSecondary } = findFieldByInputName(name);
+    if (!field) return;
+    const value = String(formData[name] ?? "");
+    const message = validateFieldValue({
+      field,
+      isSecondary,
+      value,
+      sourceName: name,
+    });
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      if (message) {
+        next[name] = message;
+      } else {
+        delete next[name];
+      }
+      return next;
+    });
+  };
+
   const getFieldMessage = (fieldName: string) => {
     const error = fieldErrors[fieldName];
     if (error) {
@@ -240,23 +301,32 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
 
       sections.forEach((section) => {
         section.fields.forEach((field) => {
-          if (field.validateValue) {
-            const message = field.validateValue(String(formData[field.name] ?? ""), formData);
-            if (message) validationErrors[field.name] = message;
+          const primaryMessage = validateFieldValue({
+            field,
+            isSecondary: false,
+            value: String(formData[field.name] ?? ""),
+            sourceName: field.name,
+          });
+          if (primaryMessage) {
+            validationErrors[field.name] = primaryMessage;
           }
-          if (field.secondaryName && field.secondaryValidateValue) {
-            const message = field.secondaryValidateValue(
-              String(formData[field.secondaryName] ?? ""),
-              formData
-            );
-            if (message) validationErrors[field.secondaryName] = message;
+          if (field.secondaryName) {
+            const secondaryMessage = validateFieldValue({
+              field,
+              isSecondary: true,
+              value: String(formData[field.secondaryName] ?? ""),
+              sourceName: field.secondaryName,
+            });
+            if (secondaryMessage) {
+              validationErrors[field.secondaryName] = secondaryMessage;
+            }
           }
         });
       });
 
       if (Object.keys(validationErrors).length > 0) {
         setFieldErrors(validationErrors);
-        setErrorMsg("Please fix the highlighted fields.");
+        setErrorMsg("Please fill all mandatory fields and fix the highlighted inputs.");
         return;
       }
 
@@ -293,6 +363,7 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
             name={field.name}
             value={value}
             onChange={handleChange}
+            onBlur={() => handleFieldBlur(field.name)}
             rows={field.rows ?? 4}
             placeholder={field.placeholder ?? ""}
             maxLength={field.maxLength}
@@ -311,6 +382,7 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
             name={field.name}
             checked={Boolean(formData[field.name])}
             onChange={handleChange}
+            onBlur={() => handleFieldBlur(field.name)}
             className="h-4 w-4 rounded border-[#cfd7e6]"
           />
         </div>
@@ -319,12 +391,16 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
 
     if (field.type === "select") {
       return (
-        <SelectField
-          name={field.name}
-          value={value}
-          onChange={handleChange}
-          options={field.options ?? ["-None-"]}
-        />
+        <div>
+          <SelectField
+            name={field.name}
+            value={value}
+            onChange={handleChange}
+            onBlur={() => handleFieldBlur(field.name)}
+            options={field.options ?? ["-None-"]}
+          />
+          {getFieldMessage(field.name)}
+        </div>
       );
     }
 
@@ -335,9 +411,10 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
         value
       );
       return (
-        <SelectField
-          name={field.name}
-          value={value}
+        <div>
+          <SelectField
+            name={field.name}
+            value={value}
             onChange={(e) => {
               const country = e.target.value;
               setFormData((prev) => ({
@@ -350,8 +427,11 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
                 setErrorMsg(null);
               }
             }}
+            onBlur={() => handleFieldBlur(field.name)}
             options={options}
           />
+          {getFieldMessage(field.name)}
+        </div>
       );
     }
 
@@ -377,12 +457,16 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
         })();
       const options = optionsWithValue(normalizeOptions(baseOptions), value);
       return (
-        <SelectField
-          name={field.name}
-          value={value}
-          onChange={handleChange}
-          options={options}
-        />
+        <div>
+          <SelectField
+            name={field.name}
+            value={value}
+            onChange={handleChange}
+            onBlur={() => handleFieldBlur(field.name)}
+            options={options}
+          />
+          {getFieldMessage(field.name)}
+        </div>
       );
     }
 
@@ -393,6 +477,7 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
             name={field.name}
             value={value}
             onChange={handleChange}
+            onBlur={() => handleFieldBlur(field.name)}
             className={inputClass}
             placeholder={field.placeholder ?? ""}
             readOnly={field.readOnly}
@@ -412,6 +497,7 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
             name={field.name}
             value={value}
             onChange={handleChange}
+            onBlur={() => handleFieldBlur(field.name)}
             className={inputClass}
             placeholder={field.placeholder ?? ""}
             list={listId}
@@ -437,12 +523,14 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
               name={field.name}
               value={value}
               onChange={handleChange}
+              onBlur={() => handleFieldBlur(field.name)}
               options={field.options ?? ["-None-"]}
             />
             <input
               name={field.secondaryName!}
               value={String(formData[field.secondaryName!] ?? "")}
               onChange={handleChange}
+              onBlur={() => handleFieldBlur(field.secondaryName!)}
               className="h-[34px] w-full rounded-r-[4px] border border-l-0 border-[#cfd7e6] bg-white px-3 text-[14px] text-slate-700 outline-none"
               placeholder={field.placeholder ?? ""}
               maxLength={field.secondaryMaxLength}
@@ -461,6 +549,7 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
             name={field.name}
             value={value}
             onChange={handleChange}
+            onBlur={() => handleFieldBlur(field.name)}
             className={`${inputClass} pr-4 pl-11`}
             placeholder={field.placeholder ?? ""}
             maxLength={field.maxLength}
@@ -481,6 +570,7 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
           name={field.name}
           value={value}
           onChange={handleChange}
+          onBlur={() => handleFieldBlur(field.name)}
           placeholder={field.placeholder ?? ""}
           className={inputClass}
           readOnly={field.readOnly}
@@ -507,7 +597,7 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
                 type="button"
                 onClick={() => navigate(backPath)}
                 disabled={saving}
-                className="h-[32px] rounded-[6px] border border-[#cfd7e6] bg-white px-6 text-[14px] text-[#334155] disabled:opacity-60"
+                className="h-[32px] w-[130px] rounded-[6px] border border-[#cfd7e6] bg-white px-4 text-[14px] text-[#334155] disabled:opacity-60"
               >
                 Cancel
               </button>
@@ -515,7 +605,7 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
                 type="button"
                 onClick={() => void handleSave(true)}
                 disabled={saving}
-                className="h-[32px] rounded-[6px] border border-[#cfd7e6] bg-white px-6 text-[14px] text-[#334155] disabled:opacity-60"
+                className="h-[32px] w-[130px] rounded-[6px] border border-[#cfd7e6] bg-white px-4 text-[14px] text-[#334155] disabled:opacity-60"
               >
                 {saving ? "Saving..." : "Save and New"}
               </button>
@@ -523,7 +613,7 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
                 type="button"
                 onClick={() => void handleSave(false)}
                 disabled={saving}
-                className="h-[32px] rounded-[6px] bg-gradient-to-b from-[#359de9] to-[#365eea] px-8 text-[14px] font-medium text-white disabled:opacity-60"
+                className="h-[32px] w-[130px] rounded-[6px] bg-gradient-to-b from-[#359de9] to-[#365eea] px-4 text-[14px] font-medium text-white disabled:opacity-60"
               >
                 {saving ? "Saving..." : "Save"}
               </button>
@@ -558,7 +648,12 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
                       <div className="grid grid-cols-[180px_minmax(0,1fr)] items-center gap-y-5">
                         {section.fields.map((field) => (
                           <div key={field.name} className="contents">
-                            <label className={labelClass}>{field.label}</label>
+                            <label className={labelClass}>
+                              {field.label}
+                              {(field.required || field.secondaryRequired) && (
+                                <span className="ml-1 text-red-600">*</span>
+                              )}
+                            </label>
                             {renderField(field)}
                           </div>
                         ))}
@@ -571,7 +666,12 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
                           .filter((_, index) => index % 2 === 0)
                           .map((field) => (
                             <div key={field.name} className="contents">
-                              <label className={labelClass}>{field.label}</label>
+                              <label className={labelClass}>
+                                {field.label}
+                                {(field.required || field.secondaryRequired) && (
+                                  <span className="ml-1 text-red-600">*</span>
+                                )}
+                              </label>
                               {renderField(field)}
                             </div>
                           ))}
@@ -582,7 +682,12 @@ export default function CRMCreatePage<T extends Record<string, unknown>>({
                           .filter((_, index) => index % 2 === 1)
                           .map((field) => (
                             <div key={field.name} className="contents">
-                              <label className={labelClass}>{field.label}</label>
+                              <label className={labelClass}>
+                                {field.label}
+                                {(field.required || field.secondaryRequired) && (
+                                  <span className="ml-1 text-red-600">*</span>
+                                )}
+                              </label>
                               {renderField(field)}
                             </div>
                           ))}

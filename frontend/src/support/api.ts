@@ -41,6 +41,10 @@ function asNumber(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function stripHtmlPreview(value: unknown): string {
+  return asString(value).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
 function mapNote(parentId: string, item: any) {
   return {
     id: asString(item.id),
@@ -84,6 +88,7 @@ function mapActivity(parentId: string, item: any) {
 }
 
 function mapEmail(parentId: string, item: any) {
+  const bodyText = asString(item.body || item.body_text).trim() || stripHtmlPreview(item.body_html);
   return {
     id: asString(item.id),
     parentId,
@@ -91,12 +96,15 @@ function mapEmail(parentId: string, item: any) {
     sentAt: asString(item.created_at),
     sentBy: asString(item.sent_by_email),
     status: "Sent" as const,
-    previewText: asString(item.body || item.body_text || item.body_html),
+    previewText: bodyText,
+    bodyText,
   };
 }
 
 function mapIntegrationEmail(parentId: string, item: any) {
   const direction = asString(item.direction).toLowerCase();
+  const bodyText = asString(item.body_text).trim() || stripHtmlPreview(item.body_html);
+  const previewText = asString(item.preview_text).trim() || bodyText;
   return {
     id: `integration-${asString(item.id)}`,
     parentId,
@@ -104,7 +112,8 @@ function mapIntegrationEmail(parentId: string, item: any) {
     sentAt: asString(item.sent_at || item.received_at || item.created_at),
     sentBy: asString(item.counterparty_email || item.from_email),
     status: direction === "incoming" ? ("Received" as const) : ("Sent" as const),
-    previewText: asString(item.preview_text),
+    previewText,
+    bodyText,
   };
 }
 

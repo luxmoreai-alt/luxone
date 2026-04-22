@@ -22,7 +22,16 @@ const dealColumns: CRMColumn<Deal>[] = [
 export const dealFilterSections: FilterSection[] = [
   {
     title: "System Defined Filters",
-    items: ["My Deals", "Won Deals", "Lost Deals", "High Priority"],
+    items: [
+      { label: "Qualification", key: "stage", value: "Qualification" },
+      { label: "Needs Analysis", key: "stage", value: "Needs Analysis" },
+      { label: "Value Proposition", key: "stage", value: "Value Proposition" },
+      { label: "Identify Decision Makers", key: "stage", value: "Identify Decision Makers" },
+      { label: "Proposal / Price Quote", key: "stage", value: "Proposal / Price Quote" },
+      { label: "Negotiation / Review", key: "stage", value: "Negotiation / Review" },
+      { label: "Closed Won", key: "stage", value: "Closed Won" },
+      { label: "Closed Lost", key: "stage", value: "Closed Lost" },
+    ],
   },
   {
     title: "Filter By Fields",

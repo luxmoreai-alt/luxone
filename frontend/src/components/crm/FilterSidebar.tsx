@@ -10,6 +10,11 @@ function getKey(item: FilterSectionItem): string | null {
   return typeof item === "string" ? null : item.key;
 }
 
+function getFixedValue(item: FilterSectionItem): string | null {
+  if (typeof item === "string") return null;
+  return (item.value ?? "").trim() || null;
+}
+
 type FilterSidebarProps = {
   title: string;
   sections: FilterSection[];
@@ -77,9 +82,10 @@ export default function FilterSidebar({
       section.items.forEach((item) => {
         const label = getLabel(item);
         const key = getKey(item);
+        const fixedValue = getFixedValue(item);
 
         if (key && checked[label]) {
-          const value = (fieldValues[label] ?? "").trim();
+          const value = fixedValue ?? (fieldValues[label] ?? "").trim();
           if (value) {
             filters[key] = value;
           }
@@ -146,6 +152,7 @@ export default function FilterSidebar({
                   {section.items.map((item) => {
                     const label = getLabel(item);
                     const key = getKey(item);
+                    const fixedValue = getFixedValue(item);
                     const isChecked = checked[label] ?? false;
 
                     return (
@@ -160,7 +167,7 @@ export default function FilterSidebar({
                           <span>{label}</span>
                         </label>
 
-                        {key && isChecked && (
+                        {key && !fixedValue && isChecked && (
                           <div className="mb-1 ml-5 mt-1">
                             <input
                               type="text"
