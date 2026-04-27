@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronDown, Pencil } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import DashboardLayout from "../../../components/layout/DashboardLayout";
 import ModuleToolbar from "../../../components/crm/ModuleToolbar";
 import FilterSidebar from "../../../components/crm/FilterSidebar";

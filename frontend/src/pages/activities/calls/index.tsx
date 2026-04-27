@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronDown, Filter, Loader2, Pencil, Search, Trash2, X } from "lucide-react";
+import { Filter, Loader2, Pencil, Search, Trash2, X } from "lucide-react";
 import FilterSidebar from "../../../components/crm/FilterSidebar";
 import DashboardLayout from "../../../components/layout/DashboardLayout";
 import { apiRequest } from "../../../api/client";
