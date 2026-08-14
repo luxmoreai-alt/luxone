@@ -59,9 +59,10 @@ https://<backend-project>.vercel.app/swagger/
 
 ## 2. Frontend project
 
-Create another Vercel project from the same repository and set its **Root
-Directory** to `frontend`. Vercel uses the included Vite configuration and SPA
-rewrite.
+Create another Vercel project from the same repository. Either leave its **Root
+Directory** at the repository root (the root `vercel.json` delegates the build
+to `frontend`) or set it to `frontend`. Both configurations build the same Vite
+application and include the required SPA rewrite.
 
 Add this build-time environment variable for Production and Preview:
 
