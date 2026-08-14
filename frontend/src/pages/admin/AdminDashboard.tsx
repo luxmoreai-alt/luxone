@@ -18,7 +18,7 @@ type OrgUser = {
   manager_email: string | null;
 };
 
-const ORGANIZATION_LABEL = "Zora Global AI Technologies";
+const ORGANIZATION_LABEL = "Luxmor AI Technologies Pvt Ltd";
 
 type GroupedOrg = {
   managers: OrgUser[];

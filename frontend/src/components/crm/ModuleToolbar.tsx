@@ -123,10 +123,10 @@ export default function ModuleToolbar({
   const hidePostSortIconStrip = ["lead", "contact", "account", "deal"].includes(normalizedModuleName);
 
   const primaryActionClass = isDealsToolbar
-    ? "cursor-pointer rounded-md border border-[#d7c5fb] bg-[linear-gradient(135deg,#a97df4_0%,#8b5cf6_100%)] px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(139,92,246,0.24)] transition duration-150 hover:brightness-105"
+    ? "cursor-pointer rounded-xl border border-indigo-400/20 bg-[linear-gradient(135deg,#4537d4_0%,#176de5_68%,#10bde8_135%)] px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(40,74,210,0.20)] transition duration-150 hover:-translate-y-0.5 hover:brightness-105"
     : "cursor-pointer rounded-md bg-gradient-to-b from-blue-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white transition duration-150 hover:shadow-sm";
   const primaryDropdownClass = isDealsToolbar
-    ? "cursor-pointer rounded-md border border-[#d7c5fb] bg-[linear-gradient(135deg,#a97df4_0%,#8b5cf6_100%)] px-3 py-2 text-white shadow-[0_12px_28px_rgba(139,92,246,0.24)] transition duration-150 hover:brightness-105"
+    ? "cursor-pointer rounded-xl border border-indigo-400/20 bg-[linear-gradient(135deg,#4537d4_0%,#176de5_68%,#10bde8_135%)] px-3 py-2 text-white shadow-[0_10px_24px_rgba(40,74,210,0.20)] transition duration-150 hover:-translate-y-0.5 hover:brightness-105"
     : "cursor-pointer rounded-md bg-gradient-to-b from-blue-500 to-blue-600 px-3 py-2 text-white transition duration-150 hover:shadow-sm";
 
   useEffect(() => {

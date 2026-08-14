@@ -116,7 +116,7 @@ type FullUserDetail = {
   created_at?: string;
 };
 
-const ORGANIZATION_LABEL = "Zora Global AI Technologies";
+const ORGANIZATION_LABEL = "Luxmor AI Technologies Pvt Ltd";
 
 function getEmailHandle(email?: string | null) {
   const value = (email || "").trim();
@@ -538,7 +538,7 @@ export default function Topbar({
 
   return (
     <>
-      <header className="flex h-[62px] items-center justify-between border-b border-slate-200 bg-white px-4">
+      <header className="luxmor-topbar flex h-[68px] items-center justify-between border-b border-slate-200/80 bg-white/90 px-4 backdrop-blur-xl sm:px-6">
         <div className="flex min-w-0 items-center">
           <button
             type="button"
@@ -549,7 +549,7 @@ export default function Topbar({
             <Menu size={18} />
           </button>
 
-          <h1 className="truncate text-[18px] font-medium text-slate-800">{pageTitle}</h1>
+          <div><h1 className="truncate text-[18px] font-bold tracking-tight text-[#071a40]">{pageTitle}</h1><p className="hidden text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400 sm:block">LuxOne Workspace</p></div>
         </div>
 
         <div className="flex items-center gap-1 sm:gap-2">

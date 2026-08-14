@@ -171,11 +171,11 @@ def generate_secure_password(length=12):
 def send_welcome_email(name, email, password):
     """Send login credentials to newly created user."""
     display_name = name or email.split("@")[0]
-    subject = "Welcome to Zora CRM – Your Login Credentials"
+    subject = "Welcome to LuxOne – Your Login Credentials"
     frontend_url = getattr(django_settings, "FRONTEND_URL", "http://localhost:5173")
     body = f"""Hi {display_name},
 
-Your Zora CRM account has been created. Here are your login credentials:
+Your LuxOne account has been created. Here are your login credentials:
 
   Email:    {email}
   Password: {password}
@@ -187,7 +187,7 @@ Important: You will be prompted to change your password on your first login.
 If you did not request this account, please contact your administrator.
 
 Best regards,
-Zora CRM Team
+LuxOne Team
 """
     try:
         send_mail(

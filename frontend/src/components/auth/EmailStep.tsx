@@ -39,7 +39,7 @@ const EmailStep = ({
 
       <div className="mt-5">
         <p className="text-[14px] leading-6 text-slate-500">
-          Use your organization email to continue securely into ZORA CRM.
+          Use your organization email to continue securely into LuxOne.
         </p>
       </div>
 

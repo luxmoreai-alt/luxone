@@ -177,11 +177,11 @@ export default function HomePage() {
   return (
     <DashboardLayout>
       <div className="mx-auto w-full max-w-[1400px] space-y-5">
-        <div className="relative overflow-hidden rounded-[28px] border border-[#d8cdf8] bg-[linear-gradient(135deg,#fbf9ff_0%,#f3eeff_44%,#ffffff_100%)] shadow-[0_18px_42px_rgba(109,40,217,0.10)]">
-          <div className="pointer-events-none absolute right-0 top-0 h-40 w-40 rounded-full bg-[#8b5cf6]/10 blur-3xl" />
+        <div className="relative overflow-hidden rounded-[28px] border border-[#d9e5f5] bg-[linear-gradient(135deg,#f8faff_0%,#edf5ff_48%,#f5fdff_100%)] shadow-[0_18px_42px_rgba(15,57,122,0.09)]">
+          <div className="pointer-events-none absolute right-0 top-0 h-40 w-40 rounded-full bg-[#10bde8]/15 blur-3xl" />
           <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0 flex-1">
-              <div className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-violet-700">
+              <div className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-indigo-700">
                 <Sparkles className="h-3.5 w-3.5" />
                 Customer Command Center
               </div>
@@ -197,7 +197,7 @@ export default function HomePage() {
             <button
               type="button"
               onClick={() => navigate("/accounts")}
-              className="inline-flex items-center gap-2 rounded-2xl border border-[#d7c5fb] bg-[linear-gradient(135deg,#a97df4_0%,#8b5cf6_100%)] px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(139,92,246,0.24)] transition hover:brightness-105"
+              className="inline-flex items-center gap-2 rounded-2xl border border-indigo-400/20 bg-[linear-gradient(135deg,#4537d4_0%,#176de5_65%,#10bde8_130%)] px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(40,74,210,0.22)] transition hover:-translate-y-0.5 hover:brightness-105"
             >
               Open Customers
               <ArrowRight className="h-4 w-4" />

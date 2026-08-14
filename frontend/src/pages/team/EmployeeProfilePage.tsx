@@ -63,7 +63,7 @@ type UserRole = "admin" | "sub_admin" | "hr" | "manager" | "team_lead" | "employ
 type UserDepartment = "sales" | "business_development" | "software_development" | "support" | "";
 type ManagerOption = { id: number; email: string; role: string; name?: string; department?: string };
 
-const ORGANIZATION_LABEL = "Zora Global AI Technologies";
+const ORGANIZATION_LABEL = "Luxmor AI Technologies Pvt Ltd";
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: "admin", label: "Admin" },
   { value: "sub_admin", label: "Sub Admin" },

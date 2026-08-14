@@ -33,7 +33,7 @@ import {
   Wrench,
   X,
 } from "lucide-react";
-import companyLogo from "../../assets/Picsart_26-04-04_13-24-20-688-removebg-preview.png";
+import companyLogo from "../../assets/2.jpg";
 import { useAuth } from "../../hooks/useAuth";
 import { preloadRouteResources } from "../../lib/routePreload";
 
@@ -162,7 +162,6 @@ const initialOpenMenus: Record<string, boolean> = {
 export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  console.log("Sidebar rendered, Voice of Customer should be gone.");
   const { user, isAdmin, isManager, canAccess } = useAuth();
   const userDepartment = user?.department ?? "";
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>(initialOpenMenus);
@@ -250,7 +249,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 h-screen overflow-y-auto bg-[whitesmoke] text-slate-800 transition-all duration-300 md:static md:z-auto md:flex md:h-screen md:flex-col ${
+        className={`luxmor-sidebar fixed inset-y-0 left-0 z-40 h-screen overflow-y-auto text-white transition-all duration-300 md:static md:z-auto md:flex md:h-screen md:flex-col ${
           sidebarOpen
             ? "translate-x-0 w-56"
             : "-translate-x-full w-56 md:translate-x-0 md:w-14"
@@ -258,16 +257,16 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
       >
         <div className={`flex min-h-full flex-col ${sidebarOpen ? "min-w-[224px]" : "min-w-[56px]"}`}>
           {sidebarOpen ? (
-            <div className="flex items-center justify-between px-3 pt-3 pb-2">
+            <div className="flex items-center justify-between border-b border-white/10 px-3 pb-3 pt-4">
               <div className="flex items-center">
-                <img src={companyLogo} alt="Zora CRM Logo" className="h-[34px] w-[34px] -translate-y-[2px] rounded-md object-contain" />
-                <div className="ml-2.5 text-[17px] font-bold">Zora CRM</div>
+                <img src={companyLogo} alt="LuxOne logo" className="h-9 w-9 rounded-xl bg-white object-contain p-0.5 shadow-lg shadow-cyan-400/20" />
+                <div className="ml-2.5 leading-tight"><div className="text-[17px] font-bold tracking-wide text-white">LUXONE</div><div className="text-[9px] font-semibold uppercase tracking-[0.25em] text-cyan-300">One Intelligent CRM</div></div>
               </div>
 
               <button
                 type="button"
                 onClick={() => setSidebarOpen(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-md transition hover:bg-slate-300/60"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-300 transition hover:bg-white/10 hover:text-white"
                 aria-label="Collapse sidebar"
               >
                 <span className="hidden md:block">
@@ -286,7 +285,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
                 className="rounded-md transition hover:opacity-90"
                 aria-label="Expand sidebar"
               >
-                <img src={companyLogo} alt="Zora CRM Logo" className="h-[34px] w-[34px] -translate-y-[2px] rounded-md object-contain" />
+                <img src={companyLogo} alt="LuxOne logo" className="h-9 w-9 rounded-xl bg-white object-contain p-0.5 shadow-lg shadow-cyan-400/20" />
               </button>
             </div>
           )}
@@ -308,8 +307,8 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
                         "flex w-full items-center rounded-lg text-left text-[14px] transition",
                         sidebarOpen ? "gap-2 px-2.5 py-2" : "justify-center px-2 py-2.5",
                         location.pathname === item.path || location.pathname.startsWith(`${item.path}/`)
-                          ? "bg-slate-300/70 font-semibold text-slate-900"
-                          : "text-slate-700 hover:bg-slate-200",
+                          ? "bg-white/14 font-semibold text-white shadow-sm ring-1 ring-white/10"
+                          : "text-slate-300 hover:bg-white/8 hover:text-white",
                       ].join(" ")}
                     >
                       <Icon size={17} />
@@ -329,8 +328,8 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
                       "flex w-full items-center rounded-lg text-left text-[14px] transition",
                       sidebarOpen ? "gap-2 px-2.5 py-2" : "justify-center px-2 py-2.5",
                       location.pathname.startsWith("/team")
-                        ? "bg-slate-300/70 font-semibold text-slate-900"
-                        : "text-slate-700 hover:bg-slate-200",
+                        ? "bg-white/14 font-semibold text-white shadow-sm ring-1 ring-white/10"
+                        : "text-slate-300 hover:bg-white/8 hover:text-white",
                     ].join(" ")}
                   >
                     <Users size={17} />
@@ -340,11 +339,11 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
               </div>
             </nav>
 
-            <div className={`my-3 border-t border-slate-300 ${sidebarOpen ? "mx-2.5" : "mx-2"}`} />
+            <div className={`my-3 border-t border-white/10 ${sidebarOpen ? "mx-2.5" : "mx-2"}`} />
 
             {sidebarOpen ? (
               <div className="px-2.5">
-                <div className="px-2.5 pb-2.5 text-[14px] font-semibold">CRM Teamspace</div>
+                <div className="px-2.5 pb-2.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Workspace</div>
 
                 <div className="flex flex-col gap-0.5">
                   {visibleWorkspaceItems.map((item) => {
@@ -353,7 +352,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
 
                     return (
                       <div key={item.label}>
-                        <div className="group flex items-center justify-between rounded-lg px-2.5 py-2 text-[14px] transition hover:bg-slate-200">
+                        <div className="group flex items-center justify-between rounded-lg px-2.5 py-2 text-[14px] text-slate-300 transition hover:bg-white/8 hover:text-white">
                           <button
                             type="button"
                             onClick={() =>
@@ -374,7 +373,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
                               <button
                                 type="button"
                                 onClick={() => handleToggleMenu(item.label)}
-                                className="rounded p-1 hover:bg-slate-300/70"
+                                className="rounded p-1 hover:bg-white/10"
                                 aria-label={`Toggle ${item.label} submenu`}
                               >
                                 <ChevronDown
@@ -401,8 +400,8 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
                                   onFocus={() => preloadRouteResources(child.path)}
                                   className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] transition ${
                                     location.pathname === child.path || location.pathname.startsWith(`${child.path}/`)
-                                      ? "bg-slate-300/70 font-semibold text-slate-900"
-                                      : "text-slate-600 hover:bg-slate-200"
+                                      ? "bg-gradient-to-r from-indigo-500/30 to-cyan-400/10 font-semibold text-white ring-1 ring-cyan-300/15"
+                                      : "text-slate-400 hover:bg-white/8 hover:text-white"
                                   }`}
                                 >
                                   <ChildIcon size={13} />
@@ -431,7 +430,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
                         onClick={() => handleNavigate(fallbackPath)}
                         onMouseEnter={() => preloadRouteResources(fallbackPath)}
                         onFocus={() => preloadRouteResources(fallbackPath)}
-                        className="flex w-full items-center justify-center rounded-lg px-2 py-2.5 text-slate-700 transition hover:bg-slate-200"
+                        className="flex w-full items-center justify-center rounded-lg px-2 py-2.5 text-slate-300 transition hover:bg-white/10 hover:text-white"
                       >
                         <Icon size={17} />
                       </button>

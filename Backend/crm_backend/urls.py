@@ -26,7 +26,7 @@ from drf_yasg import openapi
 
 schema_view = get_schema_view(
     openapi.Info(
-        title="CRM Backend API",
+        title="LuxOne API",
         default_version='v1',
         description="API documentation for the CRM backend.",
         terms_of_service="https://www.google.com/policies/terms/",
@@ -41,7 +41,7 @@ schema_view = get_schema_view(
 def health_check_view(_request):
     return JsonResponse({
         "status": "ok",
-        "service": "crm-backend",
+        "service": "luxone-api",
         "debug": settings.DEBUG,
     })
 

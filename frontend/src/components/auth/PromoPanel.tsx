@@ -29,7 +29,7 @@ const PromoPanel = () => {
           </h3>
 
           <p className="mt-3 text-[14px] leading-6 text-slate-600">
-            Access ZORA CRM with a clean enterprise-grade experience designed
+            Access LuxOne with a clean enterprise-grade experience designed
             for speed, trust, and productivity.
           </p>
 

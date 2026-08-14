@@ -35,11 +35,11 @@ export function DashboardLayoutRoute() {
 
   return (
     <InsideLayoutContext.Provider value={true}>
-      <div className="flex h-screen overflow-hidden bg-slate-100">
+      <div className="luxmor-app-shell flex h-screen overflow-hidden">
         <Sidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <Topbar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
-          <main className="flex-1 min-h-0 overflow-y-auto p-5">
+          <main className="luxmor-main flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
             <Outlet />
           </main>
         </div>
@@ -60,11 +60,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-100">
+    <div className="luxmor-app-shell flex h-screen overflow-hidden">
       <Sidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Topbar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
-        <main className="flex-1 min-h-0 overflow-y-auto p-5">{children}</main>
+        <main className="luxmor-main flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">{children}</main>
       </div>
     </div>
   );

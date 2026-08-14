@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { login, storeAuthSession } from "../lib/api/authApi";
 import { getResolvedApiBaseUrl } from "../api/config";
+import luxmorWordmark from "../assets/1.jpg";
 
 type Step = "login" | "forgot-email" | "forgot-otp" | "forgot-reset";
 type LoginFieldErrors = { email?: string; password?: string };
@@ -56,7 +57,7 @@ async function authPost<T>(path: string, body: unknown): Promise<T> {
 }
 
 const inputCls =
-  "w-full rounded-[8px] border border-[#cfd7e6] px-3 py-2.5 text-sm text-slate-800 outline-none transition-colors focus:border-[#359de9] focus:ring-2 focus:ring-[#359de9]/10";
+  "w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-3 text-sm text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -215,19 +216,34 @@ export default function LoginPage() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-[#f5f7fb] flex items-center justify-center px-4">
-      <div className="w-full max-w-[420px]">
-        <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold text-[#1f2d3d] tracking-tight">Zora CRM</h1>
-          <p className="mt-2 text-sm text-slate-500">Sign in to access your workspace</p>
+    <div className="luxmor-login min-h-screen lg:grid lg:grid-cols-[1.08fr_0.92fr]">
+      <section className="relative hidden min-h-screen overflow-hidden bg-[#061532] p-12 text-white lg:flex lg:flex-col lg:justify-between">
+        <div className="absolute -left-24 top-20 h-80 w-80 rounded-full bg-indigo-600/30 blur-3xl" />
+        <div className="absolute -right-20 bottom-16 h-96 w-96 rounded-full bg-cyan-400/20 blur-3xl" />
+        <div className="relative z-10"><img src={luxmorWordmark} alt="Luxmor AI Technologies" className="h-20 w-auto max-w-[390px] rounded-2xl bg-white object-contain px-4 shadow-2xl" /></div>
+        <div className="relative z-10 max-w-xl">
+          <span className="inline-flex rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-cyan-200">Customer intelligence, reimagined</span>
+          <h1 className="mt-7 text-5xl font-bold leading-[1.08] tracking-tight">Turn every relationship into momentum.</h1>
+          <p className="mt-5 max-w-lg text-base leading-7 text-slate-300">One elegant workspace for sales, service, projects, campaigns, and the insights your team needs to move faster.</p>
+          <div className="mt-10 grid grid-cols-3 gap-3 text-sm"><div className="rounded-2xl border border-white/10 bg-white/5 p-4"><strong className="block text-xl text-white">360°</strong><span className="text-slate-400">Customer view</span></div><div className="rounded-2xl border border-white/10 bg-white/5 p-4"><strong className="block text-xl text-white">Real-time</strong><span className="text-slate-400">Team insights</span></div><div className="rounded-2xl border border-white/10 bg-white/5 p-4"><strong className="block text-xl text-white">Secure</strong><span className="text-slate-400">Cloud access</span></div></div>
+        </div>
+        <p className="relative z-10 text-xs text-slate-500">© 2026 Luxmor AI Technologies Pvt Ltd</p>
+      </section>
+      <section className="flex min-h-screen items-center justify-center bg-[#f6f8fc] px-4 py-10 sm:px-10">
+      <div className="w-full max-w-[430px]">
+        <div className="mb-7 lg:hidden"><img src={luxmorWordmark} alt="Luxmor AI Technologies" className="mx-auto h-16 w-auto max-w-full rounded-xl bg-white object-contain px-3 shadow-sm" /></div>
+        <div className="mb-7">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-600">LuxOne CRM</p>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#071a40]">Welcome back</h1>
+          <p className="mt-2 text-sm text-slate-500">Sign in to continue to your intelligent workspace.</p>
         </div>
 
-        <div className="rounded-[20px] border border-slate-200 bg-white shadow-[0_14px_36px_rgba(15,23,42,0.08)] p-8">
+        <div className="rounded-3xl border border-white bg-white p-7 shadow-[0_24px_70px_rgba(15,35,75,0.12)] sm:p-9">
 
           {/* ── STEP: login ── */}
           {step === "login" && (
             <>
-              <h2 className="mb-6 text-[18px] font-semibold text-[#1f2d3d]">Welcome back</h2>
+              <h2 className="mb-6 text-[18px] font-semibold text-[#071a40]">Sign in to your account</h2>
 
               {fpSuccess && (
                 <div className="mb-4 rounded-[6px] border border-green-200 bg-green-50 px-3 py-2.5 text-sm text-green-700">
@@ -264,7 +280,7 @@ export default function LoginPage() {
                     <button
                       type="button"
                       onClick={() => { setFpEmail(email); setFpError(""); setFpSuccess(""); setStep("forgot-email"); }}
-                      className="text-xs text-[#359de9] hover:underline"
+                      className="text-xs font-semibold text-indigo-600 hover:text-indigo-700"
                     >
                       Forgot password?
                     </button>
@@ -427,7 +443,7 @@ export default function LoginPage() {
         <p className="mt-6 text-center text-xs text-slate-400">
           Contact your administrator if you don't have an account.
         </p>
-      </div>
+      </div></section>
     </div>
   );
 }
