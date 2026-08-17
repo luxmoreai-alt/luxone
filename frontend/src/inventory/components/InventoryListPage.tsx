@@ -174,6 +174,14 @@ export default function InventoryListPage({ moduleKey }: InventoryListPageProps)
                     navigate(`${meta.baseRoute}/${row.id}`);
                     return;
                   }
+                  if (actionKey === "preview") {
+                    navigate(`${meta.baseRoute}/${row.id}?preview=1`);
+                    return;
+                  }
+                  if (actionKey === "duplicate") {
+                    navigate(`${meta.baseRoute}/create?duplicate=${encodeURIComponent(row.id)}`);
+                    return;
+                  }
                   if (actionKey === "delete") {
                     await deleteInventoryRecord(moduleKey, row.id);
                     void load();

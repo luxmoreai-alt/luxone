@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { apiRequest } from "../../api/client";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import { getLoggedInUser, getLoggedInUserName } from "../../lib/auth/currentUser";
@@ -350,13 +350,44 @@ function mapSnapshotToForm(moduleKey: InventoryModuleKey, snapshot: any): Invent
   } as ConfiguratorFormValues;
 }
 
+function prepareDuplicateForm(moduleKey: InventoryModuleKey, snapshot: any): InventoryFormValues {
+  const mapped = mapSnapshotToForm(moduleKey, snapshot) as any;
+  const today = new Date().toISOString().slice(0, 10);
+  const items = Array.isArray(mapped.items)
+    ? mapped.items.map(({ id: _id, ...item }: InventoryLineItem) => item)
+    : mapped.items;
+
+  if (moduleKey === "purchase-orders") {
+    return {
+      ...mapped,
+      subject: `${mapped.subject || "Purchase Order"} (Copy)`,
+      poNumber: "",
+      trackingNumber: "",
+      poDate: today,
+      status: "Draft",
+      items,
+    } as PurchaseOrderFormValues;
+  }
+
+  return {
+    ...mapped,
+    subject: `${mapped.subject || "Invoice"} (Copy)`,
+    invoiceDate: today,
+    status: "Draft",
+    items,
+  } as InvoiceFormValues;
+}
+
 export default function InventoryFormPage({ moduleKey }: Props) {
   const meta = getInventoryMeta(moduleKey);
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const duplicateId = searchParams.get("duplicate");
+  const isDuplicate = Boolean(duplicateId) && (moduleKey === "invoices" || moduleKey === "purchase-orders");
   const isEdit = Boolean(id);
   const [form, setForm] = useState<InventoryFormValues>(() => getInitialValues(moduleKey));
-  const [loading, setLoading] = useState(isEdit);
+  const [loading, setLoading] = useState(isEdit || isDuplicate);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -367,6 +398,31 @@ export default function InventoryFormPage({ moduleKey }: Props) {
   const totals = useMemo(() => Array.isArray(anyForm.items) ? recalculateDocument(anyForm.items as InventoryLineItem[], Number(anyForm.adjustment || 0)) : null, [anyForm.adjustment, anyForm.items]);
 
   useEffect(() => {
+    if (isDuplicate && duplicateId) {
+      let cancelled = false;
+      const loadDuplicate = async () => {
+        try {
+          setLoading(true);
+          setError(null);
+          const snapshot = await getInventoryRecordSnapshot(
+            moduleKey as "invoices" | "purchase-orders",
+            duplicateId
+          );
+          if (!cancelled) setForm(prepareDuplicateForm(moduleKey, snapshot));
+        } catch (err) {
+          if (!cancelled) {
+            setError(err instanceof Error ? err.message : `Failed to duplicate ${meta.singular.toLowerCase()}.`);
+          }
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+      };
+      void loadDuplicate();
+      return () => {
+        cancelled = true;
+      };
+    }
+
     if (!isEdit || !id) {
       setForm(getInitialValues(moduleKey));
       setLoading(false);
@@ -398,7 +454,7 @@ export default function InventoryFormPage({ moduleKey }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [id, isEdit, meta.singular, moduleKey]);
+  }, [duplicateId, id, isDuplicate, isEdit, meta.singular, moduleKey]);
 
   useEffect(() => {
     if (moduleKey !== "quotes" || !anyForm.deal) return;
@@ -850,12 +906,12 @@ export default function InventoryFormPage({ moduleKey }: Props) {
       <div className="space-y-4">
         <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-5 py-4">
           <div>
-            <h1 className="text-lg font-semibold text-slate-900">{isEdit ? `Edit ${meta.singular}` : meta.createLabel}</h1>
+            <h1 className="text-lg font-semibold text-slate-900">{isEdit ? `Edit ${meta.singular}` : isDuplicate ? `Duplicate ${meta.singular}` : meta.createLabel}</h1>
             <p className="text-sm text-slate-500">Integrated {meta.singular.toLowerCase()} form connected to the CRM backend.</p>
           </div>
           <div className="flex gap-2">
             <button type="button" onClick={() => navigate(isEdit && id ? `${meta.baseRoute}/${id}` : meta.baseRoute)} className="rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-700">Cancel</button>
-            <button type="button" disabled={saving || loading} onClick={() => void onSaveClick()} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white">{loading ? "Loading..." : saving ? "Saving..." : isEdit ? "Update" : "Save"}</button>
+            <button type="button" disabled={saving || loading} onClick={() => void onSaveClick()} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white">{loading ? "Loading..." : saving ? "Saving..." : isEdit ? "Update" : isDuplicate ? "Create Duplicate" : "Save"}</button>
           </div>
         </div>
 

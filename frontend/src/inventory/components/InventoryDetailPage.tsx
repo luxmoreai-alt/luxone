@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import CRMDetailHeader from "../../components/crm/CRMDetailHeader";
 import CRMEmptyState from "../../components/crm/CRMEmptyState";
 import CRMRelatedList from "../../components/crm/CRMRelatedList";
@@ -11,6 +11,7 @@ import { convertQuoteToSalesOrder, convertSalesOrderToInvoice, getInventoryDetai
 import { getInventoryMeta } from "../config";
 import { formatMoney } from "../utils";
 import type { InventoryModuleKey } from "../types";
+import InventoryDocumentPreviewModal from "./InventoryDocumentPreviewModal";
 
 type InventoryDetailPageProps = {
   moduleKey: InventoryModuleKey;
@@ -82,16 +83,19 @@ export default function InventoryDetailPage({ moduleKey }: InventoryDetailPagePr
   const meta = getInventoryMeta(moduleKey);
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"overview" | "timeline">("overview");
   const [activeRelatedItem, setActiveRelatedItem] = useState(meta.relatedListItems[0] || "Notes");
   const [payload, setPayload] = useState<any | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(searchParams.get("preview") === "1");
 
   const headerActions = useMemo(() => {
     if (moduleKey === "quotes") return ["Convert to Sales Order", "Edit"];
     if (moduleKey === "sales-orders") return ["Create Invoice", "Create Project", "Schedule Service", "Edit"];
-    if (moduleKey === "invoices") return ["Create Project", "Schedule Service", "Edit"];
+    if (moduleKey === "invoices") return ["Preview", "Duplicate", "Create Project", "Schedule Service", "Edit"];
+    if (moduleKey === "purchase-orders") return ["Preview", "Duplicate", "Edit"];
     if (moduleKey === "vendors") return ["Send Email", "Edit", "Assign", "New", "Attach"];
     return ["Edit"];
   }, [moduleKey]);
@@ -142,6 +146,16 @@ export default function InventoryDetailPage({ moduleKey }: InventoryDetailPagePr
             }
 
             if (!id) return;
+
+            if (action === "Preview" && (moduleKey === "invoices" || moduleKey === "purchase-orders")) {
+              setPreviewOpen(true);
+              return;
+            }
+
+            if (action === "Duplicate" && (moduleKey === "invoices" || moduleKey === "purchase-orders")) {
+              navigate(`${meta.baseRoute}/create?duplicate=${encodeURIComponent(id)}`);
+              return;
+            }
 
             if (action === "Convert to Sales Order" && moduleKey === "quotes") {
               const response = await convertQuoteToSalesOrder(id);
@@ -339,6 +353,21 @@ export default function InventoryDetailPage({ moduleKey }: InventoryDetailPagePr
           )}
         </div>
       </div>
+      {(moduleKey === "invoices" || moduleKey === "purchase-orders") && (
+        <InventoryDocumentPreviewModal
+          open={previewOpen}
+          moduleKey={moduleKey}
+          detail={detail}
+          onClose={() => {
+            setPreviewOpen(false);
+            if (searchParams.has("preview")) {
+              const next = new URLSearchParams(searchParams);
+              next.delete("preview");
+              setSearchParams(next, { replace: true });
+            }
+          }}
+        />
+      )}
     </DashboardLayout>
   );
 }

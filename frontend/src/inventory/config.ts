@@ -262,7 +262,13 @@ export const inventoryModules = {
       "Add Related List",
       "Links",
     ],
-    rowActions: defaultRowActions,
+    rowActions: [
+      { key: "open", label: "Open" },
+      { key: "preview", label: "Preview" },
+      { key: "duplicate", label: "Duplicate" },
+      { key: "edit", label: "Edit" },
+      { key: "delete", label: "Delete", destructive: true },
+    ],
   } satisfies InventoryModuleMeta<PurchaseOrderRecord>,
   invoices: {
     key: "invoices",
@@ -297,7 +303,11 @@ export const inventoryModules = {
       "Links",
     ],
     rowActions: [
-      ...defaultRowActions,
+      { key: "open", label: "Open" },
+      { key: "preview", label: "Preview" },
+      { key: "duplicate", label: "Duplicate" },
+      { key: "edit", label: "Edit" },
+      { key: "delete", label: "Delete", destructive: true },
       { key: "create-service-appointment", label: "Schedule Service" },
       { key: "create-project", label: "Create Project" },
     ],

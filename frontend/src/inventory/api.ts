@@ -782,6 +782,17 @@ export async function getInventoryDetail(
     description: asString(detail.description),
     termsAndConditions: asString(detail.terms_and_conditions),
     items: Array.isArray(detail.items) ? detail.items.map(mapLineItem) : [],
+    documentNumber: asString(detail.po_number || detail.invoice_number || detail.number),
+    documentDate: asString(detail.invoice_date || detail.po_date || detail.created_at),
+    dueDate: asString(detail.due_date),
+    partyName: asString(detail.vendor_name || detail.account_name),
+    contactName: asString(detail.contact_name),
+    status: asString(detail.status),
+    subtotal: asNumber(detail.subtotal),
+    discount: asNumber(detail.discount),
+    tax: asNumber(detail.tax),
+    adjustment: asNumber(detail.adjustment),
+    grandTotal: asNumber(detail.grand_total),
     ...mapAddress(detail),
   };
 

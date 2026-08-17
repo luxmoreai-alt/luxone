@@ -112,6 +112,17 @@ export type InventoryDetailResponse = InventoryBaseDetail &
     description?: string;
     termsAndConditions?: string;
     items?: InventoryLineItem[];
+    documentNumber?: string;
+    documentDate?: string;
+    dueDate?: string;
+    partyName?: string;
+    contactName?: string;
+    status?: string;
+    subtotal?: number;
+    discount?: number;
+    tax?: number;
+    adjustment?: number;
+    grandTotal?: number;
   };
 
 export type ProductFormValues = InventoryAddressFields & {
