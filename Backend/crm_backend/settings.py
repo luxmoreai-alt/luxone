@@ -38,13 +38,18 @@ def env_list(name: str, default: str = "") -> list[str]:
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-#02on6j-^m-dodq#tyr-fyxw3wsj@)t@rg8dj0%pg+m%5b_u9(')
 
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = env_bool('DEBUG', False)
+# Never expose Django debug pages from a Vercel deployment, even if an
+# environment variable was copied from a local .env file by mistake.
+IS_VERCEL = env_bool('VERCEL', False)
+DEBUG = env_bool('DEBUG', False) and not IS_VERCEL
 
 ALLOWED_HOSTS = env_list('ALLOWED_HOSTS', '127.0.0.1,localhost')
-VERCEL_URL = os.getenv('VERCEL_URL', '').strip()
-if VERCEL_URL and VERCEL_URL not in ALLOWED_HOSTS:
-    ALLOWED_HOSTS.append(VERCEL_URL)
+if IS_VERCEL and '.vercel.app' not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append('.vercel.app')
+for vercel_host_var in ('VERCEL_URL', 'VERCEL_PROJECT_PRODUCTION_URL'):
+    vercel_host = os.getenv(vercel_host_var, '').strip()
+    if vercel_host and vercel_host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(vercel_host)
 
 
 # Application definition
@@ -256,8 +261,8 @@ FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
 
 # Security / production hardening
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-SESSION_COOKIE_SECURE = env_bool('SESSION_COOKIE_SECURE', not DEBUG)
-CSRF_COOKIE_SECURE = env_bool('CSRF_COOKIE_SECURE', not DEBUG)
+SESSION_COOKIE_SECURE = IS_VERCEL or env_bool('SESSION_COOKIE_SECURE', not DEBUG)
+CSRF_COOKIE_SECURE = IS_VERCEL or env_bool('CSRF_COOKIE_SECURE', not DEBUG)
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = env_bool('CSRF_COOKIE_HTTPONLY', False)
 SECURE_BROWSER_XSS_FILTER = True
@@ -265,9 +270,11 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = os.getenv('X_FRAME_OPTIONS', 'SAMEORIGIN' if DEBUG else 'DENY')
 SECURE_REFERRER_POLICY = os.getenv('SECURE_REFERRER_POLICY', 'same-origin')
 SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', '0' if DEBUG else '31536000'))
-SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool('SECURE_HSTS_INCLUDE_SUBDOMAINS', not DEBUG)
-SECURE_HSTS_PRELOAD = env_bool('SECURE_HSTS_PRELOAD', not DEBUG)
-SECURE_SSL_REDIRECT = env_bool('SECURE_SSL_REDIRECT', not DEBUG)
+if IS_VERCEL:
+    SECURE_HSTS_SECONDS = max(SECURE_HSTS_SECONDS, 31536000)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = IS_VERCEL or env_bool('SECURE_HSTS_INCLUDE_SUBDOMAINS', not DEBUG)
+SECURE_HSTS_PRELOAD = IS_VERCEL or env_bool('SECURE_HSTS_PRELOAD', not DEBUG)
+SECURE_SSL_REDIRECT = IS_VERCEL or env_bool('SECURE_SSL_REDIRECT', not DEBUG)
 
 # Swagger Configuration
 SWAGGER_SETTINGS = {

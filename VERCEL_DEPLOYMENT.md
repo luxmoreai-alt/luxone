@@ -67,7 +67,7 @@ application and include the required SPA rewrite.
 Add this build-time environment variable for Production and Preview:
 
 ```dotenv
-VITE_API_BASE_URL=https://<backend-project>.vercel.app/api
+VITE_API_BASE_URL=https://<backend-project>.vercel.app
 ```
 
 Deploy the backend first, add its final URL to the frontend variable, then deploy

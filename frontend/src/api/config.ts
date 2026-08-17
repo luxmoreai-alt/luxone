@@ -7,7 +7,19 @@ function normalizeApiBaseUrl(rawValue?: string) {
 
   const trimmedValue = rawValue.replace(/\/$/, "");
   if (trimmedValue.startsWith("http://") || trimmedValue.startsWith("https://")) {
-    return trimmedValue;
+    try {
+      const url = new URL(trimmedValue);
+      const pathname = url.pathname.replace(/\/$/, "");
+      // A bare deployed backend hostname is the most common Vercel setup.
+      // Django's application endpoints live below /api.
+      if (!pathname) {
+        url.pathname = "/api";
+        return url.toString().replace(/\/$/, "");
+      }
+      return trimmedValue;
+    } catch {
+      return trimmedValue;
+    }
   }
 
   return trimmedValue.startsWith("/") ? trimmedValue : `/${trimmedValue}`;

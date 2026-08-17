@@ -112,6 +112,16 @@ async function apiPost<T>(path: string, body: unknown, token?: string): Promise<
   });
 
   const text = await res.text();
+  const contentType = res.headers.get("content-type") || "";
+  if (
+    !res.ok &&
+    (contentType.includes("text/html") || text.trimStart().toLowerCase().startsWith("<!doctype html"))
+  ) {
+    throw new Error(
+      `Backend request failed (${res.status}). Check the deployed API URL and allowed host settings.`
+    );
+  }
+
   let data: unknown;
   try {
     data = text ? JSON.parse(text) : null;
