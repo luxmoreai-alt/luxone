@@ -9,11 +9,73 @@ import { filterRecords, sortRecords } from "../../lib/shared/crmHelpers";
 import type { CRMRecord } from "../../lib/shared/crmTypes";
 import { convertQuoteToSalesOrder, convertSalesOrderToInvoice, deleteInventoryRecord, getInventoryList } from "../api";
 import { getInventoryMeta } from "../config";
-import type { InventoryModuleKey } from "../types";
+import type { InventoryDetailResponse, InventoryModuleKey } from "../types";
+import InventoryDocumentPreviewModal from "./InventoryDocumentPreviewModal";
 
 type InventoryListPageProps = {
   moduleKey: InventoryModuleKey;
 };
+
+function sampleDocument(moduleKey: "invoices" | "purchase-orders"): InventoryDetailResponse {
+  const isInvoice = moduleKey === "invoices";
+  const today = new Date();
+  const due = new Date(today);
+  due.setDate(due.getDate() + 15);
+  const dateValue = (date: Date) => date.toISOString().slice(0, 10);
+
+  return {
+    id: isInvoice ? "INV-SAMPLE-001" : "PO-SAMPLE-001",
+    name: isInvoice ? "LuxOne CRM Annual Subscription" : "LuxOne Software Procurement",
+    subtitle: "Draft template",
+    avatar: isInvoice ? "IN" : "PO",
+    summary: [],
+    fields: [],
+    timeline: [],
+    documentNumber: isInvoice ? "INV-2026-001" : "PO-2026-001",
+    documentDate: dateValue(today),
+    dueDate: dateValue(due),
+    partyName: isInvoice ? "Acme Technologies Pvt Ltd" : "Cloud Systems India Pvt Ltd",
+    contactName: isInvoice ? "Accounts Payable" : "Vendor Sales Team",
+    status: "Draft",
+    billingStreet: "12 Business Park, Hyderabad, Telangana, India 500081",
+    shippingStreet: "Luxmor AI Technologies Pvt Ltd, Hyderabad, Telangana, India",
+    subtotal: 120000,
+    discount: 5000,
+    tax: 20700,
+    adjustment: 0,
+    grandTotal: 135700,
+    description: isInvoice
+      ? "Annual LuxOne CRM subscription including onboarding and priority support."
+      : "Sample purchase order for software licences and implementation services.",
+    termsAndConditions: "Payment is due within 15 days. This is a sample template and does not represent a real transaction.",
+    items: [
+      {
+        product: "luxone-enterprise",
+        productName: "LuxOne Enterprise CRM",
+        productCode: "LUX-CRM-ENT",
+        quantity: 10,
+        listPrice: 10000,
+        amount: 100000,
+        discount: 5000,
+        tax: 17100,
+        total: 112100,
+        rowDescription: "Annual named-user licences",
+      },
+      {
+        product: "implementation",
+        productName: "Implementation & Onboarding",
+        productCode: "LUX-IMP-01",
+        quantity: 1,
+        listPrice: 20000,
+        amount: 20000,
+        discount: 0,
+        tax: 3600,
+        total: 23600,
+        rowDescription: "Configuration, migration, and team onboarding",
+      },
+    ],
+  };
+}
 
 export default function InventoryListPage({ moduleKey }: InventoryListPageProps) {
   const meta = getInventoryMeta(moduleKey);
@@ -30,6 +92,8 @@ export default function InventoryListPage({ moduleKey }: InventoryListPageProps)
   const [sortState, setSortState] = useState<{ key: string; direction: "asc" | "desc" } | null>(null);
   const [filterOpen, setFilterOpen] = useState(true);
   const [globalSearch, setGlobalSearch] = useState("");
+  const [samplePreviewOpen, setSamplePreviewOpen] = useState(false);
+  const supportsDocumentPreview = moduleKey === "invoices" || moduleKey === "purchase-orders";
 
   useEffect(() => {
     const handleSearch = (event: Event) => {
@@ -123,6 +187,15 @@ export default function InventoryListPage({ moduleKey }: InventoryListPageProps)
               >
                 {meta.createLabel}
               </button>
+              {supportsDocumentPreview && (
+                <button
+                  type="button"
+                  onClick={() => setSamplePreviewOpen(true)}
+                  className="rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
+                >
+                  Preview Default Template
+                </button>
+              )}
               {meta.importRoute && (
                 <button
                   type="button"
@@ -241,6 +314,14 @@ export default function InventoryListPage({ moduleKey }: InventoryListPageProps)
           </div>
         )}
       </div>
+      {supportsDocumentPreview && (
+        <InventoryDocumentPreviewModal
+          open={samplePreviewOpen}
+          moduleKey={moduleKey}
+          detail={sampleDocument(moduleKey)}
+          onClose={() => setSamplePreviewOpen(false)}
+        />
+      )}
     </DashboardLayout>
   );
 }
