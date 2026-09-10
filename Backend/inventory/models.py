@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
 
 from core.base_models import BaseModel
 
@@ -166,15 +167,21 @@ class Product(InventoryOwnedModel):
     class Meta:
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["product_name"]),
-            models.Index(fields=["product_code"]),
-            models.Index(fields=["product_category"]),
-            models.Index(fields=["product_type"]),
-            models.Index(fields=["billing_cycle"]),
-            models.Index(fields=["vendor"]),
-            models.Index(fields=["owner"]),
-            models.Index(fields=["is_active"]),
-        ]
+        models.Index(fields=["product_name"]),
+        models.Index(fields=["product_code"]),
+        models.Index(fields=["product_category"]),
+        models.Index(fields=["product_type"]),
+        models.Index(fields=["billing_cycle"]),
+        models.Index(fields=["vendor"]),
+        models.Index(fields=["owner"]),
+        models.Index(fields=["is_active"]),
+    ]
+    constraints = [
+        models.CheckConstraint(
+            condition=Q(quantity_in_stock__gte=0),
+            name="product_quantity_in_stock_non_negative",
+        ),
+    ]
 
     def __str__(self):
         return self.product_name
