@@ -6,10 +6,10 @@ import luxmorWordmark from "../assets/1.jpg";
 
 type Step = "login" | "forgot-email" | "forgot-otp" | "forgot-reset";
 type LoginFieldErrors = { email?: string; password?: string };
-
-const EMAIL_MAX_LENGTH = 30;
+//CHANGED THE LENGTH OF EMAIL AND PASSWORD//
+const EMAIL_MAX_LENGTH = 60;
 const PASSWORD_MIN_LENGTH = 8;
-const PASSWORD_MAX_LENGTH = 16;
+const PASSWORD_MAX_LENGTH = 30;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function extractErrorMessage(value: unknown): string | null {
