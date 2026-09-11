@@ -19,6 +19,7 @@ type AccountEditValues = {
   state: string;
   zipCode: string;
   description: string;
+  billingAddress: string;
 };
 
 const sections: CRMCreateSection[] = [
@@ -69,7 +70,7 @@ export default function EditAccountPage() {
         setInitialValues({
           accountOwner: account.accountOwner,
           accountName: account.accountName,
-          accountType: "",
+          accountType: account.accountType ?? "",
           phone: account.phone,
           website: account.website,
           industry: account.industry,
@@ -81,6 +82,7 @@ export default function EditAccountPage() {
           state: "",
           zipCode: "",
           description: account.description,
+          billingAddress: account.billingAddress ?? "",
         });
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load account");
@@ -98,6 +100,7 @@ export default function EditAccountPage() {
     await updateAccount(id!, {
       accountName: values.accountName,
       accountType: values.accountType,
+      billingAddress: values.billingAddress,
       phone: values.phone,
       website: values.website,
       industry: values.industry,

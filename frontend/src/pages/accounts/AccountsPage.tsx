@@ -14,7 +14,7 @@ export default function AccountsPage() {
     try {
       setLoading(true);
       setError(null);
-      const data = await getAccounts();
+      const data = await getAccounts({ forceFresh: true });
       setRows(keepEmployeeOwnedRows(data));
     } catch (err) {
       console.error("Failed to load accounts:", err);
