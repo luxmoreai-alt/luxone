@@ -102,7 +102,10 @@ export default function ReportsPage() {
   );
 
   const handleGenerate = async (page = 1) => {
-    if (!filters.report_key) return;
+    if (!filters.report_key) {
+      setError("Please select a report before generating.");
+      return;
+    }
     try {
       setRunningReport(true);
       setError("");
@@ -187,7 +190,7 @@ export default function ReportsPage() {
               <button
                 type="button"
                 onClick={() => void handleGenerate(1)}
-                disabled={!filters.report_key || runningReport}
+                disabled={runningReport}
                 className="inline-flex items-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#6d28d9_0%,#8b5cf6_100%)] px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(109,40,217,0.28)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Sparkles className={`h-4 w-4 ${runningReport ? "animate-pulse" : ""}`} />
@@ -279,7 +282,9 @@ export default function ReportsPage() {
         </section>
 
         {error ? (
-          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
+          <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {error}
+          </div>
         ) : null}
 
         {reportData ? (
