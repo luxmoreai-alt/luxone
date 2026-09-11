@@ -19,11 +19,11 @@ export function ProjectStatusBadge({ status }: { status: ProjectStatus }) {
 
 export function ProjectPriorityBadge({ priority }: { priority: ProjectPriority }) {
   const styles: Record<ProjectPriority, string> = {
-    Low: "bg-slate-100 text-slate-700",
+    Low: "bg-green-100 text-green-700",
     Medium: "bg-sky-100 text-sky-700",
     High: "bg-orange-100 text-orange-700",
-    Critical: "bg-red-100 text-red-700",
-  };
+    Critical: "bg-red-100 text-red-700", ...
+  }; GG
 
   return (
     <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${styles[priority]}`}>
