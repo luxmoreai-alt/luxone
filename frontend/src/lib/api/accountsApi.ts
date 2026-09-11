@@ -9,6 +9,7 @@ type BackendAccount = {
   id: number;
   name?: string;
   account_name?: string;
+  account_type?: string | null;
   website?: string | null;
   phone?: string | null;
   industry?: string | null;
@@ -55,6 +56,7 @@ function normalizeAccount(item: BackendAccount): AccountRecord {
   return {
     id: String(item.id),
     accountName,
+    accountType: item.account_type ?? "",
     accountOwner:
       item.owner_name ??
       item.owner_email ??
@@ -75,6 +77,7 @@ function normalizeAccount(item: BackendAccount): AccountRecord {
     annualRevenue: asNumber(item.annual_revenue),
     sicCode: "",
     description: item.description ?? "",
+    billingAddress: item.billing_address ?? "",
     createdAt: item.created_at ?? "",
     updatedAt: item.updated_at ?? "",
   };
@@ -118,6 +121,7 @@ function toBackendPayload(payload: Partial<CreateAccountPayload>): Record<string
 
   const billingAddress = toBillingAddress(payload);
   if (billingAddress !== undefined) body.billing_address = billingAddress;
+  else if (payload.billingAddress !== undefined) body.billing_address = payload.billingAddress || null;
 
   if (payload.accountOwner && /^\d+$/.test(payload.accountOwner.trim())) {
     body.account_owner = Number(payload.accountOwner.trim());
@@ -125,17 +129,18 @@ function toBackendPayload(payload: Partial<CreateAccountPayload>): Record<string
   return body;
 }
 
-export async function getAccounts(options?: { pageSize?: number; cacheTtlMs?: number }): Promise<AccountRecord[]> {
+export async function getAccounts(options?: { pageSize?: number; cacheTtlMs?: number; forceFresh?: boolean }): Promise<AccountRecord[]> {
   const data = await apiRequest<BackendAccount[] | Paginated<BackendAccount>>(endpoint("/accounts"), {
     query: options?.pageSize ? { page_size: options.pageSize } : undefined,
     cacheTtlMs: options?.cacheTtlMs,
+    forceFresh: options?.forceFresh,
   });
   return toList(data).map(normalizeAccount);
 }
 
 export async function getAccountById(id: string): Promise<AccountRecord | null> {
   try {
-    const data = await apiRequest<BackendAccount>(endpoint(`/accounts/${id}`));
+    const data = await apiRequest<BackendAccount>(endpoint(`/accounts/${id}`), { forceFresh: true });
     return normalizeAccount(data);
   } catch (error) {
     if (error instanceof Error && error.message.includes("404")) {
@@ -149,6 +154,7 @@ export type CreateAccountPayload = {
   accountOwner?: string;
   accountName: string;
   accountType?: string;
+  billingAddress?: string;
   phone?: string;
   website?: string;
   industry?: string;

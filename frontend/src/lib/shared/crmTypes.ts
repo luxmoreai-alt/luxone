@@ -92,6 +92,7 @@ export type AccountRecord = {
   id: string;
   accountName: string;
   accountOwner: string;
+  accountType?: string;
   ownerEmail?: string;
   accountSite: string;
   parentAccount: string;
@@ -107,6 +108,7 @@ export type AccountRecord = {
   annualRevenue: number;
   sicCode: string;
   description: string;
+  billingAddress?: string;
   createdAt: string;
   updatedAt: string;
 };
