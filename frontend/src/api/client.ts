@@ -16,6 +16,7 @@ const RESPONSE_CACHE_STORAGE_KEY = "api-response-cache-v1";
 const DEFAULT_GET_CACHE_TTL_MS = 30 * 1000;
 const responseCache = new Map<string, CacheEnvelope>();
 const inFlightRequests = new Map<string, Promise<unknown>>();
+let cacheGeneration = 0;
 
 function isGetRequest(options: RequestOptions) {
   return (options.method || "GET").toUpperCase() === "GET" && !options.body;
@@ -108,6 +109,7 @@ function setCachedResponse(key: string, data: unknown) {
 }
 
 function clearResponseCache() {
+  cacheGeneration += 1;
   responseCache.clear();
   inFlightRequests.clear();
   if (typeof window !== "undefined") {
@@ -167,6 +169,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   }
 
   const requestPromise = (async () => {
+    const requestCacheGeneration = cacheGeneration;
     let response: Response;
 
     try {
@@ -225,7 +228,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
       throw error;
     }
 
-    if (isGet && cacheTtlMs > 0) {
+    if (isGet && cacheTtlMs > 0 && requestCacheGeneration === cacheGeneration) {
       setCachedResponse(cacheKey, data);
     } else if (!isGet) {
       clearResponseCache();
