@@ -292,6 +292,7 @@ class VerifyOTPView(APIView):
         if serializer.is_valid():
             email = serializer.validated_data['email']
             code = serializer.validated_data['otp']
+            purpose = serializer.validated_data['purpose']
 
             user = get_user_by_email(email)
             if not user:
@@ -299,6 +300,8 @@ class VerifyOTPView(APIView):
 
             otp_record = OTP.objects.filter(email=email, code=code, is_verified=False).order_by('-created_at').first()
             if otp_record and otp_record.is_valid():
+                if purpose == "password_reset":
+                    return Response(custom_response(success=True, message="OTP verified"), status=status.HTTP_200_OK)
                 otp_record.is_verified = True
                 otp_record.save()
                 data = build_auth_payload(user)
