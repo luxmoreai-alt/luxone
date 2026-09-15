@@ -190,7 +190,19 @@ export default function LoginPage() {
     e.preventDefault();
     setFpError("");
     if (!fpOtp.trim()) { setFpError("Enter the OTP sent to your email."); return; }
-    setStep("forgot-reset");
+    setFpLoading(true);
+    try {
+      await authPost("/auth/verify-otp/", {
+        email: fpEmail.trim(),
+        otp: fpOtp.trim(),
+        purpose: "password_reset",
+      });
+      setStep("forgot-reset");
+    } catch (err) {
+      setFpError(err instanceof Error ? err.message : "Invalid or expired OTP.");
+    } finally {
+      setFpLoading(false);
+    }
   };
 
   // ── Forgot: reset password ─────────────────────────────────────────────────
@@ -384,9 +396,9 @@ export default function LoginPage() {
                   <div className="rounded-[6px] border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-600">{fpError}</div>
                 )}
 
-                <button type="submit" disabled={fpOtp.length < 6}
+                <button type="submit" disabled={fpOtp.length < 6 || fpLoading}
                   className="w-full rounded-[8px] bg-gradient-to-b from-[#359de9] to-[#365eea] py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">
-                  Verify OTP
+                  {fpLoading ? "Verifying…" : "Verify OTP"}
                 </button>
 
                 <div className="flex items-center justify-between text-sm">
