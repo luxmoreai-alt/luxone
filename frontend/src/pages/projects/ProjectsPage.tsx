@@ -24,7 +24,22 @@ export default function ProjectsPage() {
         const response = await apiRequest("/projects/");
         const res = response as Project[] | { results: Project[] };
         const data = Array.isArray(res) ? res : res.results || [];
-        setProjects(data);
+        const projectsWithProgress = await Promise.all(
+          data.map(async (project) => {
+            try {
+              const detail = await apiRequest(`/projects/${project.id}/`);
+              const tasks = (detail as Project).tasks ?? [];
+              const completedTasks = tasks.filter((task) => task.status === "Completed").length;
+              return {
+                ...project,
+                progress: tasks.length > 0 ? Math.round((completedTasks / tasks.length) * 100) : 0,
+              };
+            } catch {
+              return project;
+            }
+          })
+        );
+        setProjects(projectsWithProgress);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to fetch projects");
       } finally {
@@ -85,7 +100,7 @@ export default function ProjectsPage() {
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-3">
-              <div className="relative min-w-[260px]">
+              <div className="relative min-w-65">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
@@ -171,7 +186,8 @@ function ProjectsTable({ projects }: { projects: Project[] }) {
         <thead>
           <tr className="border-b border-slate-200 text-left text-sm text-slate-500">
             <th className="px-4 py-3 font-medium">Project Code</th>
-            <th className="px-4 py-3 font-medium">Project Name</th>
+            <th className="px-4 py-3 font-medium">Project Name</th>
+
             <th className="px-4 py-3 font-medium">Owner</th>
             <th className="px-4 py-3 font-medium">Status</th>
             <th className="px-4 py-3 font-medium">Priority</th>
@@ -190,7 +206,8 @@ function ProjectsTable({ projects }: { projects: Project[] }) {
                 >
                   {project.name}
                 </Link>
-              </td>
+              </td>
+
               <td className="px-4 py-4 text-slate-700">{project.owner || "—"}</td>
               <td className="px-4 py-4">
                 <ProjectStatusBadge status={project.status} />
@@ -199,7 +216,7 @@ function ProjectsTable({ projects }: { projects: Project[] }) {
                 <ProjectPriorityBadge priority={project.priority} />
               </td>
               <td className="px-4 py-4">
-                <div className="min-w-[120px]">
+                <div className="min-w-30">
                   <div className="mb-1 flex items-center justify-between text-xs text-slate-500">
                     <span>{project.progress ?? 0}%</span>
                   </div>
@@ -257,7 +274,8 @@ function ProjectsCards({ projects }: { projects: Project[] }) {
             <ProjectStatusBadge status={project.status} />
           </div>
 
-          <div className="space-y-2 text-sm text-slate-600">
+          <div className="space-y-2 text-sm text-slate-600">
+
             <p><span className="font-medium text-slate-800">Owner:</span> {project.owner || "—"}</p>
             <p><span className="font-medium text-slate-800">Due:</span> {project.due_date || "—"}</p>
           </div>

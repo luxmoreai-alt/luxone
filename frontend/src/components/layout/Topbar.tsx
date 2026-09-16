@@ -9,6 +9,7 @@ import {
   Shield,
   LogOut,
   Building2,
+  KeyRound,
   UserCog,
   Briefcase,
   Clock,
@@ -227,6 +228,7 @@ const getPageTitle = (pathname: string) => {
   if (pathname === "/reports") return "Reports";
   if (pathname === "/analytics") return "Analytics";
   if (pathname === "/my-requests") return "My Requests";
+  if (pathname === "/change-password") return "Change Password";
   return "";
 };
 
@@ -555,10 +557,12 @@ export default function Topbar({
         <div className="flex items-center gap-1 sm:gap-2">
           <div className="relative">
             <button
+              type="button"
+              aria-label="Notifications"
               onClick={() => { setNotificationsOpen((prev) => !prev); setEmailInboxOpen(false); }}
               className="relative flex h-[32px] w-[32px] items-center justify-center rounded-md hover:bg-slate-100"
             >
-              <Bell size={16} />
+              <Bell size={16} aria-hidden="true"/>
               {unreadCount > 0 && (
                 <span className="absolute -right-1 -top-1 min-w-[16px] rounded-full bg-red-500 px-1 text-center text-[10px] font-semibold leading-4 text-white">
                   {unreadCount}
@@ -631,10 +635,12 @@ export default function Topbar({
 
           <div className="relative">
             <button
+              type="button"
+              aria-label="Email Inbox"
               onClick={() => { setEmailInboxOpen((prev) => !prev); setNotificationsOpen(false); }}
               className="relative flex h-[32px] w-[32px] items-center justify-center rounded-md hover:bg-slate-100"
             >
-              <Mail size={16} />
+              <Mail size={16} aria-hidden="true" />
               {unreadEmailCount > 0 && (
                 <span className="absolute -right-1 -top-1 min-w-[16px] rounded-full bg-red-500 px-1 text-center text-[10px] font-semibold leading-4 text-white">
                   {unreadEmailCount > 99 ? "99+" : unreadEmailCount}
@@ -666,10 +672,11 @@ export default function Topbar({
                     )}
                     <button
                       type="button"
+                      aria-label="Close email inbox panel"
                       onClick={() => setEmailInboxOpen(false)}
                       className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
                     >
-                      <X size={14} />
+                      <X size={14} aria-hidden="true" />
                     </button>
                   </div>
                 </div>
@@ -734,17 +741,21 @@ export default function Topbar({
           </div>
 
             <button
+              type="button"
+              aria-label="Calendar"
               onClick={() => navigate("/calendar")}
               className="flex h-[32px] w-[32px] items-center justify-center rounded-md hover:bg-slate-100"
             >
-              <CalendarDays size={16} />
+              <CalendarDays size={16} aria-hidden="true" />
             </button>
 
             <button
+              type="button"
+              aria-label="Profile"
               onClick={() => setProfileOpen(true)}
               className="flex h-[32px] w-[32px] items-center justify-center rounded-md hover:bg-slate-100"
             >
-              <User size={16} />
+              <User size={16} aria-hidden="true" />
             </button>
         </div>
       </header>
@@ -764,10 +775,12 @@ export default function Topbar({
                 </h2>
 
                 <button
+                  type="button"
+                  aria-label="Close profile panel"
                   onClick={() => setProfileOpen(false)}
                   className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-slate-100"
                 >
-                  <X size={18} />
+                  <X size={18} aria-hidden="true" />
                 </button>
               </div>
 
@@ -831,6 +844,15 @@ export default function Topbar({
 
               <div className="border-t border-slate-200 p-4">
                 <button
+                  type="button"
+                  onClick={() => { setProfileOpen(false); navigate("/change-password"); }}
+                  className="mb-3 flex w-full items-center justify-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-700 transition hover:bg-blue-100"
+                >
+                  <KeyRound size={16} />
+                  Change Password
+                </button>
+                <button
+                  type="button"
                   onClick={handleLogout}
                   className="flex w-full items-center justify-center gap-2 rounded-md bg-red-50 px-4 py-2.5 text-sm font-medium text-red-600 transition hover:bg-red-100"
                 >
