@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { KeyRound, Loader2, ShieldCheck } from "lucide-react";
-import { changePassword, getAccessToken, getStoredUser } from "../lib/api/authApi";
+import { changePassword, clearAuthSession, getAccessToken, getStoredUser } from "../lib/api/authApi";
 
 export default function ChangePasswordPage() {
   const navigate = useNavigate();
 
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState("");
@@ -23,8 +24,8 @@ export default function ChangePasswordPage() {
     e.preventDefault();
     setError("");
 
-    if (!newPassword || !confirmPassword) {
-      setError("Both fields are required.");
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setError("All password fields are required.");
       return;
     }
     if (newPassword.length < 6) {
@@ -43,15 +44,9 @@ export default function ChangePasswordPage() {
 
     setLoading(true);
     try {
-      await changePassword(newPassword, confirmPassword, accessToken);
-
-      // Update stored user: clear must_change_password flag locally
-      if (user) {
-        const updatedUser = { ...user, must_change_password: false };
-        localStorage.setItem("loggedInUser", JSON.stringify(updatedUser));
-      }
-
-      navigate("/home", { replace: true });
+      await changePassword(currentPassword, newPassword, confirmPassword, accessToken);
+      clearAuthSession();
+      navigate("/login", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to change password.");
     } finally {
@@ -66,21 +61,36 @@ export default function ChangePasswordPage() {
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-blue-100">
             <ShieldCheck size={28} className="text-[#359de9]" />
           </div>
-          <h1 className="text-2xl font-bold text-[#1f2d3d]">Set Your Password</h1>
+          <h1 className="text-2xl font-bold text-[#1f2d3d]">Change Password</h1>
           <p className="mt-2 text-sm text-slate-500">
             {user?.email
               ? `Welcome, ${user.name || user.email.split("@")[0]}!`
-              : "Welcome!"}{" "}
-            Please set a new password to continue.
+              : "Update your account password."} {" "}
+            Enter your current password and choose a new one.
           </p>
         </div>
 
         <div className="rounded-[20px] border border-slate-200 bg-white shadow-[0_14px_36px_rgba(15,23,42,0.08)] p-8">
           <div className="mb-5 rounded-[8px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-            <strong>Security Notice:</strong> Your account was created by an administrator. You must set a personal password before accessing the system.
+            <strong>Security Notice:</strong> After changing your password, you will be signed out and asked to log in again.
           </div>
 
           <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4" noValidate>
+            <div>
+              <label htmlFor="current-password" className="block text-sm font-medium text-slate-700 mb-1.5">
+                Current Password
+              </label>
+              <input
+                id="current-password"
+                type="password"
+                autoComplete="current-password"
+                autoFocus
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                className={inputCls}
+              />
+            </div>
+
             <div>
               <label htmlFor="new-password" className="block text-sm font-medium text-slate-700 mb-1.5">
                 New Password
@@ -90,7 +100,6 @@ export default function ChangePasswordPage() {
                   id="new-password"
                   type={showNew ? "text" : "password"}
                   autoComplete="new-password"
-                  autoFocus
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="Minimum 6 characters"
@@ -148,7 +157,7 @@ export default function ChangePasswordPage() {
               ) : (
                 <KeyRound size={15} />
               )}
-              {loading ? "Saving…" : "Set Password & Continue"}
+              {loading ? "Saving..." : "Change Password"}
             </button>
           </form>
         </div>
