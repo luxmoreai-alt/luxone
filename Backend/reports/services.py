@@ -608,7 +608,7 @@ def export_report_file(context: ReportContext, export_format: str):
             date_to=context.date_to,
             search=context.search,
             page=1,
-            page_size=10000,
+            page_size=context.page_size,
         )
     )
     rows = payload["rows"]
