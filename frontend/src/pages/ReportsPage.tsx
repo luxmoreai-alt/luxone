@@ -106,6 +106,7 @@ export default function ReportsPage() {
     try {
       setRunningReport(true);
       setError("");
+      setReportData(null);
       const response = await runReport({
         reportKey: filters.report_key,
         date_from: filters.date_from,
@@ -116,6 +117,7 @@ export default function ReportsPage() {
       });
       setReportData(response);
     } catch (err) {
+      setReportData(null);
       setError(err instanceof Error ? err.message : "Failed to generate report.");
     } finally {
       setRunningReport(false);

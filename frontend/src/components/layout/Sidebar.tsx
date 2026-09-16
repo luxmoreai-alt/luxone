@@ -15,6 +15,7 @@ import {
   HandHelping,
   Home,
   Inbox,
+  KeyRound,
   Lightbulb,
   MapPinned,
   Megaphone,
@@ -57,6 +58,7 @@ const primaryItems: NavItem[] = [
   { label: "Reports", icon: BarChart3, path: "/reports" },
   { label: "Analytics", icon: PieChart, path: "/analytics" },
   { label: "My Requests", icon: ClipboardList, path: "/my-requests" },
+  { label: "Change Password", icon: KeyRound, path: "/change-password" },
 ];
 
 const workspaceItems: NavItem[] = [
