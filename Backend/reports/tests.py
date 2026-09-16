@@ -191,3 +191,18 @@ class ReportDashboardTests(APITestCase):
         self.assertTrue(any(item["title"] == "Follow up proposal" for item in response.data["open_requests"]))
         self.assertEqual(response.data["summary_cards"]["due_today"], 0)
         self.assertEqual(response.data["focus_today"]["pending"], 0)
+
+    def test_reports_csv_export_returns_downloadable_file(self):
+        response = self.client.get(
+            "/api/reports/download/",
+            {
+                "reportKey": "deals_report",
+                "export_format": "csv",
+                "page_size": 1,
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response["Content-Type"], "text/csv")
+        self.assertIn("attachment;", response["Content-Disposition"])
+        self.assertIn("Deal Name", response.content.decode())
