@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { KeyRound, Loader2, ShieldCheck } from "lucide-react";
 import { changePassword, clearAuthSession, getAccessToken, getStoredUser } from "../lib/api/authApi";
 
+const PASSWORD_MIN_LENGTH = 8;
+
 export default function ChangePasswordPage() {
   const navigate = useNavigate();
 
@@ -28,8 +30,8 @@ export default function ChangePasswordPage() {
       setError("All password fields are required.");
       return;
     }
-    if (newPassword.length < 6) {
-      setError("Password must be at least 6 characters.");
+    if (newPassword.length < PASSWORD_MIN_LENGTH) {
+      setError(`Password must be at least ${PASSWORD_MIN_LENGTH} characters.`);
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -102,7 +104,7 @@ export default function ChangePasswordPage() {
                   autoComplete="new-password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Minimum 6 characters"
+                  placeholder={`Minimum ${PASSWORD_MIN_LENGTH} characters`}
                   className={`${inputCls} pr-10`}
                 />
                 <button

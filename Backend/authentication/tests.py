@@ -5,6 +5,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 from unittest.mock import patch
 
+from .serializers import ResetPasswordSerializer
 from .views import get_tenant_user_for_email
 
 
@@ -89,6 +90,18 @@ class AuthenticationApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password("StrongPass123"))
+
+    def test_reset_password_rejects_password_shorter_than_policy(self):
+        serializer = ResetPasswordSerializer(
+            data={
+                "email": self.user.email,
+                "otp": "123456",
+                "new_password": "1234567",
+            }
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("new_password", serializer.errors)
 
     @override_settings(DEFAULT_FROM_EMAIL="otp@crm.example", EMAIL_HOST_USER="emailapikey")
     @patch("authentication.services.send_mail")

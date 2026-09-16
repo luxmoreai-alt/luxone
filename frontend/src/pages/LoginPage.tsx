@@ -199,7 +199,10 @@ export default function LoginPage() {
     setFpError("");
     if (!fpNewPwd || !fpConfirmPwd) { setFpError("Both password fields are required."); return; }
     if (fpNewPwd !== fpConfirmPwd) { setFpError("Passwords do not match."); return; }
-    if (fpNewPwd.length < 6) { setFpError("Password must be at least 6 characters."); return; }
+    if (fpNewPwd.length < PASSWORD_MIN_LENGTH) {
+      setFpError(`Password must be at least ${PASSWORD_MIN_LENGTH} characters.`);
+      return;
+    }
     setFpLoading(true);
     try {
       await authPost("/auth/reset-password/", {
@@ -414,7 +417,7 @@ export default function LoginPage() {
                   <div className="relative">
                     <input type={fpShowPwd ? "text" : "password"} autoFocus value={fpNewPwd}
                       onChange={(e) => setFpNewPwd(e.target.value)}
-                      placeholder="At least 6 characters"
+                      placeholder={`At least ${PASSWORD_MIN_LENGTH} characters`}
                       className={inputCls + " pr-10"} />
                     <button type="button" onClick={() => setFpShowPwd((v) => !v)}
                       className="absolute inset-y-0 right-3 flex items-center text-slate-400 hover:text-slate-600 text-xs" tabIndex={-1}>

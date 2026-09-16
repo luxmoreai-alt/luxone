@@ -23,6 +23,8 @@ DEPARTMENT_CHOICES = [
     ("support", "Support"),
 ]
 
+PASSWORD_MIN_LENGTH = 8
+
 
 # ── Auth flow serializers ──────────────────────────────────────────────────────
 
@@ -43,12 +45,12 @@ class VerifyOTPSerializer(serializers.Serializer):
 class ResetPasswordSerializer(serializers.Serializer):
     email = serializers.EmailField()
     otp = serializers.CharField(max_length=6)
-    new_password = serializers.CharField(write_only=True)
+    new_password = serializers.CharField(write_only=True, min_length=PASSWORD_MIN_LENGTH)
 
 class ChangePasswordSerializer(serializers.Serializer):
     current_password = serializers.CharField(write_only=True)
-    new_password = serializers.CharField(write_only=True, min_length=6)
-    confirm_password = serializers.CharField(write_only=True, min_length=6)
+    new_password = serializers.CharField(write_only=True, min_length=PASSWORD_MIN_LENGTH)
+    confirm_password = serializers.CharField(write_only=True, min_length=PASSWORD_MIN_LENGTH)
 
     def validate(self, data):
         user = self.context["request"].user
@@ -137,4 +139,4 @@ class UserUpdateSerializer(serializers.ModelSerializer):
 
 class SetPasswordSerializer(serializers.Serializer):
     """Admin can reset another user's password."""
-    new_password = serializers.CharField(write_only=True, min_length=6)
+    new_password = serializers.CharField(write_only=True, min_length=PASSWORD_MIN_LENGTH)

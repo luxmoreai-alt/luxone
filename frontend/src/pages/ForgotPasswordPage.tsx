@@ -7,6 +7,8 @@ import BrandHeader from "../components/auth/BrandHeader";
 import PromoPanel from "../components/auth/PromoPanel";
 import { buildApiUrl } from "../api/config";
 
+const PASSWORD_MIN_LENGTH = 8;
+
 const FORGOT_PASSWORD_URL = buildApiUrl("/auth/forgot-password");
 const RESET_PASSWORD_URL = buildApiUrl("/auth/reset-password");
 
@@ -55,6 +57,10 @@ const ForgotPasswordPage = () => {
   const handleResetPassword = async () => {
     if (!otp.trim()) { setOtpError("OTP is required"); return; }
     if (!newPassword) { setPasswordError("New password is required"); return; }
+    if (newPassword.length < PASSWORD_MIN_LENGTH) {
+      setPasswordError(`Password must be at least ${PASSWORD_MIN_LENGTH} characters`);
+      return;
+    }
     if (newPassword !== confirmPassword) { setPasswordError("Passwords do not match"); return; }
 
     try {
@@ -140,7 +146,7 @@ const ForgotPasswordPage = () => {
                   type="password"
                   value={newPassword}
                   onChange={setNewPassword}
-                  placeholder="New password"
+                  placeholder={`At least ${PASSWORD_MIN_LENGTH} characters`}
                 />
                 <AuthInput
                   type="password"
