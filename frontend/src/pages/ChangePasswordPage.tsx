@@ -61,18 +61,18 @@ export default function ChangePasswordPage() {
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-blue-100">
             <ShieldCheck size={28} className="text-[#359de9]" />
           </div>
-          <h1 className="text-2xl font-bold text-[#1f2d3d]">Set Your Password</h1>
+          <h1 className="text-2xl font-bold text-[#1f2d3d]">Change Password</h1>
           <p className="mt-2 text-sm text-slate-500">
             {user?.email
               ? `Welcome, ${user.name || user.email.split("@")[0]}!`
-              : "Welcome!"}{" "}
-            Please set a new password to continue.
+              : "Update your account password."} {" "}
+            Enter your current password and choose a new one.
           </p>
         </div>
 
         <div className="rounded-[20px] border border-slate-200 bg-white shadow-[0_14px_36px_rgba(15,23,42,0.08)] p-8">
           <div className="mb-5 rounded-[8px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-            <strong>Security Notice:</strong> Your account was created by an administrator. You must set a personal password before accessing the system.
+            <strong>Security Notice:</strong> After changing your password, you will be signed out and asked to log in again.
           </div>
 
           <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4" noValidate>
@@ -157,7 +157,7 @@ export default function ChangePasswordPage() {
               ) : (
                 <KeyRound size={15} />
               )}
-              {loading ? "Saving…" : "Set Password & Continue"}
+              {loading ? "Saving..." : "Change Password"}
             </button>
           </form>
         </div>
