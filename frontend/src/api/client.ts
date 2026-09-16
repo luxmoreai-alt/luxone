@@ -16,6 +16,7 @@ const RESPONSE_CACHE_STORAGE_KEY = "api-response-cache-v1";
 const DEFAULT_GET_CACHE_TTL_MS = 30 * 1000;
 const responseCache = new Map<string, CacheEnvelope>();
 const inFlightRequests = new Map<string, Promise<unknown>>();
+let sessionRedirectStarted = false;
 
 function isGetRequest(options: RequestOptions) {
   return (options.method || "GET").toUpperCase() === "GET" && !options.body;
@@ -125,9 +126,15 @@ export function clearStoredAuth() {
 
 function redirectToLogin() {
   if (typeof window === "undefined") return;
-  if (window.location.pathname !== "/login") {
-    window.location.assign("/login");
-  }
+  if (sessionRedirectStarted || window.location.pathname === "/login") return;
+  sessionRedirectStarted = true;
+  window.location.replace("/login");
+}
+
+function expireSession() {
+  clearStoredAuth();
+  clearResponseCache();
+  redirectToLogin();
 }
 
 async function executeRequest(path: string, options: RequestOptions) {
@@ -185,13 +192,16 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
         try {
           response = await executeRequest(path, options);
         } catch {
-          clearStoredAuth();
-          redirectToLogin();
+          expireSession();
           throw new Error("Session expired. Please log in again.");
         }
       } else {
-        clearStoredAuth();
-        redirectToLogin();
+        expireSession();
+        throw new Error("Session expired. Please log in again.");
+      }
+
+      if (response.status === 401) {
+        expireSession();
         throw new Error("Session expired. Please log in again.");
       }
     }
