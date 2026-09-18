@@ -15,6 +15,7 @@ import {
   HandHelping,
   Home,
   Inbox,
+  KeyRound,
   Lightbulb,
   MapPinned,
   Megaphone,
@@ -186,6 +187,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
     const paths = primaryItems
       .map((item) => item.path)
       .filter((path): path is string => Boolean(path));
+    paths.push("/change-password");
 
     if (isAdmin || isManager) {
       paths.push("/team");
@@ -249,7 +251,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
       )}
 
       <aside
-        className={`luxmor-sidebar fixed inset-y-0 left-0 z-40 h-screen overflow-y-auto text-white transition-all duration-300 md:static md:z-auto md:flex md:h-screen md:flex-col ${
+        className={`luxmor-sidebar fixed inset-y-0 left-0 z-40 h-screen overflow-y-hidden text-white transition-all duration-300 md:static md:z-auto md:flex md:h-screen md:flex-col ${
           sidebarOpen
             ? "translate-x-0 w-56"
             : "-translate-x-full w-56 md:translate-x-0 md:w-14"
@@ -439,6 +441,26 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
                 </div>
               </div>
             )}
+
+            <div className={`mt-3 border-t border-white/10 pt-3 ${sidebarOpen ? "mx-2.5" : "mx-1.5"}`}>
+              <button
+                type="button"
+                onClick={() => handleNavigate("/change-password")}
+                onMouseEnter={() => preloadRouteResources("/change-password")}
+                onFocus={() => preloadRouteResources("/change-password")}
+                title={!sidebarOpen ? "Change Password" : undefined}
+                className={[
+                  "flex w-full items-center rounded-lg text-left text-[14px] transition",
+                  sidebarOpen ? "gap-2 px-2.5 py-2" : "justify-center px-2 py-2.5",
+                  location.pathname === "/change-password"
+                    ? "bg-white/14 font-semibold text-white shadow-sm ring-1 ring-white/10"
+                    : "text-slate-300 hover:bg-white/8 hover:text-white",
+                ].join(" ")}
+              >
+                <KeyRound size={17} />
+                {sidebarOpen && <span>Change Password</span>}
+              </button>
+            </div>
           </div>
         </div>
       </aside>
