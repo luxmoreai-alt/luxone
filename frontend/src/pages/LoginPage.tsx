@@ -301,7 +301,7 @@ export default function LoginPage() {
                       maxLength={PASSWORD_MAX_LENGTH}
                       value={password}
                       onChange={(e) => {
-                        setPassword(e.target.value.replace(/\s/g, "").slice(0, PASSWORD_MAX_LENGTH));
+                        setPassword(e.target.value.slice(0, PASSWORD_MAX_LENGTH));
                         setLoginErrors((current) => ({ ...current, password: undefined }));
                         if (error) setError("");
                       }}
