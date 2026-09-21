@@ -11,7 +11,7 @@ import os
 import json
 from urllib import parse as urllib_parse, request as urllib_request, error as urllib_error
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import filters, status, viewsets
+from rest_framework import filter, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response

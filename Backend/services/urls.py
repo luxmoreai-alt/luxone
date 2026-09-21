@@ -25,7 +25,7 @@ from .views import (
     ServiceMembersAPIView,
     ServicesEnableAPIView,
     ServicesSetupStatusAPIView,
-    ServiceTeamMembersAPIView,
+    ServiceTeamMembersAPIView, 
 )
 
 urlpatterns = [
