@@ -776,6 +776,9 @@ export default function InventoryFormPage({ moduleKey }: Props) {
       const hasInvalidQuantityRow = itemRows.some(
         (item) => String(item.product || "").trim().length > 0 && Number(item.quantity || 0) <= 0
       );
+      const hasNegativeValueRow = itemRows.some(
+        (item) => [item.quantity, item.listPrice, item.discount, item.tax].some((value) => Number(value || 0) < 0)
+      );
 
       if (!hasSelectedProduct) {
         setError("Add at least one item and select a product from the dropdown.");
@@ -789,6 +792,11 @@ export default function InventoryFormPage({ moduleKey }: Props) {
 
       if (hasInvalidQuantityRow) {
         setError("Each selected item needs a quantity greater than 0.");
+        return;
+      }
+
+      if (hasNegativeValueRow) {
+        setError("Quantity, list price, discount, and tax must be zero or greater.");
         return;
       }
     }
@@ -960,7 +968,11 @@ export default function InventoryFormPage({ moduleKey }: Props) {
                   <Field label="Email"><input className={inputClass} value={anyForm.email || ""} onChange={(e) => setForm({ ...anyForm, email: e.target.value })} /></Field>
                   <Field label="Phone"><input className={inputClass} value={anyForm.phone || ""} onChange={(e) => setForm({ ...anyForm, phone: e.target.value })} /></Field>
                   <Field label="Website"><input className={inputClass} value={anyForm.website || ""} onChange={(e) => setForm({ ...anyForm, website: e.target.value })} /></Field>
-                  <Field label="Category"><input className={inputClass} value={anyForm.category || ""} onChange={(e) => setForm({ ...anyForm, category: e.target.value })} /></Field>
+                  <Field label="Category"><select className={inputClass} value={anyForm.category || ""} onChange={(e) => setForm({ ...anyForm, category: e.target.value })}>
+                    <option value="">Select category</option>
+                    {anyForm.category && anyForm.category !== "Technology" ? <option value={anyForm.category}>{anyForm.category}</option> : null}
+                    <option value="Technology">Technology</option>
+                  </select></Field>
                   <div className="md:col-span-2"><Field label="Description"><textarea className={textareaClass} value={anyForm.description || ""} onChange={(e) => setForm({ ...anyForm, description: e.target.value })} /></Field></div>
                 </>
               )}
