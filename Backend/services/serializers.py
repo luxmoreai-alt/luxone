@@ -996,6 +996,7 @@ class ServiceCompanyDetailsSerializer(serializers.ModelSerializer):
                 "Phone number can contain only numbers and valid phone characters."
             )
         return value   
+        return value    
 
     def get_public_booking_base_url(self, obj):
         return get_public_booking_base_url()
