@@ -10,7 +10,6 @@ import {
   Shield,
   LogOut,
   Building2,
-  KeyRound,
   UserCog,
   Briefcase,
   Clock,
