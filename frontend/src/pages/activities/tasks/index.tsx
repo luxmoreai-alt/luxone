@@ -4,7 +4,7 @@ import { ChevronDown } from "lucide-react";
 import DashboardLayout from "../../../components/layout/DashboardLayout";
 import ModuleToolbar from "../../../components/crm/ModuleToolbar";
 import FilterSidebar from "../../../components/crm/FilterSidebar";
-import TasksKanbanBoard, { type TasksKanbanBoardHandle } from "./TasksKanbanBoard";
+import TasksKanbanBoard, { type TaskGroupBy, type TasksKanbanBoardHandle } from "./TasksKanbanBoard";
 import type { FilterSection } from "../../../lib/shared/crmTypes";
 
 type FilterMap = Record<string, string>;
@@ -33,6 +33,22 @@ const TASK_FILTER_SECTIONS: FilterSection[] = [
 
 const GROUP_BY_OPTIONS = ["Tasks by Status", "Tasks by Priority", "Tasks by Owner", "Tasks by Due Date"];
 
+const TASK_SORT_FIELDS = [
+  "Priority",
+  "Status",
+  "Due Date",
+  "Task Owner",
+  "Created Date",
+  "Modified Date",
+];
+
+const GROUP_BY_KEYS: Record<string, TaskGroupBy> = {
+  "Tasks by Status": "status",
+  "Tasks by Priority": "priority",
+  "Tasks by Owner": "owner",
+  "Tasks by Due Date": "dueDate",
+};
+
 export default function TasksPage() {
   const navigate = useNavigate();
   const [filterOpen, setFilterOpen] = useState(false);
@@ -54,6 +70,7 @@ export default function TasksPage() {
           viewName="All Tasks"
           createButtonLabel="Create Task"
           showImportActions={false}
+          sortFields={TASK_SORT_FIELDS}
           isFilterOpen={filterOpen}
           onToggleFilter={() => setFilterOpen((prev) => !prev)}
           onCreateClick={() => navigate("/tasks/create")}
@@ -108,7 +125,7 @@ export default function TasksPage() {
           )}
 
           <div className="min-w-0 flex-1 overflow-auto">
-            <TasksKanbanBoard ref={boardRef} filters={filters} />
+            <TasksKanbanBoard ref={boardRef} filters={filters} groupBy={GROUP_BY_KEYS[groupBy]} />
           </div>
         </div>
       </div>

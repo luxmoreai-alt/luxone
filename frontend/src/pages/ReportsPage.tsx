@@ -115,6 +115,7 @@ export default function ReportsPage() {
       });
       setReportData(response);
     } catch (err) {
+      setReportData(null);
       setError(err instanceof Error ? err.message : "Failed to generate report.");
     } finally {
       setRunningReport(false);
