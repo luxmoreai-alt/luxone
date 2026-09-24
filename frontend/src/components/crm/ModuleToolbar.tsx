@@ -167,7 +167,7 @@ export default function ModuleToolbar({
       if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
         setFieldDropdownOpen(false);
         setOrderDropdownOpen(false);
-      }
+   }
     };
 
     document.addEventListener("mousedown", handleClickOutside);
