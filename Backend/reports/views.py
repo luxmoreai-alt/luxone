@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.db.models import Count, Q, Sum
+from django.db.models.functions import TruncDate
 from django.utils import timezone
 
 from accounts.models import Account
@@ -280,18 +281,52 @@ class AnalyticsDashboardView(APIView):
             | Q(converted_contact__isnull=False)
             | Q(converted_deal__isnull=False)
         )
+        deals_today = deals_today_qs.count()
+        deals_yesterday = deals_yesterday_qs.count()
+        revenue_today = float(invoices_today_qs.aggregate(total=Sum("grand_total")).get("total") or 0)
+        revenue_yesterday = float(invoices_yesterday_qs.aggregate(total=Sum("grand_total")).get("total") or 0)
+        leads_this_month = leads_this_month_qs.count()
+        converted_leads_this_month = converted_leads_this_month_qs.count()
+        pipeline_amount = float(pipeline_qs.aggregate(total=Sum("amount")).get("total") or 0)
+        pipeline_deals = pipeline_qs.count()
+        won_today_revenue = float(won_today_qs.aggregate(total=Sum("amount")).get("total") or 0)
+        won_today_deals = won_today_qs.count()
+        stale_pipeline_qs = pipeline_qs.filter(updated_at__date__lt=today - timedelta(days=21))
+        stale_pipeline_deals = stale_pipeline_qs.count()
+        stale_pipeline_amount = float(stale_pipeline_qs.aggregate(total=Sum("amount")).get("total") or 0)
+        overdue_invoices = overdue_invoices_qs.count()
+        overdue_invoice_amount = float(overdue_invoices_qs.aggregate(total=Sum("grand_total")).get("total") or 0)
 
-        daily_series = []
-        for offset in range(6, -1, -1):
-            day = today - timedelta(days=offset)
-            daily_series.append(
-                {
-                    "day": day.strftime("%a"),
-                    "leads": Lead.objects.filter(created_at__date=day).count(),
-                    "deals": Deal.objects.filter(created_at__date=day).count(),
-                    "revenue": float(Invoice.objects.filter(invoice_date=day).aggregate(total=Sum("grand_total")).get("total") or 0),
-                }
-            )
+        series_start = today - timedelta(days=6)
+        lead_series = {
+            row["day"]: row["total"]
+            for row in Lead.objects.filter(created_at__date__range=(series_start, today))
+            .annotate(day=TruncDate("created_at"))
+            .values("day")
+            .annotate(total=Count("id"))
+        }
+        deal_series = {
+            row["day"]: row["total"]
+            for row in Deal.objects.filter(created_at__date__range=(series_start, today))
+            .annotate(day=TruncDate("created_at"))
+            .values("day")
+            .annotate(total=Count("id"))
+        }
+        revenue_series = {
+            row["invoice_date"]: row["total"]
+            for row in Invoice.objects.filter(invoice_date__range=(series_start, today))
+            .values("invoice_date")
+            .annotate(total=Sum("grand_total"))
+        }
+        daily_series = [
+            {
+                "day": (day := today - timedelta(days=offset)).strftime("%a"),
+                "leads": lead_series.get(day, 0),
+                "deals": deal_series.get(day, 0),
+                "revenue": float(revenue_series.get(day) or 0),
+            }
+            for offset in range(6, -1, -1)
+        ]
 
         lead_sources = []
         for row in (
@@ -355,27 +390,27 @@ class AnalyticsDashboardView(APIView):
         payload = {
             "hero": {
                 "updated": timezone.now().isoformat(),
-                "revenue_today": float(invoices_today_qs.aggregate(total=Sum("grand_total")).get("total") or 0),
+                "revenue_today": revenue_today,
                 "leads_today": leads_today,
-                "deals_today": deals_today_qs.count(),
+                "deals_today": deals_today,
             },
             "daily_metrics": {
                 "leads_today": leads_today,
                 "leads_yesterday": leads_yesterday,
                 "accounts_today": accounts_today,
                 "accounts_yesterday": accounts_yesterday,
-                "deals_today": deals_today_qs.count(),
-                "deals_yesterday": deals_yesterday_qs.count(),
-                "revenue_today": float(invoices_today_qs.aggregate(total=Sum("grand_total")).get("total") or 0),
-                "revenue_yesterday": float(invoices_yesterday_qs.aggregate(total=Sum("grand_total")).get("total") or 0),
+                "deals_today": deals_today,
+                "deals_yesterday": deals_yesterday,
+                "revenue_today": revenue_today,
+                "revenue_yesterday": revenue_yesterday,
             },
             "month_scorecard": {
-                "leads_created": leads_this_month_qs.count(),
+                "leads_created": leads_this_month,
                 "contacts_added": Contact.objects.filter(created_at__date__gte=start_month).count(),
                 "deals_created": Deal.objects.filter(created_at__date__gte=start_month).count(),
                 "deals_won": Deal.objects.filter(is_won=True, closing_date__gte=start_month).count(),
                 "revenue_won": float(Deal.objects.filter(is_won=True, closing_date__gte=start_month).aggregate(total=Sum("amount")).get("total") or 0),
-                "open_amount": float(pipeline_qs.aggregate(total=Sum("amount")).get("total") or 0),
+                "open_amount": pipeline_amount,
             },
             "revenue_target": {
                 "achieved": float(Invoice.objects.filter(invoice_date__gte=start_month).aggregate(total=Sum("grand_total")).get("total") or 0),
@@ -383,11 +418,11 @@ class AnalyticsDashboardView(APIView):
                 "goal": 300000,
             },
             "risk": {
-                "stale_pipeline_deals": pipeline_qs.filter(updated_at__date__lt=today - timedelta(days=21)).count(),
-                "stale_pipeline_amount": float(pipeline_qs.filter(updated_at__date__lt=today - timedelta(days=21)).aggregate(total=Sum("amount")).get("total") or 0),
-                "overdue_invoices": overdue_invoices_qs.count(),
-                "overdue_invoice_amount": float(overdue_invoices_qs.aggregate(total=Sum("grand_total")).get("total") or 0),
-                "lead_conversion_rate": round((converted_leads_this_month_qs.count() / max(leads_this_month_qs.count(), 1)) * 100),
+                "stale_pipeline_deals": stale_pipeline_deals,
+                "stale_pipeline_amount": stale_pipeline_amount,
+                "overdue_invoices": overdue_invoices,
+                "overdue_invoice_amount": overdue_invoice_amount,
+                "lead_conversion_rate": round((converted_leads_this_month / max(leads_this_month, 1)) * 100),
                 "top_source": lead_sources[0] if lead_sources else None,
             },
             "daily_series": daily_series,
@@ -396,10 +431,10 @@ class AnalyticsDashboardView(APIView):
             "recent_signals": recent_signals[:7],
             "top_revenue_accounts": top_revenue_accounts,
             "pipeline_health": {
-                "open_amount": float(pipeline_qs.aggregate(total=Sum("amount")).get("total") or 0),
-                "pipeline_deals": pipeline_qs.count(),
-                "won_revenue": float(won_today_qs.aggregate(total=Sum("amount")).get("total") or 0),
-                "won_deals": won_today_qs.count(),
+                "open_amount": pipeline_amount,
+                "pipeline_deals": pipeline_deals,
+                "won_revenue": won_today_revenue,
+                "won_deals": won_today_deals,
             },
         }
         return Response(payload, status=status.HTTP_200_OK)

@@ -6,6 +6,7 @@ import type { CompanyDetails, DomainMapping, ServiceSettings, TeamMember } from 
 
 const inputClass = "h-[38px] w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-blue-500";
 const textareaClass = "min-h-[96px] w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500";
+const phonePattern = /^\+?[0-9\-().\s]+$/;
 
 export default function CompanyDetailsPage() {
   const [form, setForm] = useState<CompanyDetails>({ id: "", companyName: "", companyEmail: "", contactPerson: "", phone: "", address: "" });
@@ -15,6 +16,7 @@ export default function CompanyDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{ companyName?: string; phone?: string }>({});
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
   const [usageSummary, setUsageSummary] = useState({ services: 0, appointments: 0, jobSheets: 0 });
 
@@ -49,11 +51,28 @@ export default function CompanyDetailsPage() {
   }, []);
 
   const handleSave = async () => {
+    const nextFieldErrors: { companyName?: string; phone?: string } = {};
+    const companyName = form.companyName.trim();
+    const phone = form.phone.trim();
+
+    if (!companyName) nextFieldErrors.companyName = "Company Name is required.";
+    const phoneDigits = phone.replace(/\D/g, "");
+    if (phone && (!phonePattern.test(phone) || phoneDigits.length < 7 || phoneDigits.length > 15)) {
+      nextFieldErrors.phone = "Enter a valid phone number.";
+    }
+    if (Object.keys(nextFieldErrors).length) {
+      setFieldErrors(nextFieldErrors);
+      setError("Please correct the highlighted fields before saving.");
+      setSavedMessage(null);
+      return;
+    }
+
     try {
       setSaving(true);
       setError(null);
+      setFieldErrors({});
       setSavedMessage(null);
-      setForm(await updateCompanyDetails(form));
+      setForm(await updateCompanyDetails({ ...form, companyName, phone }));
       setSavedMessage("Company details updated.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to update company details.");
@@ -81,10 +100,10 @@ export default function CompanyDetailsPage() {
         <div className="grid gap-4 lg:grid-cols-[1fr_0.8fr]">
           <CRMSectionCard title="Basic Information">
             <div className="grid gap-4 md:grid-cols-2">
-              <div><label className="mb-1.5 block text-sm font-medium text-slate-700">Company Name</label><input className={inputClass} value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} /></div>
+              <div><label className="mb-1.5 block text-sm font-medium text-slate-700">Company Name <span className="text-rose-500">*</span></label><input required aria-invalid={Boolean(fieldErrors.companyName)} className={`${inputClass} ${fieldErrors.companyName ? "border-rose-400" : ""}`} value={form.companyName} onChange={(e) => { setForm({ ...form, companyName: e.target.value }); setFieldErrors((current) => ({ ...current, companyName: undefined })); }} />{fieldErrors.companyName ? <p className="mt-1 text-xs text-rose-600">{fieldErrors.companyName}</p> : null}</div>
               <div><label className="mb-1.5 block text-sm font-medium text-slate-700">Company Email</label><input className={inputClass} value={form.companyEmail} onChange={(e) => setForm({ ...form, companyEmail: e.target.value })} /></div>
               <div><label className="mb-1.5 block text-sm font-medium text-slate-700">Contact Person</label><input className={inputClass} value={form.contactPerson} onChange={(e) => setForm({ ...form, contactPerson: e.target.value })} /></div>
-              <div><label className="mb-1.5 block text-sm font-medium text-slate-700">Phone</label><input className={inputClass} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
+              <div><label className="mb-1.5 block text-sm font-medium text-slate-700">Phone</label><input aria-invalid={Boolean(fieldErrors.phone)} className={`${inputClass} ${fieldErrors.phone ? "border-rose-400" : ""}`} value={form.phone} onChange={(e) => { setForm({ ...form, phone: e.target.value }); setFieldErrors((current) => ({ ...current, phone: undefined })); }} />{fieldErrors.phone ? <p className="mt-1 text-xs text-rose-600">{fieldErrors.phone}</p> : null}</div>
               <div className="md:col-span-2"><label className="mb-1.5 block text-sm font-medium text-slate-700">Address</label><textarea className={textareaClass} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></div>
             </div>
           </CRMSectionCard>
