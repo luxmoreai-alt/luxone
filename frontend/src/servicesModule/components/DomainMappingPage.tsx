@@ -59,10 +59,12 @@ export default function DomainMappingPage() {
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  const handleCopy = async (value: string, label: string, rowId?: string) => {
-    try {
-      await navigator.clipboard.writeText(value);
-    } catch {
+  const handleCopy = async (value: string, label: string, rowId: string) => {
+    const success = await copyToClipboard(value);
+    if (success) {
+      setCopiedId(rowId);
+      setTimeout(() => setCopiedId(null), 2000);
+    } else {
       setError(`${label} could not be copied.`);
     }
   };
@@ -146,6 +148,7 @@ export default function DomainMappingPage() {
                       type="button"
                       onClick={() => void handleVerify(row.id)}
                       disabled={verifyingId === row.id}
+                      aria-busy={verifyingId === row.id}
                       className="inline-flex min-w-23 items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-xs font-medium text-white disabled:cursor-wait disabled:opacity-60"
                     >
                       {verifyingId === row.id ? (
@@ -161,7 +164,12 @@ export default function DomainMappingPage() {
                 <div className="grid gap-4 sm:grid-cols-4">
                   <div><p className="text-xs uppercase tracking-wide text-slate-500">Account</p><p className="mt-1 text-sm text-slate-800">{row.accountType.toUpperCase()}</p></div>
                   <div><p className="text-xs uppercase tracking-wide text-slate-500">CNAME Target</p><p className="mt-1 text-sm text-slate-800">{row.cnameTarget}</p></div>
-                  <div><p className="text-xs uppercase tracking-wide text-slate-500">Verification</p><p className="mt-1 text-sm text-slate-800">{row.verificationStatus}</p></div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Verification</p>
+                    <p className="mt-1 text-sm text-slate-800">
+                      {verifyingId === row.id ? "Checking DNS..." : row.verificationStatus}
+                    </p>
+                  </div>
                   <div><p className="text-xs uppercase tracking-wide text-slate-500">Portal URL</p><p className="mt-1 text-sm text-slate-800">{row.publicBookingBaseUrl || "-"}</p></div>
                 </div>
               </CRMSectionCard>
@@ -169,7 +177,7 @@ export default function DomainMappingPage() {
           </div>
         ) : null}
       </div>
-      <DomainMappingModal open={open} onClose={() => setOpen(false)} onSaved={() => void load()} />
+      <DomainMappingModal initialMapping={null} open={open} onClose={() => setOpen(false)} onSaved={() => void load()} />
     </DashboardLayout>
   );
 }
