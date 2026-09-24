@@ -15,6 +15,12 @@ export default function FiscalYearPage() {
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
   const [usageSummary, setUsageSummary] = useState({ appointmentsInPeriod: 0, completedAppointments: 0, jobSheetsInPeriod: 0 });
 
+  const handleFiscalYearTypeChange = (fiscalYearType: FiscalYearSettings["fiscalYearType"]) => {
+    setForm((current) => ({ ...current, fiscalYearType, startsInMonth: 1 }));
+    setError(null);
+    setSavedMessage(null);
+  };
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -23,7 +29,7 @@ export default function FiscalYearPage() {
           listAppointments(),
           listJobSheets(),
         ]);
-        setForm(settings);
+        setForm({ ...settings, startsInMonth: settings.fiscalYearType === "standard" ? 1 : settings.startsInMonth });
         const inRange = (value?: string) => {
           if (!value || !settings.currentPeriodStart || !settings.currentPeriodEnd) return false;
           return value >= settings.currentPeriodStart && value <= settings.currentPeriodEnd;
@@ -44,7 +50,8 @@ export default function FiscalYearPage() {
   }, []);
 
   const handleSave = async () => {
-    if (form.startsInMonth < 1 || form.startsInMonth > 12) {
+    const valuesToSave = form.fiscalYearType === "standard" ? { ...form, startsInMonth: 1 } : form;
+    if (valuesToSave.startsInMonth < 1 || valuesToSave.startsInMonth > 12) {
       setError("Fiscal year month must be between 1 and 12.");
       return;
     }
@@ -52,7 +59,7 @@ export default function FiscalYearPage() {
       setSaving(true);
       setError(null);
       setSavedMessage(null);
-      setForm(await updateFiscalYearSettings(form));
+      setForm(await updateFiscalYearSettings(valuesToSave));
       setSavedMessage("Fiscal year settings updated.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to update fiscal year settings.");
@@ -77,19 +84,27 @@ export default function FiscalYearPage() {
           <div className="grid gap-4 md:grid-cols-2">
             <label className="rounded-lg border border-slate-200 p-4 text-sm text-slate-700">
               <div className="flex items-center gap-2">
-                <input type="radio" checked={form.fiscalYearType === "standard"} onChange={() => setForm({ ...form, fiscalYearType: "standard" })} />
+                <input type="radio" checked={form.fiscalYearType === "standard"} onChange={() => handleFiscalYearTypeChange("standard")} />
                 Standard Fiscal Year
               </div>
             </label>
             <label className="rounded-lg border border-slate-200 p-4 text-sm text-slate-700">
               <div className="flex items-center gap-2">
-                <input type="radio" checked={form.fiscalYearType === "custom"} onChange={() => setForm({ ...form, fiscalYearType: "custom" })} />
+                <input type="radio" checked={form.fiscalYearType === "custom"} onChange={() => handleFiscalYearTypeChange("custom")} />
                 Custom Fiscal Year
               </div>
             </label>
             <div className="md:col-span-2">
-              <label className="mb-1.5 block text-sm font-medium text-slate-700">Fiscal year begins in month</label>
-              <select className={inputClass} value={form.startsInMonth} onChange={(e) => setForm({ ...form, startsInMonth: Number(e.target.value) })}>
+              <label htmlFor="fiscal-year-start-month" className="mb-1.5 block text-sm font-medium text-slate-700">
+                {form.fiscalYearType === "custom" ? "Custom fiscal year starts in month" : "Fiscal year starts in January"}
+              </label>
+              <select
+                id="fiscal-year-start-month"
+                className={`${inputClass} disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500`}
+                value={form.startsInMonth}
+                disabled={form.fiscalYearType === "standard"}
+                onChange={(e) => setForm((current) => ({ ...current, startsInMonth: Number(e.target.value) }))}
+              >
                 {fiscalYearMonthOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </div>
