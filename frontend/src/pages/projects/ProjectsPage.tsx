@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import { apiRequest } from "../../api/client";
 import type { Project } from "./types";
+import { getProjectTaskProgress } from "./types";
 import { ProjectPriorityBadge,ProjectStatusBadge } from "./ProjectStatusBadge";
 import { FolderKanban, Search, Plus, Filter, LayoutList, KanbanSquare } from "lucide-react";
 
@@ -24,22 +25,21 @@ export default function ProjectsPage() {
         const response = await apiRequest("/projects/");
         const res = response as Project[] | { results: Project[] };
         const data = Array.isArray(res) ? res : res.results || [];
-        const projectsWithProgress = await Promise.all(
+        const projectsWithTaskProgress = await Promise.all(
           data.map(async (project) => {
             try {
               const detail = await apiRequest(`/projects/${project.id}/`);
-              const tasks = (detail as Project).tasks ?? [];
-              const completedTasks = tasks.filter((task) => task.status === "Completed").length;
+              const detailProject = detail as Project;
               return {
                 ...project,
-                progress: tasks.length > 0 ? Math.round((completedTasks / tasks.length) * 100) : 0,
+                progress: getProjectTaskProgress(detailProject.tasks, project.progress),
               };
             } catch {
               return project;
             }
           })
         );
-        setProjects(projectsWithProgress);
+        setProjects(projectsWithTaskProgress);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to fetch projects");
       } finally {
@@ -188,6 +188,7 @@ function ProjectsTable({ projects }: { projects: Project[] }) {
             <th className="px-4 py-3 font-medium">Project Code</th>
             <th className="px-4 py-3 font-medium">Project Name</th>
 
+
             <th className="px-4 py-3 font-medium">Owner</th>
             <th className="px-4 py-3 font-medium">Status</th>
             <th className="px-4 py-3 font-medium">Priority</th>
@@ -207,6 +208,7 @@ function ProjectsTable({ projects }: { projects: Project[] }) {
                   {project.name}
                 </Link>
               </td>
+
 
               <td className="px-4 py-4 text-slate-700">{project.owner || "—"}</td>
               <td className="px-4 py-4">
@@ -275,6 +277,7 @@ function ProjectsCards({ projects }: { projects: Project[] }) {
           </div>
 
           <div className="space-y-2 text-sm text-slate-600">
+
 
             <p><span className="font-medium text-slate-800">Owner:</span> {project.owner || "—"}</p>
             <p><span className="font-medium text-slate-800">Due:</span> {project.due_date || "—"}</p>
