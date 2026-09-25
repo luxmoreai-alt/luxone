@@ -70,7 +70,7 @@ function UserRow({ user, onClick }: { user: OrgUser; onClick: () => void }) {
         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-700 uppercase">
           {user.email[0]}
         </div>
-        <span className="text-sm text-slate-700 truncate max-w-[200px]">{user.email}</span>
+        <span className="text-sm text-slate-700 truncate max-w-[200px]">{user.name || user.email}</span>
         <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
           {user.team_label || user.team || "General"}
         </span>
@@ -122,9 +122,9 @@ function UnassignedRow({
       <div className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-3 mx-1 my-1">
         <div className="flex items-center gap-2 mb-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-700 uppercase shrink-0">
-            {user.email[0]}
+            {(user.name || user.email)[0]}
           </div>
-          <span className="text-sm font-medium text-slate-700 truncate">{user.email}</span>
+          <span className="text-sm font-medium text-slate-700 truncate">{user.name || user.email}</span>
         </div>
 
         <label className="mb-1 block text-xs font-semibold text-violet-700">
@@ -217,11 +217,11 @@ function ManagerCard({
       >
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-violet-200 text-sm font-bold text-violet-800 uppercase">
-            {manager.email[0]}
+            {(manager.name || manager.email)[0]}
           </div>
           <div>
             <p className="text-sm font-semibold text-slate-800 truncate max-w-[200px]">
-              {manager.email}
+              {manager.name || manager.email}
             </p>
             <p className="text-xs text-violet-600">{employees.length} employee{employees.length !== 1 ? "s" : ""}</p>
           </div>
