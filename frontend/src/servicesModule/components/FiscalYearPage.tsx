@@ -2,13 +2,13 @@ import { useEffect, useState } from "react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import CRMSectionCard from "../../components/crm/CRMSectionCard";
 import { getFiscalYearSettings, listAppointments, listJobSheets, updateFiscalYearSettings } from "../api";
-import { fiscalYearMonthOptions } from "../config";
 import type { FiscalYearSettings } from "../types";
 
 const inputClass = "h-[38px] w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-blue-500";
+const customFiscalYearStorageKey = "services.customFiscalYearRange";
 
 export default function FiscalYearPage() {
-  const [form, setForm] = useState<FiscalYearSettings>({ id: "", fiscalYearType: "standard", startsInMonth: 1 });
+  const [form, setForm] = useState<FiscalYearSettings>({ id: "", fiscalYearType: "standard", startsInMonth: 1, customStartDate: "", customEndDate: "" });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,10 +29,19 @@ export default function FiscalYearPage() {
           listAppointments(),
           listJobSheets(),
         ]);
-        setForm({ ...settings, startsInMonth: settings.fiscalYearType === "standard" ? 1 : settings.startsInMonth });
+        const storedRange = localStorage.getItem(customFiscalYearStorageKey);
+        const customRange = storedRange ? JSON.parse(storedRange) as { startDate?: string; endDate?: string } : {};
+        setForm({
+          ...settings,
+          startsInMonth: settings.fiscalYearType === "standard" ? 1 : settings.startsInMonth,
+          customStartDate: customRange.startDate || settings.currentPeriodStart || "",
+          customEndDate: customRange.endDate || settings.currentPeriodEnd || "",
+        });
         const inRange = (value?: string) => {
-          if (!value || !settings.currentPeriodStart || !settings.currentPeriodEnd) return false;
-          return value >= settings.currentPeriodStart && value <= settings.currentPeriodEnd;
+          const startDate = settings.fiscalYearType === "custom" ? customRange.startDate || settings.currentPeriodStart : settings.currentPeriodStart;
+          const endDate = settings.fiscalYearType === "custom" ? customRange.endDate || settings.currentPeriodEnd : settings.currentPeriodEnd;
+          if (!value || !startDate || !endDate) return false;
+          return value >= startDate && value <= endDate;
         };
         const appointmentsInPeriod = appointments.filter((item) => inRange(item.appointmentDate));
         setUsageSummary({
@@ -50,7 +59,17 @@ export default function FiscalYearPage() {
   }, []);
 
   const handleSave = async () => {
-    const valuesToSave = form.fiscalYearType === "standard" ? { ...form, startsInMonth: 1 } : form;
+    const valuesToSave = form.fiscalYearType === "standard"
+      ? { ...form, startsInMonth: 1 }
+      : { ...form, startsInMonth: form.customStartDate ? Number(form.customStartDate.slice(5, 7)) : form.startsInMonth };
+    if (valuesToSave.fiscalYearType === "custom" && (!valuesToSave.customStartDate || !valuesToSave.customEndDate)) {
+      setError("Select both a custom fiscal year start date and end date.");
+      return;
+    }
+    if (valuesToSave.fiscalYearType === "custom" && valuesToSave.customStartDate! >= valuesToSave.customEndDate!) {
+      setError("Custom fiscal year end date must be after the start date.");
+      return;
+    }
     if (valuesToSave.startsInMonth < 1 || valuesToSave.startsInMonth > 12) {
       setError("Fiscal year month must be between 1 and 12.");
       return;
@@ -59,7 +78,11 @@ export default function FiscalYearPage() {
       setSaving(true);
       setError(null);
       setSavedMessage(null);
-      setForm(await updateFiscalYearSettings(valuesToSave));
+      const updatedSettings = await updateFiscalYearSettings(valuesToSave);
+      if (valuesToSave.fiscalYearType === "custom") {
+        localStorage.setItem(customFiscalYearStorageKey, JSON.stringify({ startDate: valuesToSave.customStartDate, endDate: valuesToSave.customEndDate }));
+      }
+      setForm({ ...updatedSettings, customStartDate: valuesToSave.customStartDate, customEndDate: valuesToSave.customEndDate });
       setSavedMessage("Fiscal year settings updated.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to update fiscal year settings.");
@@ -94,22 +117,22 @@ export default function FiscalYearPage() {
                 Custom Fiscal Year
               </div>
             </label>
-            <div className="md:col-span-2">
-              <label htmlFor="fiscal-year-start-month" className="mb-1.5 block text-sm font-medium text-slate-700">
-                {form.fiscalYearType === "custom" ? "Custom fiscal year starts in month" : "Fiscal year starts in January"}
-              </label>
-              <select
-                id="fiscal-year-start-month"
-                className={`${inputClass} disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500`}
-                value={form.startsInMonth}
-                disabled={form.fiscalYearType === "standard"}
-                onChange={(e) => setForm((current) => ({ ...current, startsInMonth: Number(e.target.value) }))}
-              >
-                {fiscalYearMonthOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
-            </div>
+            {form.fiscalYearType === "custom" ? (
+              <div className="grid gap-4 md:col-span-2 md:grid-cols-2">
+                <label htmlFor="custom-fiscal-year-start" className="text-sm font-medium text-slate-700">
+                  Start date
+                  <input id="custom-fiscal-year-start" type="date" className={`${inputClass} mt-1.5`} value={form.customStartDate || ""} onChange={(e) => setForm((current) => ({ ...current, customStartDate: e.target.value }))} />
+                </label>
+                <label htmlFor="custom-fiscal-year-end" className="text-sm font-medium text-slate-700">
+                  End date
+                  <input id="custom-fiscal-year-end" type="date" className={`${inputClass} mt-1.5`} value={form.customEndDate || ""} min={form.customStartDate || undefined} onChange={(e) => setForm((current) => ({ ...current, customEndDate: e.target.value }))} />
+                </label>
+              </div>
+            ) : (
+              <div className="md:col-span-2 text-sm text-slate-600">Fiscal year starts in January.</div>
+            )}
             <div><p className="text-xs uppercase tracking-wide text-slate-500">Current Fiscal Year</p><p className="mt-1 text-sm text-slate-800">{form.fiscalYearLabel || "-"}</p></div>
-            <div><p className="text-xs uppercase tracking-wide text-slate-500">Current Period</p><p className="mt-1 text-sm text-slate-800">{form.currentPeriodStart && form.currentPeriodEnd ? `${form.currentPeriodStart} to ${form.currentPeriodEnd}` : "-"}</p></div>
+            <div><p className="text-xs uppercase tracking-wide text-slate-500">Current Period</p><p className="mt-1 text-sm text-slate-800">{form.fiscalYearType === "custom" && form.customStartDate && form.customEndDate ? `${form.customStartDate} to ${form.customEndDate}` : form.currentPeriodStart && form.currentPeriodEnd ? `${form.currentPeriodStart} to ${form.currentPeriodEnd}` : "-"}</p></div>
           </div>
         </CRMSectionCard>
         <div className="grid gap-3 md:grid-cols-3">
