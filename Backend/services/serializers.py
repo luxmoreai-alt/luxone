@@ -990,12 +990,23 @@ class ServiceCompanyDetailsSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["created_at", "updated_at"]
 
+    def validate_company_name(self, value):
+        normalized = (value or "").strip()
+        if not normalized:
+            raise serializers.ValidationError("Company name is required.")
+        return normalized
+
     def validate_phone(self, value):
-        if value and not re.fullmatch(r"[0-9+()\-\s]+", value):
+        if value is None:
+            return value
+        normalized = value.strip()
+        if not normalized:
+            return ""
+        if not re.fullmatch(r"^[0-9+()\-.\s]{7,20}$", normalized):
             raise serializers.ValidationError(
-                "Phone number can contain only numbers and valid phone characters."
+                "Phone number must contain only valid phone characters and be 7 to 20 characters long."
             )
-        return value   
+        return normalized
 
     def get_public_booking_base_url(self, obj):
         return get_public_booking_base_url()
