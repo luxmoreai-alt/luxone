@@ -18,6 +18,7 @@ from activities.services import (
     create_deal_activity,
     create_lead_activity,
 )
+
 from contacts.models import Contact
 from deals.models import Deal
 from inventory.models import Invoice, Product, SalesOrder
