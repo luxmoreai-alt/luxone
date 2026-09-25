@@ -145,6 +145,23 @@ class ReportDashboardTests(APITestCase):
         self.assertEqual(response.data["risk"]["top_source"]["name"], "Advertisement")
         self.assertEqual(response.data["pipeline_health"]["won_deals"], 1)
 
+    def test_analytics_dashboard_uses_bounded_database_queries(self):
+        Invoice.objects.create(
+            subject="Invoice-001",
+            owner=self.user,
+            account=self.account,
+            grand_total="125000.00",
+            invoice_date=self.today,
+            due_date=self.today + timedelta(days=7),
+            status="Unpaid",
+        )
+
+        with self.assertNumQueries(25):
+            response = self.client.get("/api/dashboard/analytics/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["hero"]["leads_today"], 1)
+
     def test_my_requests_dashboard_includes_task_statuses_that_are_still_open(self):
         Task.objects.create(
             subject="Follow up proposal",

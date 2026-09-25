@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.db.models import Count, Q, Sum
+from django.db.models.functions import TruncDate
 from django.utils import timezone
 
 from accounts.models import Account
@@ -260,26 +261,54 @@ class AnalyticsDashboardView(APIView):
         today = timezone.localdate()
         yesterday = today - timedelta(days=1)
         start_month = today.replace(day=1)
-        previous_month_end = start_month - timedelta(days=1)
-        previous_month_start = previous_month_end.replace(day=1)
+        day_window_start = today - timedelta(days=6)
+        stale_pipeline_threshold = today - timedelta(days=21)
 
-        leads_today = Lead.objects.filter(created_at__date=today).count()
-        leads_yesterday = Lead.objects.filter(created_at__date=yesterday).count()
-        accounts_today = Account.objects.filter(created_at__date=today).count()
-        accounts_yesterday = Account.objects.filter(created_at__date=yesterday).count()
-        deals_today_qs = Deal.objects.filter(created_at__date=today)
-        deals_yesterday_qs = Deal.objects.filter(created_at__date=yesterday)
-        invoices_today_qs = Invoice.objects.filter(invoice_date=today)
-        invoices_yesterday_qs = Invoice.objects.filter(invoice_date=yesterday)
-        won_today_qs = Deal.objects.filter(is_won=True, closing_date=today)
-        pipeline_qs = Deal.objects.filter(is_closed=False)
-        overdue_invoices_qs = Invoice.objects.filter(due_date__lt=today).exclude(status__iexact="paid")
-        leads_this_month_qs = Lead.objects.filter(created_at__date__gte=start_month)
+        leads_qs = Lead.objects.all()
+        deals_qs = Deal.objects.all()
+        invoices_qs = Invoice.objects.all()
+        accounts_qs = Account.objects.all()
+        pipeline_qs = deals_qs.filter(is_closed=False)
+        stale_pipeline_qs = pipeline_qs.filter(updated_at__date__lt=stale_pipeline_threshold)
+        overdue_invoices_qs = invoices_qs.filter(due_date__lt=today).exclude(status__iexact="paid")
+
+        leads_today = leads_qs.filter(created_at__date=today).count()
+        leads_yesterday = leads_qs.filter(created_at__date=yesterday).count()
+        accounts_today = accounts_qs.filter(created_at__date=today).count()
+        accounts_yesterday = accounts_qs.filter(created_at__date=yesterday).count()
+        deals_today_qs = deals_qs.filter(created_at__date=today)
+        deals_yesterday_qs = deals_qs.filter(created_at__date=yesterday)
+        invoices_today_qs = invoices_qs.filter(invoice_date=today)
+        invoices_yesterday_qs = invoices_qs.filter(invoice_date=yesterday)
+        won_today_qs = deals_qs.filter(is_won=True, closing_date=today)
+        leads_this_month_qs = leads_qs.filter(created_at__date__gte=start_month)
         converted_leads_this_month_qs = leads_this_month_qs.filter(
             Q(converted_account__isnull=False)
             | Q(converted_contact__isnull=False)
             | Q(converted_deal__isnull=False)
         )
+
+        lead_day_map = {
+            row["day"].isoformat(): int(row["leads"] or 0)
+            for row in leads_qs.filter(created_at__date__gte=day_window_start)
+            .annotate(day=TruncDate("created_at"))
+            .values("day")
+            .annotate(leads=Count("id"))
+        }
+        deal_day_map = {
+            row["day"].isoformat(): int(row["deals"] or 0)
+            for row in deals_qs.filter(created_at__date__gte=day_window_start)
+            .annotate(day=TruncDate("created_at"))
+            .values("day")
+            .annotate(deals=Count("id"))
+        }
+        invoice_day_map = {
+            row["day"].isoformat(): float(row["revenue"] or 0)
+            for row in invoices_qs.filter(invoice_date__gte=day_window_start)
+            .annotate(day=TruncDate("invoice_date"))
+            .values("day")
+            .annotate(revenue=Sum("grand_total"))
+        }
 
         daily_series = []
         for offset in range(6, -1, -1):
@@ -287,21 +316,21 @@ class AnalyticsDashboardView(APIView):
             daily_series.append(
                 {
                     "day": day.strftime("%a"),
-                    "leads": Lead.objects.filter(created_at__date=day).count(),
-                    "deals": Deal.objects.filter(created_at__date=day).count(),
-                    "revenue": float(Invoice.objects.filter(invoice_date=day).aggregate(total=Sum("grand_total")).get("total") or 0),
+                    "leads": lead_day_map.get(day.isoformat(), 0),
+                    "deals": deal_day_map.get(day.isoformat(), 0),
+                    "revenue": float(invoice_day_map.get(day.isoformat(), 0) or 0),
                 }
             )
 
         lead_sources = []
         for row in (
-            Lead.objects.values("lead_source").annotate(value=Count("id")).order_by("-value")[:6]
+            leads_qs.values("lead_source").annotate(value=Count("id")).order_by("-value")[:6]
         ):
             lead_sources.append({"name": row["lead_source"] or "Unknown", "value": int(row["value"] or 0)})
 
         owner_rows = []
         for index, row in enumerate(
-            Deal.objects.filter(is_won=True)
+            deals_qs.filter(is_won=True)
             .values("deal_owner__name", "deal_owner__email")
             .annotate(revenue=Sum("amount"), won_count=Count("id"))
             .order_by("-revenue")[:5],
@@ -316,7 +345,7 @@ class AnalyticsDashboardView(APIView):
             )
 
         recent_signals = []
-        for invoice in Invoice.objects.order_by("-invoice_date", "-created_at")[:3]:
+        for invoice in invoices_qs.order_by("-invoice_date", "-created_at")[:3]:
             recent_signals.append(
                 {
                     "key": f"invoice-{invoice.id}",
@@ -326,7 +355,7 @@ class AnalyticsDashboardView(APIView):
                     "tone": "alert" if invoice.due_date and invoice.due_date < today else "neutral",
                 }
             )
-        for deal in Deal.objects.select_related("account").order_by("-updated_at")[:3]:
+        for deal in deals_qs.select_related("account").order_by("-updated_at")[:3]:
             recent_signals.append(
                 {
                     "key": f"deal-{deal.id}",
@@ -339,7 +368,7 @@ class AnalyticsDashboardView(APIView):
 
         top_revenue_accounts = []
         for row in (
-            Deal.objects.values("account_id", "account__account_name")
+            deals_qs.values("account_id", "account__account_name")
             .annotate(revenue=Sum("amount"), deals_count=Count("id"))
             .order_by("-revenue")[:5]
         ):
@@ -351,6 +380,11 @@ class AnalyticsDashboardView(APIView):
                     "last_touched_days": 0,
                 }
             )
+
+        pipeline_total = pipeline_qs.aggregate(total=Sum("amount")).get("total") or 0
+        stale_pipeline_amount = stale_pipeline_qs.aggregate(total=Sum("amount")).get("total") or 0
+        month_revenue = Invoice.objects.filter(invoice_date__gte=start_month).aggregate(total=Sum("grand_total")).get("total") or 0
+        month_won_revenue = Deal.objects.filter(is_won=True, closing_date__gte=start_month).aggregate(total=Sum("amount")).get("total") or 0
 
         payload = {
             "hero": {
@@ -372,19 +406,19 @@ class AnalyticsDashboardView(APIView):
             "month_scorecard": {
                 "leads_created": leads_this_month_qs.count(),
                 "contacts_added": Contact.objects.filter(created_at__date__gte=start_month).count(),
-                "deals_created": Deal.objects.filter(created_at__date__gte=start_month).count(),
-                "deals_won": Deal.objects.filter(is_won=True, closing_date__gte=start_month).count(),
-                "revenue_won": float(Deal.objects.filter(is_won=True, closing_date__gte=start_month).aggregate(total=Sum("amount")).get("total") or 0),
-                "open_amount": float(pipeline_qs.aggregate(total=Sum("amount")).get("total") or 0),
+                "deals_created": deals_qs.filter(created_at__date__gte=start_month).count(),
+                "deals_won": deals_qs.filter(is_won=True, closing_date__gte=start_month).count(),
+                "revenue_won": float(month_won_revenue),
+                "open_amount": float(pipeline_total),
             },
             "revenue_target": {
-                "achieved": float(Invoice.objects.filter(invoice_date__gte=start_month).aggregate(total=Sum("grand_total")).get("total") or 0),
-                "won": float(Deal.objects.filter(is_won=True, closing_date__gte=start_month).aggregate(total=Sum("amount")).get("total") or 0),
+                "achieved": float(month_revenue),
+                "won": float(month_won_revenue),
                 "goal": 300000,
             },
             "risk": {
-                "stale_pipeline_deals": pipeline_qs.filter(updated_at__date__lt=today - timedelta(days=21)).count(),
-                "stale_pipeline_amount": float(pipeline_qs.filter(updated_at__date__lt=today - timedelta(days=21)).aggregate(total=Sum("amount")).get("total") or 0),
+                "stale_pipeline_deals": stale_pipeline_qs.count(),
+                "stale_pipeline_amount": float(stale_pipeline_amount),
                 "overdue_invoices": overdue_invoices_qs.count(),
                 "overdue_invoice_amount": float(overdue_invoices_qs.aggregate(total=Sum("grand_total")).get("total") or 0),
                 "lead_conversion_rate": round((converted_leads_this_month_qs.count() / max(leads_this_month_qs.count(), 1)) * 100),
@@ -396,7 +430,7 @@ class AnalyticsDashboardView(APIView):
             "recent_signals": recent_signals[:7],
             "top_revenue_accounts": top_revenue_accounts,
             "pipeline_health": {
-                "open_amount": float(pipeline_qs.aggregate(total=Sum("amount")).get("total") or 0),
+                "open_amount": float(pipeline_total),
                 "pipeline_deals": pipeline_qs.count(),
                 "won_revenue": float(won_today_qs.aggregate(total=Sum("amount")).get("total") or 0),
                 "won_deals": won_today_qs.count(),
