@@ -264,38 +264,65 @@ class AnalyticsDashboardView(APIView):
         previous_month_end = start_month - timedelta(days=1)
         previous_month_start = previous_month_end.replace(day=1)
 
-        leads_today = Lead.objects.filter(created_at__date=today).count()
-        leads_yesterday = Lead.objects.filter(created_at__date=yesterday).count()
-        accounts_today = Account.objects.filter(created_at__date=today).count()
-        accounts_yesterday = Account.objects.filter(created_at__date=yesterday).count()
-        deals_today_qs = Deal.objects.filter(created_at__date=today)
-        deals_yesterday_qs = Deal.objects.filter(created_at__date=yesterday)
-        invoices_today_qs = Invoice.objects.filter(invoice_date=today)
-        invoices_yesterday_qs = Invoice.objects.filter(invoice_date=yesterday)
-        won_today_qs = Deal.objects.filter(is_won=True, closing_date=today)
         pipeline_qs = Deal.objects.filter(is_closed=False)
         overdue_invoices_qs = Invoice.objects.filter(due_date__lt=today).exclude(status__iexact="paid")
         leads_this_month_qs = Lead.objects.filter(created_at__date__gte=start_month)
-        converted_leads_this_month_qs = leads_this_month_qs.filter(
-            Q(converted_account__isnull=False)
-            | Q(converted_contact__isnull=False)
-            | Q(converted_deal__isnull=False)
-        )
-        deals_today = deals_today_qs.count()
-        deals_yesterday = deals_yesterday_qs.count()
-        revenue_today = float(invoices_today_qs.aggregate(total=Sum("grand_total")).get("total") or 0)
-        revenue_yesterday = float(invoices_yesterday_qs.aggregate(total=Sum("grand_total")).get("total") or 0)
-        leads_this_month = leads_this_month_qs.count()
-        converted_leads_this_month = converted_leads_this_month_qs.count()
-        pipeline_amount = float(pipeline_qs.aggregate(total=Sum("amount")).get("total") or 0)
-        pipeline_deals = pipeline_qs.count()
-        won_today_revenue = float(won_today_qs.aggregate(total=Sum("amount")).get("total") or 0)
-        won_today_deals = won_today_qs.count()
         stale_pipeline_qs = pipeline_qs.filter(updated_at__date__lt=today - timedelta(days=21))
-        stale_pipeline_deals = stale_pipeline_qs.count()
-        stale_pipeline_amount = float(stale_pipeline_qs.aggregate(total=Sum("amount")).get("total") or 0)
-        overdue_invoices = overdue_invoices_qs.count()
-        overdue_invoice_amount = float(overdue_invoices_qs.aggregate(total=Sum("grand_total")).get("total") or 0)
+
+        lead_metrics = Lead.objects.filter(created_at__date__in=(today, yesterday)).aggregate(
+            today=Count("id", filter=Q(created_at__date=today)),
+            yesterday=Count("id", filter=Q(created_at__date=yesterday)),
+        )
+        account_metrics = Account.objects.filter(created_at__date__in=(today, yesterday)).aggregate(
+            today=Count("id", filter=Q(created_at__date=today)),
+            yesterday=Count("id", filter=Q(created_at__date=yesterday)),
+        )
+        deal_metrics = Deal.objects.filter(created_at__date__in=(today, yesterday)).aggregate(
+            today=Count("id", filter=Q(created_at__date=today)),
+            yesterday=Count("id", filter=Q(created_at__date=yesterday)),
+        )
+        invoice_metrics = Invoice.objects.filter(invoice_date__in=(today, yesterday)).aggregate(
+            today=Sum("grand_total", filter=Q(invoice_date=today)),
+            yesterday=Sum("grand_total", filter=Q(invoice_date=yesterday)),
+        )
+        won_today_metrics = Deal.objects.filter(is_won=True, closing_date=today).aggregate(
+            revenue=Sum("amount"),
+            deals=Count("id"),
+        )
+        pipeline_metrics = pipeline_qs.aggregate(amount=Sum("amount"), deals=Count("id"))
+        stale_pipeline_metrics = stale_pipeline_qs.aggregate(amount=Sum("amount"), deals=Count("id"))
+        overdue_invoice_metrics = overdue_invoices_qs.aggregate(amount=Sum("grand_total"), invoices=Count("id"))
+        month_lead_metrics = leads_this_month_qs.aggregate(
+            leads=Count("id"),
+            converted=Count(
+                "id",
+                distinct=True,
+                filter=(
+                    Q(converted_account__isnull=False)
+                    | Q(converted_contact__isnull=False)
+                    | Q(converted_deal__isnull=False)
+                ),
+            ),
+        )
+
+        leads_today = lead_metrics["today"] or 0
+        leads_yesterday = lead_metrics["yesterday"] or 0
+        accounts_today = account_metrics["today"] or 0
+        accounts_yesterday = account_metrics["yesterday"] or 0
+        deals_today = deal_metrics["today"] or 0
+        deals_yesterday = deal_metrics["yesterday"] or 0
+        revenue_today = float(invoice_metrics["today"] or 0)
+        revenue_yesterday = float(invoice_metrics["yesterday"] or 0)
+        leads_this_month = month_lead_metrics["leads"] or 0
+        converted_leads_this_month = month_lead_metrics["converted"] or 0
+        pipeline_amount = float(pipeline_metrics["amount"] or 0)
+        pipeline_deals = pipeline_metrics["deals"] or 0
+        won_today_revenue = float(won_today_metrics["revenue"] or 0)
+        won_today_deals = won_today_metrics["deals"] or 0
+        stale_pipeline_deals = stale_pipeline_metrics["deals"] or 0
+        stale_pipeline_amount = float(stale_pipeline_metrics["amount"] or 0)
+        overdue_invoices = overdue_invoice_metrics["invoices"] or 0
+        overdue_invoice_amount = float(overdue_invoice_metrics["amount"] or 0)
 
         series_start = today - timedelta(days=6)
         lead_series = {
