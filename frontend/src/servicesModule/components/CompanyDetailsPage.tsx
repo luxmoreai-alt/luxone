@@ -7,6 +7,21 @@ import type { CompanyDetails, DomainMapping, ServiceSettings, TeamMember } from 
 const inputClass = "h-[38px] w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-blue-500";
 const textareaClass = "min-h-[96px] w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500";
 
+function validateCompanyForm(values: CompanyDetails) {
+  const errors: Partial<Record<"companyName" | "phone", string>> = {};
+
+  if (!values.companyName.trim()) {
+    errors.companyName = "Company name is required.";
+  }
+
+  const phone = values.phone.trim();
+  if (phone && !/^[0-9+()\-.\s]{7,20}$/.test(phone)) {
+    errors.phone = "Enter a valid phone number using digits or common phone characters.";
+  }
+
+  return errors;
+}
+
 export default function CompanyDetailsPage() {
   const [form, setForm] = useState<CompanyDetails>({ id: "", companyName: "", companyEmail: "", contactPerson: "", phone: "", address: "" });
   const [settings, setSettings] = useState<ServiceSettings | null>(null);
@@ -16,6 +31,7 @@ export default function CompanyDetailsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
+  const [formErrors, setFormErrors] = useState<Partial<Record<"companyName" | "phone", string>>>({});
   const [usageSummary, setUsageSummary] = useState({ services: 0, appointments: 0, jobSheets: 0 });
 
   useEffect(() => {
@@ -49,6 +65,15 @@ export default function CompanyDetailsPage() {
   }, []);
 
   const handleSave = async () => {
+    const nextErrors = validateCompanyForm(form);
+    setFormErrors(nextErrors);
+
+    if (Object.keys(nextErrors).length > 0) {
+      setError("Please correct the highlighted fields before saving.");
+      setSavedMessage(null);
+      return;
+    }
+
     try {
       setSaving(true);
       setError(null);
@@ -81,10 +106,32 @@ export default function CompanyDetailsPage() {
         <div className="grid gap-4 lg:grid-cols-[1fr_0.8fr]">
           <CRMSectionCard title="Basic Information">
             <div className="grid gap-4 md:grid-cols-2">
-              <div><label className="mb-1.5 block text-sm font-medium text-slate-700">Company Name</label><input className={inputClass} value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} /></div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">Company Name</label>
+                <input
+                  className={`${inputClass} ${formErrors.companyName ? "border-rose-400" : ""}`}
+                  value={form.companyName}
+                  onChange={(e) => {
+                    setForm({ ...form, companyName: e.target.value });
+                    setFormErrors((prev) => ({ ...prev, companyName: undefined }));
+                  }}
+                />
+                {formErrors.companyName ? <p className="mt-1 text-xs text-rose-600">{formErrors.companyName}</p> : null}
+              </div>
               <div><label className="mb-1.5 block text-sm font-medium text-slate-700">Company Email</label><input className={inputClass} value={form.companyEmail} onChange={(e) => setForm({ ...form, companyEmail: e.target.value })} /></div>
               <div><label className="mb-1.5 block text-sm font-medium text-slate-700">Contact Person</label><input className={inputClass} value={form.contactPerson} onChange={(e) => setForm({ ...form, contactPerson: e.target.value })} /></div>
-              <div><label className="mb-1.5 block text-sm font-medium text-slate-700">Phone</label><input className={inputClass} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">Phone</label>
+                <input
+                  className={`${inputClass} ${formErrors.phone ? "border-rose-400" : ""}`}
+                  value={form.phone}
+                  onChange={(e) => {
+                    setForm({ ...form, phone: e.target.value });
+                    setFormErrors((prev) => ({ ...prev, phone: undefined }));
+                  }}
+                />
+                {formErrors.phone ? <p className="mt-1 text-xs text-rose-600">{formErrors.phone}</p> : null}
+              </div>
               <div className="md:col-span-2"><label className="mb-1.5 block text-sm font-medium text-slate-700">Address</label><textarea className={textareaClass} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></div>
             </div>
           </CRMSectionCard>

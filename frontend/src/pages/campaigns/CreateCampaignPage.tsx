@@ -207,6 +207,31 @@ export default function CreateCampaignPage() {
       return;
     }
 
+    if (formData.actualCost.trim() !== "" && (Number(formData.actualCost) < 0 || Number.isNaN(Number(formData.actualCost)))) {
+      setError("Actual Cost cannot be negative.");
+      return;
+    }
+
+    if (formData.budgetedCost.trim() !== "" && (Number(formData.budgetedCost) < 0 || Number.isNaN(Number(formData.budgetedCost)))) {
+      setError("Budgeted Cost cannot be negative.");
+      return;
+    }
+
+    if (formData.expectedRevenue.trim() !== "" && (Number(formData.expectedRevenue) < 0 || Number.isNaN(Number(formData.expectedRevenue)))) {
+      setError("Expected Revenue cannot be negative.");
+      return;
+    }
+
+    if (formData.numbersSent.trim() !== "" && (Number(formData.numbersSent) < 0 || Number.isNaN(Number(formData.numbersSent)))) {
+      setError("Numbers sent cannot be negative.");
+      return;
+    }
+
+    if (formData.expectedResponse.trim() !== "" && (Number(formData.expectedResponse) < 0 || Number.isNaN(Number(formData.expectedResponse)))) {
+      setError("Expected Response cannot be negative.");
+      return;
+    }
+
     try {
       setSaving(true);
       setError(null);

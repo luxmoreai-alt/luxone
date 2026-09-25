@@ -76,10 +76,18 @@ export default function CRMRowUtilityIcons({
                 Create Meeting
               </button>
 
-              <div className="relative">
+              <div
+                className="relative"
+                onMouseEnter={() => setOpenCallSubmenu(true)}
+                onMouseLeave={() => setOpenCallSubmenu(false)}
+              >
                 <button
                   type="button"
-                  onClick={() => setOpenCallSubmenu((prev) => !prev)}
+                  onClick={() => {
+                    onOpenActivityAction?.("schedule-call");
+                    setOpen(false);
+                    setOpenCallSubmenu(false);
+                  }}
                   className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
                 >
                   <span>Create Call</span>
