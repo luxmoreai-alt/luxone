@@ -264,6 +264,14 @@ export function TaskModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (open) {
+      setSubject(recordName ? `Follow up with ${recordName}` : "");
+      setDescription("");
+      setError(null);
+    }
+  }, [open, recordName]);
+
   const handleSave = async () => {
     if (!subject.trim()) {
       setError("Please enter a subject.");
@@ -317,6 +325,14 @@ export function MeetingModal({
   const [agenda, setAgenda] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setMeetingSubject(recordName ? `Meeting with ${recordName}` : "");
+      setAgenda("");
+      setError(null);
+    }
+  }, [open, recordName]);
 
   const handleSave = async () => {
     if (!meetingSubject.trim()) {
@@ -881,7 +897,7 @@ export function MassUpdateModal({
     deals: ["Qualification", "Needs Analysis", "Value Proposition", "Identify Decision Makers", "Proposal/Price Quote", "Negotiation/Review", "Closed Won", "Closed Lost"],
     contacts: [],
     accounts: ["Analyst", "Competitor", "Customer", "Distributor", "Integrator", "Investor", "Partner", "Press", "Prospect", "Reseller", "Other"],
-  };
+      };
 
   const options = statusOptions[module] ?? [];
   const statusLabel = module === "leads" ? "Lead Status" : module === "deals" ? "Stage" : module === "accounts" ? "Account Type" : "Status";
