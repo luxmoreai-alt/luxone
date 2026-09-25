@@ -199,8 +199,9 @@ LuxOne Team
             fail_silently=False,
         )
         return True
-    except Exception:
-        return False
+    except Exception as exc:
+      print(f"Welcome email failed: {exc}")
+      return False
 
 
 # ── Public Auth Views ──────────────────────────────────────────────────────────

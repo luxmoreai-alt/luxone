@@ -10,6 +10,7 @@ import { readDashboardCache, writeDashboardCache, removeDashboardCache } from ".
 type OrgUser = {
   id: number;
   email: string;
+  name?: string | null;
   role: "admin" | "manager" | "employee";
   team: string;
   team_label?: string | null;
