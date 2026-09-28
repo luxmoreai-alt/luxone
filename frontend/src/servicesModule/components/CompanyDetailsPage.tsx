@@ -48,19 +48,26 @@ export default function CompanyDetailsPage() {
     void load();
   }, []);
 
-  const handleSave = async () => {
-    try {
-      setSaving(true);
-      setError(null);
-      setSavedMessage(null);
-      setForm(await updateCompanyDetails(form));
-      setSavedMessage("Company details updated.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to update company details.");
-    } finally {
-      setSaving(false);
-    }
-  };
+ const handleSave = async () => {
+  if (!form.companyName.trim()) {
+    setError("Company Name is required.");
+    setSavedMessage(null);
+    return;
+  }
+
+  try {
+    setSaving(true);
+    setError(null);
+    setSavedMessage(null);
+
+    setForm(await updateCompanyDetails(form));
+    setSavedMessage("Company details updated.");
+  } catch (err) {
+    setError(err instanceof Error ? err.message : "Unable to update company details.");
+  } finally {
+    setSaving(false);
+  }
+};
 
   const verifiedDomain = domains.find((item) => item.verificationStatus === "verified");
   const pendingDomain = domains.find((item) => item.verificationStatus === "pending");
@@ -81,10 +88,15 @@ export default function CompanyDetailsPage() {
         <div className="grid gap-4 lg:grid-cols-[1fr_0.8fr]">
           <CRMSectionCard title="Basic Information">
             <div className="grid gap-4 md:grid-cols-2">
-              <div><label className="mb-1.5 block text-sm font-medium text-slate-700">Company Name</label><input className={inputClass} value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} /></div>
-              <div><label className="mb-1.5 block text-sm font-medium text-slate-700">Company Email</label><input className={inputClass} value={form.companyEmail} onChange={(e) => setForm({ ...form, companyEmail: e.target.value })} /></div>
-              <div><label className="mb-1.5 block text-sm font-medium text-slate-700">Contact Person</label><input className={inputClass} value={form.contactPerson} onChange={(e) => setForm({ ...form, contactPerson: e.target.value })} /></div>
-              <div><label className="mb-1.5 block text-sm font-medium text-slate-700">Phone</label><input className={inputClass} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
+              <div><label className="mb-1.5 block text-sm font-medium text-slate-700">Company Name</label><input
+                className={inputClass}
+                value={form.companyName}
+                onChange={(e) => setForm({ ...form, companyName: e.target.value })}
+                required
+              /></div>
+              <div><label className="mb-1.5 block text-sm font-medium text-slate-700">Company Email *</label><input className={inputClass} value={form.companyEmail} onChange={(e) => setForm({ ...form, companyEmail: e.target.value })} required /></div>
+              <div><label className="mb-1.5 block text-sm font-medium text-slate-700">Contact Person </label><input className={inputClass} value={form.contactPerson} onChange={(e) => setForm({ ...form, contactPerson: e.target.value })} required /></div>
+              <div><label className="mb-1.5 block text-sm font-medium text-slate-700">Phone *</label><input className={inputClass} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
               <div className="md:col-span-2"><label className="mb-1.5 block text-sm font-medium text-slate-700">Address</label><textarea className={textareaClass} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></div>
             </div>
           </CRMSectionCard>
