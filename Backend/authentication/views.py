@@ -494,9 +494,12 @@ class UserManagementViewSet(viewsets.ViewSet):
 
         response_data = UserDetailSerializer(new_user).data
         response_data["email_sent"] = email_sent
-        # Only expose the temp password if email delivery failed
-        if not email_sent:
-            response_data["temp_password"] = raw_password
+        # # Only expose the temp password if email delivery failed
+        # if not email_sent:
+        #     response_data["temp_password"] = raw_password
+
+        # Always return temp_password so the admin can copy or view credentials
+        response_data["temp_password"] = raw_password
 
         return Response(response_data, status=status.HTTP_201_CREATED)
 
@@ -527,25 +530,27 @@ class UserManagementViewSet(viewsets.ViewSet):
         return Response(UserDetailSerializer(user).data)
 
     # ── DELETE /manage-users/{id}/ ────────────────────────────────────────
-    def destroy(self, request, pk=None):
-        if getattr(request.user, "role", None) not in ("admin", "sub_admin"):
-            return Response(
-                {"detail": "Only admins can deactivate users."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        if str(request.user.pk) == str(pk):
-            return Response(
-                {"detail": "You cannot deactivate your own account."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        qs = self._scoped_queryset(request.user)
-        user = qs.filter(pk=pk).first()
-        if not user:
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+    # def destroy(self, request, pk=None):
+    #     if getattr(request.user, "role", None) not in ("admin", "sub_admin"):
+    #         return Response(
+    #             {"detail": "Only admins can deactivate users."},
+    #             status=status.HTTP_403_FORBIDDEN,
+    #         )
+    #     if str(request.user.pk) == str(pk):
+    #         return Response(
+    #             {"detail": "You cannot deactivate your own account."},
+    #             status=status.HTTP_400_BAD_REQUEST,
+    #         )
+    #     qs = self._scoped_queryset(request.user)
+    #     user = qs.filter(pk=pk).first()
+    #     if not user:
+    #         return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        user.is_active = False
-        user.save(update_fields=["is_active"])
-        return Response({"detail": f"User {user.email} has been deactivated."})
+    #     user.is_active = False
+    #     user.save(update_fields=["is_active"])
+    #     return Response({"detail": f"User {user.email} has been deactivated."})
+
+    
 
     # ── POST /manage-users/{id}/set-password/ ────────────────────────────
     @action(detail=True, methods=["post"], url_path="set-password",
