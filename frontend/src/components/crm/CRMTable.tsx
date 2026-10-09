@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Phone, CalendarCheck, CalendarDays, Activity, Pencil, Trash2 } from "lucide-react";
+import { Phone, CalendarCheck, CalendarDays, Activity } from "lucide-react";
 import type { CRMColumn, CRMRecord, CRMRowAction } from "../../lib/shared/crmTypes";
 import CRMRowMoreOptionsMenu from "./CRMRowMoreOptionsMenu";
 import CRMRowUtilityIcons from "./CRMRowUtilityIcons";
@@ -54,7 +54,6 @@ type CRMTableProps<T extends CRMRecord> = {
   onToggleHideColumn: (columnKey: string) => void;
   onTogglePinColumn: (columnKey: string) => void;
   onFilterColumn: (columnKey: string, value: string) => void;
-  variant?: "default" | "bordered";
 };
 
 export default function CRMTable<T extends CRMRecord>({
@@ -78,7 +77,6 @@ export default function CRMTable<T extends CRMRecord>({
   onToggleHideColumn,
   onTogglePinColumn,
   onFilterColumn,
-  variant = "default",
 }: CRMTableProps<T>) {
   const isLongTextColumn = (columnKey: string) => {
     const normalized = columnKey.toLowerCase();
@@ -123,13 +121,13 @@ export default function CRMTable<T extends CRMRecord>({
   return (
     <div className="overflow-visible rounded-xl border border-slate-200 bg-white pb-1">
       <div className="overflow-x-auto overflow-y-visible">
-      <table className={`w-full min-w-[1180px] text-left ${variant === "bordered" ? "border-collapse border border-slate-300" : "divide-y divide-slate-200"}`}>
+      <table className="w-full min-w-[1180px] divide-y divide-slate-200 text-left">
         <thead className="bg-slate-50">
           <tr>
-            <th className={`w-10 px-2 py-3 ${variant === "bordered" ? "border border-slate-300 bg-slate-50" : ""}`} />
-            {showNotes ? <th className={`w-10 px-2 py-3 ${variant === "bordered" ? "border border-slate-300 bg-slate-50" : ""}`} /> : null}
-            {showActivity ? <th className={`w-10 px-2 py-3 ${variant === "bordered" ? "border border-slate-300 bg-slate-50" : ""}`} /> : null}
-            <th className={`w-12 px-3 py-3 ${variant === "bordered" ? "border border-slate-300 bg-slate-50" : ""}`}>
+            <th className="w-10 px-2 py-3" />
+            {showNotes ? <th className="w-10 px-2 py-3" /> : null}
+            {showActivity ? <th className="w-10 px-2 py-3" /> : null}
+            <th className="w-12 px-3 py-3">
               <input
                 type="checkbox"
                 checked={allChecked}
@@ -143,7 +141,7 @@ export default function CRMTable<T extends CRMRecord>({
                 key={column.key}
                 className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600 ${column.minWidth ?? ""} ${
                   pinnedColumn === column.key ? "sticky z-30 bg-slate-50" : ""
-                } ${variant === "bordered" ? "border border-slate-300 bg-slate-50" : ""}`}
+                }`}
                 style={pinnedColumn === column.key ? { left: showNotes && showActivity ? 172 : 132 } : undefined}
               >
                 <div ref={openHeaderMenu === column.key ? menuRef : null}>
@@ -175,19 +173,13 @@ export default function CRMTable<T extends CRMRecord>({
                 </div>
               </th>
             ))}
-            <th className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600 text-center ${variant === "bordered" ? "border border-slate-300 bg-slate-50" : ""}`}>
-              ACTIONS
-            </th>
           </tr>
         </thead>
 
-        <tbody className={variant === "default" ? "divide-y divide-slate-100" : ""}>
+        <tbody className="divide-y divide-slate-100">
           {rows.map((row) => (
-            <tr key={row.id} className="group transition-colors duration-200 hover:bg-blue-50/30">
-              <td className={`px-2 py-2 ${variant === "bordered" ? "border border-slate-300" : "relative"}`} onClick={(event) => event.stopPropagation()}>
-                {variant === "default" && (
-                  <div className="absolute left-0 top-0 h-full w-[3px] scale-y-50 bg-gradient-to-b from-blue-400 to-blue-600 opacity-0 transition-all duration-300 group-hover:scale-y-100 group-hover:opacity-100"></div>
-                )}
+            <tr key={row.id} className="hover:bg-slate-50">
+              <td className="px-2 py-2" onClick={(event) => event.stopPropagation()}>
                 <CRMRowMoreOptionsMenu
                   actions={rowActions}
                   onClickAction={(actionKey) => onRowAction(actionKey, row)}
@@ -195,13 +187,13 @@ export default function CRMTable<T extends CRMRecord>({
               </td>
 
               {showNotes ? (
-                <td className={`px-2 py-2 ${variant === "bordered" ? "border border-slate-300" : ""}`} onClick={(event) => event.stopPropagation()}>
+                <td className="px-2 py-2" onClick={(event) => event.stopPropagation()}>
                   <CRMRowUtilityIcons showActivity={false} onOpenNotes={() => onOpenNotes?.(row)} />
                 </td>
               ) : null}
 
               {showActivity ? (
-                <td className={`px-2 py-2 ${variant === "bordered" ? "border border-slate-300" : ""}`} onClick={(event) => event.stopPropagation()}>
+                <td className="px-2 py-2" onClick={(event) => event.stopPropagation()}>
                   {(row as { nextActivity?: ActivityBadge }).nextActivity ? (
                     <ActivityReminderBadge
                       activity={(row as { nextActivity: ActivityBadge }).nextActivity}
@@ -216,7 +208,7 @@ export default function CRMTable<T extends CRMRecord>({
                 </td>
               ) : null}
 
-              <td className={`px-3 py-2 ${variant === "bordered" ? "border border-slate-300" : ""}`} onClick={(event) => event.stopPropagation()}>
+              <td className="px-3 py-2" onClick={(event) => event.stopPropagation()}>
                 <input
                   type="checkbox"
                   checked={selectedIds.includes(row.id)}
@@ -228,7 +220,7 @@ export default function CRMTable<T extends CRMRecord>({
               {visibleColumns.map((column) => (
                 <td
                   key={column.key}
-                  className={`px-4 py-3 text-sm text-slate-700 ${pinnedColumn === column.key ? "sticky z-20 bg-white" : ""} ${variant === "bordered" ? "border border-slate-300" : ""}`}
+                  className={`px-4 py-3 text-sm text-slate-700 ${pinnedColumn === column.key ? "sticky z-20 bg-white" : ""}`}
                   style={pinnedColumn === column.key ? { left: showNotes && showActivity ? 172 : 132 } : undefined}
                 >
                   <button
@@ -242,35 +234,6 @@ export default function CRMTable<T extends CRMRecord>({
                   </button>
                 </td>
               ))}
-
-              <td className={`px-4 py-3 text-sm text-slate-700 whitespace-nowrap ${variant === "bordered" ? "border border-slate-300" : ""}`} onClick={(event) => event.stopPropagation()}>
-                <div className="flex items-center justify-center gap-2">
-                  <button
-                    type="button"
-                    title="Update"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onRowAction("edit", row);
-                    }}
-                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 transition hover:bg-blue-100 hover:shadow-sm"
-                  >
-                    <Pencil size={13} className="text-blue-600" />
-                    <span>Update</span>
-                  </button>
-                  <button
-                    type="button"
-                    title="Delete"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onRowAction("delete", row);
-                    }}
-                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700 transition hover:bg-rose-100 hover:shadow-sm"
-                  >
-                    <Trash2 size={13} className="text-rose-600" />
-                    <span>Delete</span>
-                  </button>
-                </div>
-              </td>
             </tr>
           ))}
         </tbody>
