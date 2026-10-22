@@ -361,3 +361,6 @@ class AccountSendEmailSerializer(serializers.Serializer):
     subject = serializers.CharField(max_length=255)
     body = serializers.CharField()
     to_email = serializers.EmailField(required=False, allow_blank=True)
+
+
+# chnaged
