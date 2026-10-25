@@ -103,6 +103,20 @@ class ReportDashboardTests(APITestCase):
         self.assertEqual(response.data["hero"]["meetings_today"], 1)
         self.assertEqual(response.data["top_customers"][0]["name"], "Zora CRM")
 
+    def test_home_dashboard_excludes_deleted_accounts_from_customer_counts(self):
+        self.account.is_active = False
+        self.account.save(update_fields=["is_active", "updated_at"])
+
+        response = self.client.get("/api/dashboard/home/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["hero"]["customers_added_today"], 0)
+        self.assertEqual(response.data["summary_cards"][0]["value"], 0)
+        new_customers_chip = next(
+            chip for chip in response.data["top_insight_chips"] if chip["label"] == "New Customers"
+        )
+        self.assertEqual(new_customers_chip["value"], 0)
+
     def test_analytics_dashboard_reports_current_month_activity(self):
         Invoice.objects.create(
             subject="Invoice-001",
@@ -130,6 +144,23 @@ class ReportDashboardTests(APITestCase):
         self.assertEqual(response.data["month_scorecard"]["contacts_added"], 2)
         self.assertEqual(response.data["risk"]["top_source"]["name"], "Advertisement")
         self.assertEqual(response.data["pipeline_health"]["won_deals"], 1)
+
+    def test_analytics_dashboard_uses_bounded_database_queries(self):
+        Invoice.objects.create(
+            subject="Invoice-001",
+            owner=self.user,
+            account=self.account,
+            grand_total="125000.00",
+            invoice_date=self.today,
+            due_date=self.today + timedelta(days=7),
+            status="Unpaid",
+        )
+
+        with self.assertNumQueries(25):
+            response = self.client.get("/api/dashboard/analytics/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["hero"]["leads_today"], 1)
 
     def test_my_requests_dashboard_includes_task_statuses_that_are_still_open(self):
         Task.objects.create(

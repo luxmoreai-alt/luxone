@@ -12,6 +12,7 @@ from deals.models import Deal
 from inventory.models import Invoice, Product, SalesOrder
 from leads.models import Lead
 from support.models import SupportCase
+import re
 
 from .models import (
     BusinessHours,
@@ -37,6 +38,7 @@ from .services import (
     get_public_booking_base_url,
     get_service_business_hours,
     get_service_public_booking_url,
+    validate_public_domain,
 )
 
 User = get_user_model()
@@ -102,6 +104,13 @@ class ServicesModuleSettingsSerializer(serializers.ModelSerializer):
                 "address": details.address,
             }
         return None
+    
+    def validate_phone(self, value):
+      if value and not re.fullmatch(r"[0-9+()\-\s]+", value):
+        raise serializers.ValidationError(
+            "Phone number can contain only numbers and valid phone characters."
+        )
+      return value
 
     def get_public_booking_base_url(self, obj):
         return get_public_booking_base_url()
@@ -372,6 +381,13 @@ class ServiceDetailSerializer(ServiceWriteSerializer):
         if obj.location_type == CRMService.LocationType.HYBRID:
             return "hybrid"
         return "offline"
+
+    def validate_phone(self, value):
+      if value and not re.fullmatch(r"[0-9+()\-\s]+", value):
+        raise serializers.ValidationError(
+            "Phone number can contain only numbers and valid phone characters."
+        )
+      return value
 
     def get_public_booking_url(self, obj):
         return get_service_public_booking_url(obj)
@@ -895,10 +911,20 @@ class ServiceDomainMappingSerializer(serializers.ModelSerializer):
         read_only_fields = ["cname_target", "created_at", "updated_at"]
 
     def validate_domain(self, value):
-        value = (value or "").strip().lower()
-        if not value:
-            raise serializers.ValidationError("Domain is required.")
-        return value
+        try:
+            return validate_public_domain(value)
+        except serializers.ValidationError:
+            raise
+        except Exception as exc:
+            raise serializers.ValidationError(str(exc)) from exc
+
+    def update(self, instance, validated_data):
+        domain_changed = "domain" in validated_data and validated_data["domain"] != instance.domain
+        instance = super().update(instance, validated_data)
+        if domain_changed:
+            instance.verification_status = ServiceDomainMapping.VerificationStatus.PENDING
+            instance.save(update_fields=["verification_status", "updated_at"])
+        return instance
 
     def get_public_booking_base_url(self, obj):
         if obj.verification_status == ServiceDomainMapping.VerificationStatus.VERIFIED:
@@ -963,6 +989,24 @@ class ServiceCompanyDetailsSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["created_at", "updated_at"]
+
+    def validate_company_name(self, value):
+        normalized = (value or "").strip()
+        if not normalized:
+            raise serializers.ValidationError("Company name is required.")
+        return normalized
+
+    def validate_phone(self, value):
+        if value is None:
+            return value
+        normalized = value.strip()
+        if not normalized:
+            return ""
+        if not re.fullmatch(r"^[0-9+()\-.\s]{7,20}$", normalized):
+            raise serializers.ValidationError(
+                "Phone number must contain only valid phone characters and be 7 to 20 characters long."
+            )
+        return normalized
 
     def get_public_booking_base_url(self, obj):
         return get_public_booking_base_url()

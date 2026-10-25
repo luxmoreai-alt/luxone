@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from decimal import Decimal
 
 from django.conf import settings
@@ -505,6 +506,22 @@ class ServiceCompanyDetails(BaseModel):
 
     class Meta:
         ordering = ["id"]
+
+    def clean(self):
+        cleaned_name = (self.company_name or "").strip()
+        if not cleaned_name:
+            raise ValidationError({"company_name": "Company name is required."})
+
+        cleaned_phone = (self.phone or "").strip()
+        if cleaned_phone and not re.fullmatch(r"^[0-9+()\-.\s]{7,20}$", cleaned_phone):
+            raise ValidationError({"phone": "Phone number must contain only valid phone characters and be 7 to 20 characters long."})
+
+        self.company_name = cleaned_name
+        self.phone = cleaned_phone
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return self.company_name or "Company Details"

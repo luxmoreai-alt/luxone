@@ -263,6 +263,8 @@ export type FiscalYearSettings = {
   id: string;
   fiscalYearType: "standard" | "custom";
   startsInMonth: number;
+  customStartDate?: string;
+  customEndDate?: string;
   currentPeriodStart?: string;
   currentPeriodEnd?: string;
   fiscalYearLabel?: string;

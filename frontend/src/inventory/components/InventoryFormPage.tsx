@@ -1127,12 +1127,18 @@ export default function InventoryFormPage({ moduleKey }: Props) {
                               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">₹</span>
                               <input
                                 type="number"
+                                min="0"
+                                step="any"
                                 className={`${inputClass} pl-7`}
-                                placeholder="List Price"
-                                value={link.listPrice || 0}
+                                placeholder="0.00"
+                                value={link.listPrice ?? ""}
+                                onFocus={(e) => e.target.select()}
                                 onChange={(e) => {
                                   const productLinks = [...anyForm.productLinks];
-                                  productLinks[index] = { ...productLinks[index], listPrice: Number(e.target.value) };
+                                  productLinks[index] = {
+                                    ...productLinks[index],
+                                    listPrice: e.target.value === "" ? "" : e.target.value,
+                                  };
                                   updateInventoryForm({ ...anyForm, productLinks });
                                 }}
                               />
@@ -1312,7 +1318,24 @@ export default function InventoryFormPage({ moduleKey }: Props) {
             <div className="grid gap-4 xl:grid-cols-[1fr_320px]">
               <InventoryDocumentItemsTable title={moduleKey === "quotes" ? "Quoted Items" : moduleKey === "sales-orders" ? "Ordered Items" : moduleKey === "purchase-orders" ? "Purchase Items" : "Invoiced Items"} items={anyForm.items as InventoryLineItem[]} onChange={syncItems} showDescription={moduleKey === "invoices"} />
               <div className="space-y-4">
-                <div className="rounded-xl border border-slate-200 bg-white p-4"><Field label="Adjustment"><input type="number" className={inputClass} value={anyForm.adjustment || 0} onChange={(e) => { const next = recalculateDocument(anyForm.items as InventoryLineItem[], Number(e.target.value)); setForm({ ...anyForm, ...next }); }} /></Field></div>
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <Field label="Adjustment">
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      placeholder="0.00"
+                      className={inputClass}
+                      value={anyForm.adjustment ?? ""}
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => {
+                        const val = e.target.value === "" ? "" : e.target.value;
+                        const next = recalculateDocument(anyForm.items as InventoryLineItem[], Number(e.target.value || 0));
+                        setForm({ ...anyForm, ...next, adjustment: val });
+                      }}
+                    />
+                  </Field>
+                </div>
                 <InventoryTotalsPanel subtotal={totals?.subtotal || 0} discount={totals?.discount || 0} tax={totals?.tax || 0} adjustment={totals?.adjustment || 0} grandTotal={totals?.grandTotal || 0} />
               </div>
             </div>

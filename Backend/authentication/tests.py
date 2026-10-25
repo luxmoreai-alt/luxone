@@ -1,9 +1,11 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 from unittest.mock import patch
 
+from .models import OTP
 from .views import get_tenant_user_for_email
 
 
@@ -71,3 +73,62 @@ class AuthenticationApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["data"]["tenant_db"], "tenant_client_one")
         self.assertEqual(response.data["data"]["user"]["email"], "client@example.com")
+
+    def test_change_password_rejects_incorrect_current_password(self):
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.post(
+            "/api/auth/change-password/",
+            {
+                "current_password": "WrongPass123",
+                "new_password": "NewStrongPass123",
+                "confirm_password": "NewStrongPass123",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("StrongPass123"))
+
+    @override_settings(DEFAULT_FROM_EMAIL="otp@crm.example", EMAIL_HOST_USER="emailapikey")
+    @patch("authentication.services.send_mail")
+    def test_forgot_password_uses_configured_sender_email(self, mocked_send_mail):
+        response = self.client.post(
+            "/api/auth/forgot-password",
+            {"email": self.user.email},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        mocked_send_mail.assert_called_once()
+        self.assertEqual(mocked_send_mail.call_args.args[2], "otp@crm.example")
+
+    @patch("authentication.services.send_mail", side_effect=OSError("SMTP unavailable"))
+    def test_forgot_password_rolls_back_otp_when_email_delivery_fails(self, mocked_send_mail):
+        response = self.client.post(
+            "/api/auth/forgot-password",
+            {"email": self.user.email},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(OTP.objects.filter(email=self.user.email).count(), 0)
+        mocked_send_mail.assert_called_once()
+
+    def test_change_password_updates_password_with_correct_current_password(self):
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.post(
+            "/api/auth/change-password/",
+            {
+                "current_password": "StrongPass123",
+                "new_password": "NewStrongPass123",
+                "confirm_password": "NewStrongPass123",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("NewStrongPass123"))
