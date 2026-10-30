@@ -100,6 +100,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
     def get_manager_email(self, obj):
         return obj.manager.email if obj.manager else None
 
+    
     def get_manager_name(self, obj):
         if not obj.manager:
             return None

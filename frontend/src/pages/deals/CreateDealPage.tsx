@@ -72,9 +72,9 @@ export default function CreateDealPage() {
           { name: "dealOwner", label: "Deal Owner", type: "owner", readOnly: true },
           { name: "dealName", label: "Deal Name", type: "text", required: true },
           { name: "accountName", label: "Account Name", type: "lookup", required: true, options: accountOptions, placeholder: "Search or select an account" },
-          { name: "contactName", label: "Contact Name", type: "lookup", required: true, options: contactOptions, placeholder: "Search or select a contact" },
-          { name: "amount", label: "Amount", type: "currency" },
-          { name: "closingDate", label: "Closing Date", type: "text", placeholder: "YYYY-MM-DD" },
+          { name: "contactName", label: "Contact Name", type: "lookup",required:true, options: contactOptions, placeholder: "Search or select a contact" },
+          { name: "amount", label: "Amount", type: "currency", digitsOnly: true, inputMode: "numeric", sanitizeValue: (value) => value.replace(/[^0-9]/g, "") },
+          { name: "closingDate", label: "Closing Date", type: "date" },
           { name: "stage", label: "Stage", type: "select", required: true, options: DEAL_STAGE_OPTIONS },
           { name: "probability", label: "Probability (%)", type: "number" },
           { name: "type", label: "Type", type: "select", options: DEAL_TYPE_OPTIONS },
@@ -121,4 +121,3 @@ export default function CreateDealPage() {
     />
   );
 }
-

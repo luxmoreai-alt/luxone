@@ -48,7 +48,7 @@ export default function ServiceDetailPage() {
 
   const latestAppointment = [...appointments].sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
   const latestJobSheet = [...jobSheets].sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
-  const isDraftService = String(service.status || "").toLowerCase() === "draft";
+  const isDraftService = service.status.toLowerCase() === "draft";
 
   return (
     <DashboardLayout>
@@ -64,8 +64,8 @@ export default function ServiceDetailPage() {
         />
 
         {isDraftService ? (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            Draft service: appointment mapping is disabled until this service is published or set to Active.
+          <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <span className="font-semibold">Draft service:</span> appointments can still be created and linked while this service is being prepared.
           </div>
         ) : null}
 
@@ -161,13 +161,10 @@ export default function ServiceDetailPage() {
                     <div className="text-sm font-medium text-slate-800">{item.appointmentForDisplay || item.appointmentNumber}</div>
                     <div className="mt-1 text-xs text-slate-500">{formatDateOnly(item.appointmentDate)} • {item.appointmentStartTime} - {item.appointmentEndTime} • {item.status}</div>
                   </button>
-                )) : (
-                  <div className="text-sm text-slate-500">
-                    {isDraftService
-                      ? "Draft service: appointment mapping is disabled until this service is published or set to Active."
-                      : "No appointments linked to this service yet."}
-                  </div>
-                )}
+                )) : <div className="text-sm text-slate-500">
+                  No appointments linked to this service yet.
+                  {isDraftService ? " Draft services can still have appointments mapped to them." : null}
+                </div>}
               </div>
             </CRMSectionCard>
           </div>

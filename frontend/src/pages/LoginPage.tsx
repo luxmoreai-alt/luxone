@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { login, storeAuthSession } from "../lib/api/authApi";
 import { getResolvedApiBaseUrl } from "../api/config";
@@ -75,6 +75,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [revealedPasswordIndex, setRevealedPasswordIndex] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [loginErrors, setLoginErrors] = useState<LoginFieldErrors>({});
   const [loading, setLoading] = useState(false);
@@ -89,6 +90,27 @@ export default function LoginPage() {
   const [fpError, setFpError] = useState("");
   const [fpLoading, setFpLoading] = useState(false);
   const [fpSuccess, setFpSuccess] = useState("");
+  const [fpResendCountdown, setFpResendCountdown] = useState(0);
+  const fpResendCooldownRef = useRef(false);
+
+  useEffect(() => {
+    if (showPassword || revealedPasswordIndex === null) return;
+    const timeoutId = window.setTimeout(() => setRevealedPasswordIndex(null), 800);
+    return () => window.clearTimeout(timeoutId);
+  }, [password, revealedPasswordIndex, showPassword]);
+
+  useEffect(() => {
+    if (fpResendCountdown === 0) {
+      fpResendCooldownRef.current = false;
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      if (fpResendCountdown === 1) fpResendCooldownRef.current = false;
+      setFpResendCountdown((current) => Math.max(0, current - 1));
+    }, 1000);
+    return () => window.clearTimeout(timeoutId);
+  }, [fpResendCountdown]);
 
   const rawRedirect =
     typeof window.history.state === "object" &&
@@ -176,7 +198,7 @@ export default function LoginPage() {
     if (!fpEmail.trim()) { setFpError("Email is required."); return; }
     setFpLoading(true);
     try {
-      await authPost("/auth/forgot-password/", { email: fpEmail.trim() });
+        await authPost("/auth/forgot-password/", { email: fpEmail.trim() });
       setStep("forgot-otp");
     } catch (err) {
       setFpError(err instanceof Error ? err.message : "Failed to send OTP.");
@@ -185,12 +207,33 @@ export default function LoginPage() {
     }
   };
 
+  const handleResendOtp = () => {
+    if (fpResendCooldownRef.current || fpLoading) return;
+    fpResendCooldownRef.current = true;
+    setFpResendCountdown(30);
+    setFpError("");
+    void handleSendOtp({ preventDefault: () => {} });
+  };
+
   // ── Forgot: verify OTP ─────────────────────────────────────────────────────
   const handleVerifyOtp = async (e: { preventDefault(): void }) => {
     e.preventDefault();
     setFpError("");
     if (!fpOtp.trim()) { setFpError("Enter the OTP sent to your email."); return; }
-    setStep("forgot-reset");
+    setFpLoading(true);
+    try {
+      await authPost("/auth/verify-reset-otp/", {
+        email: fpEmail.trim(),
+        otp: fpOtp.trim(),
+      });
+      fpResendCooldownRef.current = false;
+      setFpResendCountdown(0);
+      setStep("forgot-reset");
+    } catch (err) {
+      setFpError(err instanceof Error ? err.message : "Invalid or expired OTP.");
+    } finally {
+      setFpLoading(false);
+    }
   };
 
   // ── Forgot: reset password ─────────────────────────────────────────────────
@@ -221,6 +264,8 @@ export default function LoginPage() {
     setStep("login");
     setFpEmail(""); setFpOtp(""); setFpNewPwd(""); setFpConfirmPwd("");
     setFpError(""); setFpLoading(false);
+    fpResendCooldownRef.current = false;
+    setFpResendCountdown(0);
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -229,7 +274,7 @@ export default function LoginPage() {
       <section className="relative hidden min-h-screen overflow-hidden bg-[#061532] p-12 text-white lg:flex lg:flex-col lg:justify-between">
         <div className="absolute -left-24 top-20 h-80 w-80 rounded-full bg-indigo-600/30 blur-3xl" />
         <div className="absolute -right-20 bottom-16 h-96 w-96 rounded-full bg-cyan-400/20 blur-3xl" />
-        <div className="relative z-10"><img src={luxmorWordmark} alt="Luxmor AI Technologies" className="h-20 w-auto max-w-[390px] rounded-2xl bg-white object-contain px-4 shadow-2xl" /></div>
+        <div className="relative z-10"><img src={luxmorWordmark} alt="Luxmor AI Technologies" className="h-20 w-auto max-w-97.5 rounded-2xl bg-white object-contain px-4 shadow-2xl" /></div>
         <div className="relative z-10 max-w-xl">
           <span className="inline-flex rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-cyan-200">Customer intelligence, reimagined</span>
           <h1 className="mt-7 text-5xl font-bold leading-[1.08] tracking-tight">Turn every relationship into momentum.</h1>
@@ -239,7 +284,7 @@ export default function LoginPage() {
         <p className="relative z-10 text-xs text-slate-500">© 2026 Luxmor AI Technologies Pvt Ltd</p>
       </section>
       <section className="flex min-h-screen items-center justify-center bg-[#f6f8fc] px-4 py-10 sm:px-10">
-      <div className="w-full max-w-[430px]">
+      <div className="w-full max-w-107.5">
         <div className="mb-7 lg:hidden"><img src={luxmorWordmark} alt="Luxmor AI Technologies" className="mx-auto h-16 w-auto max-w-full rounded-xl bg-white object-contain px-3 shadow-sm" /></div>
         <div className="mb-7">
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-600">LuxOne CRM</p>
@@ -255,7 +300,7 @@ export default function LoginPage() {
               <h2 className="mb-6 text-[18px] font-semibold text-[#071a40]">Sign in to your account</h2>
 
               {fpSuccess && (
-                <div className="mb-4 rounded-[6px] border border-green-200 bg-green-50 px-3 py-2.5 text-sm text-green-700">
+                <div className="mb-4 rounded-md border border-green-200 bg-green-50 px-3 py-2.5 text-sm text-green-700">
                   {fpSuccess}
                 </div>
               )}
@@ -296,20 +341,45 @@ export default function LoginPage() {
                   </div>
                   <div className="relative">
                     <input
-                      id="password" type={showPassword ? "text" : "password"}
+                      id="password" 
+                      type={showPassword ? "text" : "password"}
                       autoComplete="current-password"
                       maxLength={PASSWORD_MAX_LENGTH}
                       value={password}
                       onChange={(e) => {
-                        setPassword(e.target.value.slice(0, PASSWORD_MAX_LENGTH));
+                        const nextPassword = e.target.value.slice(0, PASSWORD_MAX_LENGTH);
+                        setPassword(nextPassword);
+                        setRevealedPasswordIndex(
+                          nextPassword.length >= password.length && nextPassword !== password && nextPassword.length > 0
+                            ? Math.min(nextPassword.length - 1, (e.currentTarget.selectionStart ?? nextPassword.length) - 1)
+                            : null
+                        );
                         setLoginErrors((current) => ({ ...current, password: undefined }));
                         if (error) setError("");
                       }}
                       placeholder="Enter your password"
                       className={inputCls + " pr-10"}
+                      style={showPassword ? undefined : { color: "transparent", caretColor: "#1e293b" }}
                     />
-                    <button type="button" onClick={() => setShowPassword((v) => !v)}
-                      className="absolute inset-y-0 right-3 flex items-center text-slate-400 hover:text-slate-600 text-xs" tabIndex={-1}>
+                    {!showPassword && (
+                      <span
+                        aria-hidden="true"
+                        className="pointer-events-none absolute inset-y-0 left-3.5 right-10 flex items-center overflow-hidden whitespace-pre text-sm text-slate-800"
+                      >
+                        {Array.from(password, (character, index) =>
+                          index === revealedPasswordIndex ? character : "•"
+                        ).join("")}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPassword((v) => !v);
+                        setRevealedPasswordIndex(null);
+                      }}
+                      className="absolute inset-y-0 right-3 flex items-center text-slate-400 hover:text-slate-600"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
                       {showPassword ? "Hide" : "Show"}
                     </button>
                   </div>
@@ -319,13 +389,13 @@ export default function LoginPage() {
                 </div>
 
                 {error && (
-                  <div className="rounded-[6px] border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-600">
+                  <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-600">
                     {error}
                   </div>
                 )}
 
                 <button type="submit" disabled={loading}
-                  className="mt-2 w-full rounded-[8px] bg-gradient-to-b from-[#359de9] to-[#365eea] py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60">
+                  className="mt-2 w-full rounded-lg bg-linear-to-b from-[#359de9] to-[#365eea] py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60">
                   {loading ? "Signing in…" : "Sign in"}
                 </button>
               </form>
@@ -347,11 +417,11 @@ export default function LoginPage() {
                 </div>
 
                 {fpError && (
-                  <div className="rounded-[6px] border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-600">{fpError}</div>
+                  <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-600">{fpError}</div>
                 )}
 
                 <button type="submit" disabled={fpLoading}
-                  className="w-full rounded-[8px] bg-gradient-to-b from-[#359de9] to-[#365eea] py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">
+                  className="w-full rounded-lg bg-linear-to-b from-[#359de9] to-[#365eea] py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">
                   {fpLoading ? "Sending…" : "Send OTP"}
                 </button>
 
@@ -381,18 +451,19 @@ export default function LoginPage() {
                 </div>
 
                 {fpError && (
-                  <div className="rounded-[6px] border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-600">{fpError}</div>
+                  <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-600">{fpError}</div>
                 )}
 
                 <button type="submit" disabled={fpOtp.length < 6}
-                  className="w-full rounded-[8px] bg-gradient-to-b from-[#359de9] to-[#365eea] py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">
+                  className="w-full rounded-lg bg-linear-to-b from-[#359de9] to-[#365eea] py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">
                   Verify OTP
                 </button>
 
                 <div className="flex items-center justify-between text-sm">
-                  <button type="button" onClick={() => { setFpError(""); void handleSendOtp({ preventDefault: () => {} }); }}
-                    className="text-[#359de9] hover:underline">
-                    Resend OTP
+                  <button type="button" onClick={handleResendOtp}
+                    disabled={fpLoading || fpResendCountdown > 0}
+                    className="text-[#359de9] hover:underline disabled:cursor-not-allowed disabled:opacity-60">
+                    Resend OTP{fpResendCountdown > 0 ? ` (${fpResendCountdown}s)` : ""}
                   </button>
                   <button type="button" onClick={resetForgot} className="text-slate-500 hover:text-slate-700">
                     Back to Sign in
@@ -431,11 +502,11 @@ export default function LoginPage() {
                 </div>
 
                 {fpError && (
-                  <div className="rounded-[6px] border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-600">{fpError}</div>
+                  <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-600">{fpError}</div>
                 )}
 
                 <button type="submit" disabled={fpLoading}
-                  className="w-full rounded-[8px] bg-gradient-to-b from-[#359de9] to-[#365eea] py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">
+                  className="w-full rounded-lg bg-linear-to-b from-[#359de9] to-[#365eea] py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">
                   {fpLoading ? "Resetting…" : "Reset Password"}
                 </button>
 
