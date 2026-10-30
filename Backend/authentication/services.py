@@ -20,27 +20,9 @@ def generate_and_send_otp(email):
 
         OTP.objects.create(email=email, code=code)
 
-        # subject = "Your CRM Authentication OTP"
-        # message = f"Your OTP code is {code}. It is valid for 5 minutes."
-        # try:
-        #     send_mail(
-        #         subject,
-        #         message,
-        #         settings.DEFAULT_FROM_EMAIL,
-        #         [email],
-        #         fail_silently=False,
-        #     )
-        # except Exception as exc:
-        #     logger.exception(
-        #         "Failed to send OTP email to %s using %s: %s",
-        #         email,
-        #         settings.EMAIL_BACKEND,
-        #         exc,
-        #     )
         success = send_otp_via_gmail(email, code)
         
         if not success:
-
             transaction.set_rollback(True)
             return False
 

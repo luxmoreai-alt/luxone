@@ -20,7 +20,7 @@ type CRMUser = {
   status_display: string;
   is_active: boolean;
   manager_email: string | null;
-  manager_name?: string | null;
+   manager_name?: string | null;
   created_at: string;
 };
 
@@ -234,9 +234,7 @@ export default function UsersListPage() {
                   </td>
 
                   {/* Manager */}
-                  {/* <td className="px-3 py-3 text-xs text-slate-500">
-                    {u.manager_email || "—"} */}
-                    <td className="px-3 py-3 text-xs font-medium text-slate-700">
+                   <td className="px-3 py-3 text-xs font-medium text-slate-700">
                     {u.manager_name || u.manager_email || "—"}
                   </td>
 

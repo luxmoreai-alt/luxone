@@ -199,9 +199,8 @@ LuxOne Team
             fail_silently=False,
         )
         return True
-    except Exception as exc:
-      print(f"Welcome email failed: {exc}")
-      return False
+    except Exception:
+        return False
 
 
 # ── Public Auth Views ──────────────────────────────────────────────────────────
@@ -307,6 +306,31 @@ class VerifyOTPView(APIView):
                 return Response(custom_response(success=True, message="Login successful", data=data), status=status.HTTP_200_OK)
             return Response(custom_response(success=False, message="Invalid or expired OTP"), status=status.HTTP_401_UNAUTHORIZED)
         return Response(custom_response(success=False, message=serializer.errors), status=status.HTTP_400_BAD_REQUEST)
+
+
+class VerifyPasswordResetOTPView(APIView):
+    permission_classes = [AllowAny]
+
+    @swagger_auto_schema(request_body=VerifyOTPSerializer)
+    def post(self, request):
+        serializer = VerifyOTPSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(custom_response(success=False, message=serializer.errors), status=status.HTTP_400_BAD_REQUEST)
+
+        email = serializer.validated_data['email'].strip().lower()
+        code = serializer.validated_data['otp'].strip()
+        if not get_user_by_email(email):
+            return Response(custom_response(success=False, message="User not registered"), status=status.HTTP_404_NOT_FOUND)
+
+        otp_record = OTP.objects.filter(
+            email__iexact=email,
+            code=code,
+            is_verified=False,
+        ).order_by('-created_at').first()
+        if not otp_record or not otp_record.is_valid():
+            return Response(custom_response(success=False, message="Invalid or expired OTP"), status=status.HTTP_401_UNAUTHORIZED)
+
+        return Response(custom_response(success=True, message="OTP verified successfully"), status=status.HTTP_200_OK)
 
 
 class ForgotPasswordView(APIView):
@@ -494,10 +518,6 @@ class UserManagementViewSet(viewsets.ViewSet):
 
         response_data = UserDetailSerializer(new_user).data
         response_data["email_sent"] = email_sent
-        # # Only expose the temp password if email delivery failed
-        # if not email_sent:
-        #     response_data["temp_password"] = raw_password
-
         # Always return temp_password so the admin can copy or view credentials
         response_data["temp_password"] = raw_password
 
@@ -529,30 +549,8 @@ class UserManagementViewSet(viewsets.ViewSet):
         serializer.save()
         return Response(UserDetailSerializer(user).data)
 
-    # ── DELETE /manage-users/{id}/ ────────────────────────────────────────
-    # def destroy(self, request, pk=None):
-    #     if getattr(request.user, "role", None) not in ("admin", "sub_admin"):
-    #         return Response(
-    #             {"detail": "Only admins can deactivate users."},
-    #             status=status.HTTP_403_FORBIDDEN,
-    #         )
-    #     if str(request.user.pk) == str(pk):
-    #         return Response(
-    #             {"detail": "You cannot deactivate your own account."},
-    #             status=status.HTTP_400_BAD_REQUEST,
-    #         )
-    #     qs = self._scoped_queryset(request.user)
-    #     user = qs.filter(pk=pk).first()
-    #     if not user:
-    #         return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-    #     user.is_active = False
-    #     user.save(update_fields=["is_active"])
-    #     return Response({"detail": f"User {user.email} has been deactivated."})
 
-    
-
-    # ── POST /manage-users/{id}/set-password/ ────────────────────────────
     @action(detail=True, methods=["post"], url_path="set-password",
             permission_classes=[IsAuthenticated, IsOrgAdmin])
     def set_password(self, request, pk=None):

@@ -58,7 +58,6 @@ const primaryItems: NavItem[] = [
   { label: "Reports", icon: BarChart3, path: "/reports" },
   { label: "Analytics", icon: PieChart, path: "/analytics" },
   { label: "My Requests", icon: ClipboardList, path: "/my-requests" },
-
 ];
 
 const workspaceItems: NavItem[] = [
