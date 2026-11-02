@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import ModuleToolbar from "../../components/crm/ModuleToolbar";
 import FilterSidebar from "../../components/crm/FilterSidebar";
-import CRMTable from "../../components/crm/CRMTable";
+import CRMTable, { CRMAlternateView, type CRMViewMode } from "../../components/crm/CRMTable";
 import CRMPagination from "../../components/crm/CRMPagination";
 import { filterRecords, sortRecords } from "../../lib/shared/crmHelpers";
 import type { CRMRowAction } from "../../lib/shared/crmTypes";
@@ -31,6 +31,7 @@ export default function ServicesListPage() {
   const [sidebarFilters, setSidebarFilters] = useState<Record<string, string>>({});
   const [sortState, setSortState] = useState<{ key: string; direction: "asc" | "desc" } | null>(null);
   const [filterOpen, setFilterOpen] = useState(true);
+  const [viewMode, setViewMode] = useState<CRMViewMode>("table");
 
   const load = useCallback(async () => {
     try {
@@ -83,6 +84,8 @@ export default function ServicesListPage() {
           baseRoute={meta.baseRoute}
           showImportActions={false}
           isFilterOpen={filterOpen}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
           onToggleFilter={() => setFilterOpen((prev) => !prev)}
           onCreateClick={() => navigate("/services/catalog/create")}
         />
@@ -139,7 +142,9 @@ export default function ServicesListPage() {
             ) : null}
 
             <div className="min-w-0 flex-1 space-y-3">
-              <CRMTable<ServiceRecord>
+              {viewMode === "table" ? (
+                <>
+                  <CRMTable<ServiceRecord>
                 rows={paginatedRows}
                 columns={tableColumns}
                 rowActions={rowActions}
@@ -163,8 +168,23 @@ export default function ServicesListPage() {
                 onToggleHideColumn={(columnKey) => setHiddenColumns((prev) => (prev.includes(columnKey) ? prev.filter((item) => item !== columnKey) : [...prev, columnKey]))}
                 onTogglePinColumn={(columnKey) => setPinnedColumn((prev) => (prev === columnKey ? null : columnKey))}
                 onFilterColumn={(columnKey, value) => setColumnFilters((prev) => ({ ...prev, [columnKey]: value }))}
-              />
-              <CRMPagination page={page} pageSize={10} totalItems={processedRows.length} onPageChange={setPage} />
+                  />
+                  <CRMPagination page={page} pageSize={10} totalItems={processedRows.length} onPageChange={setPage} />
+                </>
+              ) : (
+                <>
+                  <CRMAlternateView
+                    mode={viewMode}
+                    rows={viewMode === "chart" || viewMode === "kanban" ? processedRows : paginatedRows}
+                    columns={tableColumns}
+                    titleField="serviceName"
+                    onOpenRow={(row) => navigate(`/services/catalog/${row.id}`)}
+                  />
+                  {viewMode === "list" || viewMode === "grid" ? (
+                    <CRMPagination page={page} pageSize={10} totalItems={processedRows.length} onPageChange={setPage} />
+                  ) : null}
+                </>
+              )}
             </div>
           </div>
         ) : null}

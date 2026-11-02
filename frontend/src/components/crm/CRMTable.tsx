@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatDateTimeForDisplay } from "../../lib/dateUtils";
 import { Phone, CalendarCheck, CalendarDays, Activity, Pencil, Trash2 } from "lucide-react";
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import type { CRMColumn, CRMRecord, CRMRowAction } from "../../lib/shared/crmTypes";
 import CRMRowMoreOptionsMenu from "./CRMRowMoreOptionsMenu";
 import CRMRowUtilityIcons from "./CRMRowUtilityIcons";
@@ -319,6 +320,141 @@ export default function CRMTable<T extends CRMRecord>({
         </tbody>
       </table>
       </div>
+    </div>
+  );
+}
+
+export type CRMViewMode = "list" | "table" | "grid" | "kanban" | "chart";
+type CRMAlternateViewMode = Exclude<CRMViewMode, "table">;
+type ViewRow = { id: string | number };
+
+type CRMAlternateViewProps<T extends ViewRow> = {
+  mode: CRMAlternateViewMode;
+  rows: T[];
+  columns: Array<{ key: string; label: string }>;
+  titleField: string;
+  onOpenRow: (row: T) => void;
+};
+
+const alternateViewColors = ["#ec4899", "#f97316", "#facc15", "#14b8a6", "#6366f1", "#8b5cf6"];
+
+function getViewValue(row: ViewRow, key: string): string {
+  const value = (row as unknown as Record<string, unknown>)[key];
+  if (typeof value === "string" || typeof value === "number") return String(value);
+  if (typeof value === "boolean") return value ? "Active" : "Inactive";
+  return "";
+}
+
+export function CRMAlternateView<T extends ViewRow>({ mode, rows, columns, titleField, onOpenRow }: CRMAlternateViewProps<T>) {
+  const groups = new Map<string, T[]>();
+  rows.forEach((row) => {
+    const status = getViewValue(row, "status") || "Uncategorized";
+    groups.set(status, [...(groups.get(status) ?? []), row]);
+  });
+  const chartData = [...groups.entries()].map(([name, groupRows]) => ({ name, count: groupRows.length }));
+  const detailColumns = columns.filter((column) => column.key !== titleField && column.key !== "status").slice(0, 3);
+  const titleFor = (row: T) => getViewValue(row, titleField) || `Record #${row.id}`;
+
+  const detailsFor = (row: T) => (
+    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+      {detailColumns.map((column) => {
+        const value = getViewValue(row, column.key);
+        return value ? <span key={column.key}>{column.label}: {value}</span> : null;
+      })}
+    </div>
+  );
+
+  if (mode === "chart") {
+    return (
+      <section className="rounded-xl border border-slate-200 bg-white p-5 sm:p-8">
+        <h2 className="text-lg font-semibold text-slate-900">Records Distribution</h2>
+        <p className="mt-1 text-sm text-slate-500">Records grouped by status</p>
+        {chartData.length ? (
+          <div className="mt-5 grid items-center gap-4 md:grid-cols-[minmax(280px,360px)_1fr] md:gap-8">
+            <div className="relative h-[280px] w-full sm:h-[320px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={chartData} dataKey="count" nameKey="name" cx="50%" cy="50%" innerRadius={72} outerRadius={118} paddingAngle={3} stroke="#fff" strokeWidth={3}>
+                    {chartData.map((entry, index) => <Cell key={entry.name} fill={alternateViewColors[index % alternateViewColors.length]} />)}
+                  </Pie>
+                  <Tooltip formatter={(value) => [`${value} records`, "Count"]} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-3xl font-semibold text-slate-900">{rows.length}</span>
+                <span className="mt-1 text-xs font-medium uppercase text-slate-500">Total records</span>
+              </div>
+            </div>
+            <div className="space-y-3">
+              {chartData.map((entry, index) => {
+                const percentage = rows.length ? Math.round((entry.count / rows.length) * 100) : 0;
+                return (
+                  <div key={entry.name} className="flex items-center justify-between gap-4 rounded-lg bg-slate-50 px-4 py-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: alternateViewColors[index % alternateViewColors.length] }} />
+                      <span className="truncate text-sm font-medium text-slate-700">{entry.name}</span>
+                    </div>
+                    <span className="shrink-0 text-sm font-semibold text-slate-900">{entry.count} <span className="font-normal text-slate-500">({percentage}%)</span></span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : <div className="flex min-h-64 items-center justify-center text-sm text-slate-500">No records match the current filters.</div>}
+      </section>
+    );
+  }
+
+  if (mode === "kanban") {
+    return (
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {[...groups.entries()].map(([status, groupRows]) => (
+          <section key={status} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-800">{status}</h2>
+              <span className="rounded-full bg-white px-2 py-0.5 text-xs text-slate-600">{groupRows.length}</span>
+            </div>
+            <div className="space-y-2">
+              {groupRows.map((row) => (
+                <button key={row.id} type="button" onClick={() => onOpenRow(row)} className="w-full rounded-md border border-slate-200 bg-white p-3 text-left hover:border-blue-300">
+                  <span className="text-sm font-medium text-slate-800">{titleFor(row)}</span>
+                  {detailsFor(row)}
+                </button>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    );
+  }
+
+  if (mode === "grid") {
+    return (
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {rows.map((row) => (
+          <button key={row.id} type="button" onClick={() => onOpenRow(row)} className="rounded-lg border border-slate-200 bg-white p-4 text-left hover:border-blue-300">
+            <div className="flex items-start justify-between gap-3">
+              <span className="font-semibold text-slate-900">{titleFor(row)}</span>
+              <span className="shrink-0 rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">{getViewValue(row, "status") || "Uncategorized"}</span>
+            </div>
+            {detailsFor(row)}
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="divide-y divide-slate-200 overflow-hidden rounded-lg border border-slate-200 bg-white">
+      {rows.map((row) => (
+        <button key={row.id} type="button" onClick={() => onOpenRow(row)} className="flex w-full items-center justify-between gap-4 p-4 text-left hover:bg-slate-50">
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-semibold text-slate-900">{titleFor(row)}</span>
+            {detailsFor(row)}
+          </span>
+          <span className="shrink-0 rounded bg-slate-100 px-2 py-1 text-xs text-slate-600">{getViewValue(row, "status") || "Uncategorized"}</span>
+        </button>
+      ))}
     </div>
   );
 }
