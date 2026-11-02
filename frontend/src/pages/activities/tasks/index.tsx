@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ChevronDown } from "lucide-react";
 import DashboardLayout from "../../../components/layout/DashboardLayout";
 import ModuleToolbar from "../../../components/crm/ModuleToolbar";
+import type { CRMViewMode } from "../../../components/crm/CRMTable";
 import FilterSidebar from "../../../components/crm/FilterSidebar";
 import TasksKanbanBoard, { type TasksGroupBy, type TasksKanbanBoardHandle } from "./TasksKanbanBoard";
 import type { FilterSection } from "../../../lib/shared/crmTypes";
@@ -57,6 +58,7 @@ export default function TasksPage() {
   const [filters, setFilters] = useState<FilterMap>({});
   const [groupBy, setGroupBy] = useState<TasksGroupBy>("Tasks by Status");
   const [groupByOpen, setGroupByOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<CRMViewMode>("kanban");
   const boardRef = useRef<TasksKanbanBoardHandle>(null);
 
   return (
@@ -76,6 +78,8 @@ export default function TasksPage() {
           sortFields={TASK_SORT_FIELDS}
           sortFieldKeyMap={TASK_SORT_FIELD_KEYS}
           isFilterOpen={filterOpen}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
           onToggleFilter={() => setFilterOpen((prev) => !prev)}
           onCreateClick={() => navigate("/tasks/create")}
           onMassAction={(action) => {
@@ -129,7 +133,7 @@ export default function TasksPage() {
           )}
 
           <div className="min-w-0 flex-1 overflow-auto">
-            <TasksKanbanBoard ref={boardRef} filters={filters} groupBy={groupBy} />
+            <TasksKanbanBoard ref={boardRef} filters={filters} groupBy={groupBy} viewMode={viewMode} />
           </div>
         </div>
       </div>

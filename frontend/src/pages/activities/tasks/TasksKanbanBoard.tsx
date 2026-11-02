@@ -2,6 +2,7 @@ import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState }
 import { AlertCircle, Loader2, Pencil, Trash2, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { apiRequest } from "../../../api/client";
+import { CRMAlternateView, type CRMViewMode } from "../../../components/crm/CRMTable";
 import { keepEmployeeVisibleRows } from "../../../lib/shared/recordVisibility";
 import { formatDateForDisplay } from "../../../lib/dateUtils";
 
@@ -479,8 +480,8 @@ export type TasksKanbanBoardHandle = {
 
 const TasksKanbanBoard = forwardRef<
   TasksKanbanBoardHandle,
-  { filters?: Record<string, string>; groupBy?: TasksGroupBy; onSelectionChange?: (ids: (string | number)[]) => void }
->(function TasksKanbanBoard({ filters = {}, groupBy = "Tasks by Status", onSelectionChange }, ref) {
+  { filters?: Record<string, string>; groupBy?: TasksGroupBy; viewMode?: CRMViewMode; onSelectionChange?: (ids: (string | number)[]) => void }
+>(function TasksKanbanBoard({ filters = {}, groupBy = "Tasks by Status", viewMode = "kanban", onSelectionChange }, ref) {
   const [tasks, setTasks] = useState<TaskRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -686,39 +687,81 @@ const TasksKanbanBoard = forwardRef<
         </div>
       )}
 
-      {/* Board */}
-      <div className="overflow-auto p-4">
-        <div className="flex gap-3" style={{ minWidth: "max-content", alignItems: "flex-start" }}>
-          {groupedTasks.map(({ title, tasks: columnTasks }) => (
-            <TaskKanbanColumn
-              key={title}
-              title={title}
-              tasks={columnTasks}
-              draggingId={draggingId}
-              selectedIds={selectedIds}
-              onToggleSelect={toggleSelect}
-              onSelectAll={selectAll}
-              onOpenTask={(id) => navigate(`/tasks/${id}`)}
-              onOpenContact={(id) => id && navigate(`/contacts/${id}`)}
-              onOpenAccount={(id) => id && navigate(`/accounts/${id}`)}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-              onDrop={groupBy === "Tasks by Status" ? (col) => void handleDrop(col) : undefined}
-            />
-          ))}
-
-          {/* Deferred — collapsed vertical column */}
-          {groupBy === "Tasks by Status" && (
-            <DeferredColumn
-              count={groupedTasks.find((group) => group.title === "Deferred")?.tasks.length || 0}
-              isOver={deferredOver}
-              onDragOver={(e) => { e.preventDefault(); setDeferredOver(true); }}
-              onDragLeave={() => setDeferredOver(false)}
-              onDrop={(e) => { e.preventDefault(); setDeferredOver(false); void handleDrop("Deferred"); }}
-            />
-          )}
+      {viewMode === "table" ? (
+        <div className="overflow-x-auto p-4">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-slate-50 text-xs font-semibold uppercase text-slate-600">
+              <tr>
+                <th className="px-3 py-2"><input type="checkbox" checked={filteredTasks.length > 0 && filteredTasks.every((task) => selectedIds.has(task.id))} onChange={(event) => selectAll(filteredTasks.map((task) => task.id), event.target.checked)} /></th>
+                <th className="px-3 py-2">Task</th>
+                <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">Priority</th>
+                <th className="px-3 py-2">Owner</th>
+                <th className="px-3 py-2">Due Date</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filteredTasks.map((task) => (
+                <tr key={task.id} className="cursor-pointer hover:bg-slate-50" onClick={() => navigate(`/tasks/${task.id}`)}>
+                  <td className="px-3 py-3" onClick={(event) => event.stopPropagation()}><input type="checkbox" checked={selectedIds.has(task.id)} onChange={() => toggleSelect(task.id)} /></td>
+                  <td className="px-3 py-3 font-medium text-slate-800">{task.subject || task.title || "Untitled task"}</td>
+                  <td className="px-3 py-3 text-slate-600">{task.status || "Not Started"}</td>
+                  <td className="px-3 py-3 text-slate-600">{task.priority || "Normal"}</td>
+                  <td className="px-3 py-3 text-slate-600">{getOwnerName(task.owner) || "Unassigned"}</td>
+                  <td className="px-3 py-3 text-slate-600">{formatDate(task.due_date || task.dueDate) || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      </div>
+      ) : viewMode === "kanban" ? (
+        <div className="overflow-auto p-4">
+          <div className="flex gap-3" style={{ minWidth: "max-content", alignItems: "flex-start" }}>
+            {groupedTasks.map(({ title, tasks: columnTasks }) => (
+              <TaskKanbanColumn
+                key={title}
+                title={title}
+                tasks={columnTasks}
+                draggingId={draggingId}
+                selectedIds={selectedIds}
+                onToggleSelect={toggleSelect}
+                onSelectAll={selectAll}
+                onOpenTask={(id) => navigate(`/tasks/${id}`)}
+                onOpenContact={(id) => id && navigate(`/contacts/${id}`)}
+                onOpenAccount={(id) => id && navigate(`/accounts/${id}`)}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+                onDrop={groupBy === "Tasks by Status" ? (col) => void handleDrop(col) : undefined}
+              />
+            ))}
+            {groupBy === "Tasks by Status" && (
+              <DeferredColumn
+                count={groupedTasks.find((group) => group.title === "Deferred")?.tasks.length || 0}
+                isOver={deferredOver}
+                onDragOver={(e) => { e.preventDefault(); setDeferredOver(true); }}
+                onDragLeave={() => setDeferredOver(false)}
+                onDrop={(e) => { e.preventDefault(); setDeferredOver(false); void handleDrop("Deferred"); }}
+              />
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="p-4">
+          <CRMAlternateView
+            mode={viewMode}
+            rows={filteredTasks}
+            columns={[
+              { key: "subject", label: "Task" },
+              { key: "status", label: "Status" },
+              { key: "priority", label: "Priority" },
+              { key: "owner", label: "Owner" },
+              { key: "due_date", label: "Due Date" },
+            ]}
+            titleField="subject"
+            onOpenRow={(task) => navigate(`/tasks/${task.id}`)}
+          />
+        </div>
+      )}
 
       {/* Mass Update Modal */}
       {showUpdateModal && (
