@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ModuleToolbar from "../../components/crm/ModuleToolbar";
 import FilterSidebar from "../../components/crm/FilterSidebar";
-import CRMTable from "../../components/crm/CRMTable";
+import CRMTable, { CRMAlternateView, type CRMViewMode } from "../../components/crm/CRMTable";
 import CRMPagination from "../../components/crm/CRMPagination";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import { filterRecords, sortRecords } from "../../lib/shared/crmHelpers";
@@ -32,6 +32,7 @@ export default function AppointmentsListPage() {
   const [sidebarFilters, setSidebarFilters] = useState<Record<string, string>>({});
   const [sortState, setSortState] = useState<{ key: string; direction: "asc" | "desc" } | null>(null);
   const [filterOpen, setFilterOpen] = useState(true);
+  const [viewMode, setViewMode] = useState<CRMViewMode>("table");
 
   const load = useCallback(async () => {
     try {
@@ -92,6 +93,8 @@ export default function AppointmentsListPage() {
           baseRoute={meta.baseRoute}
           showImportActions={false}
           isFilterOpen={filterOpen}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
           onToggleFilter={() => setFilterOpen((prev) => !prev)}
           onCreateClick={() => navigate("/services/appointments/create")}
         />
@@ -136,7 +139,9 @@ export default function AppointmentsListPage() {
                 />
               ) : null}
               <div className="min-w-0 flex-1 space-y-3">
-                 <CRMTable<AppointmentRecord>
+                {viewMode === "table" ? (
+                  <>
+                    <CRMTable<AppointmentRecord>
                   rows={paginatedRows}
                   columns={tableColumns}
                   rowActions={rowActions}
@@ -166,8 +171,23 @@ export default function AppointmentsListPage() {
                   }
                   onTogglePinColumn={(columnKey) => setPinnedColumn((prev) => (prev === columnKey ? null : columnKey))}
                   onFilterColumn={(columnKey, value) => setColumnFilters((prev) => ({ ...prev, [columnKey]: value }))}
-                />
-                <CRMPagination page={page} pageSize={10} totalItems={processedRows.length} onPageChange={setPage} />
+                    />
+                    <CRMPagination page={page} pageSize={10} totalItems={processedRows.length} onPageChange={setPage} />
+                  </>
+                ) : (
+                  <>
+                    <CRMAlternateView
+                      mode={viewMode}
+                      rows={viewMode === "chart" || viewMode === "kanban" ? processedRows : paginatedRows}
+                      columns={tableColumns}
+                      titleField="appointmentNumber"
+                      onOpenRow={(row) => navigate(`/services/appointments/${row.id}`)}
+                    />
+                    {viewMode === "list" || viewMode === "grid" ? (
+                      <CRMPagination page={page} pageSize={10} totalItems={processedRows.length} onPageChange={setPage} />
+                    ) : null}
+                  </>
+                )}
               </div>
             </div>
           </div>
